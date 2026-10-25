@@ -279,6 +279,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   var lastOn = { kind: null };
   // last: the tile focused last, which the bar's Hide or show acts on.
   var state = { row: 0, col: {}, arranging: false, held: false, bar: -1, last: null };
+  var verticalAnchor = null;
   var BAR = ['btnHide', 'btnReset', 'btnDone'];
   var build = null;
   var okDownAt = 0, okTimer = null, okLong = false, okInRecents = false, backDown = false;
@@ -327,6 +328,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   // ---------------------------------------------------------------- stage
 
   function fit() {
+    verticalAnchor = null;
     var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
     var st = $('stage');
     var x = (window.innerWidth - 1920 * s) / 2, y = (window.innerHeight - 1080 * s) / 2;
@@ -395,7 +397,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   function render() {
     stageClass();
     var html = '';
-    if (!shown(state.row)) state.row = nextShown(0, 1);
+    if (!shown(state.row)) { state.row = nextShown(0, 1); verticalAnchor = null; }
     layout.rows.forEach(function (kind, ri) {
       var list = items(kind);
       var tiles = '';
@@ -726,15 +728,51 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
     });
   }
 
+  // Keep the original horizontal bounds through a run of vertical moves:
+  // reusing each wider tile's bounds would gradually pull focus to the left.
+  function columnForVerticalMove(rowIndex) {
+    var rows = document.querySelectorAll('#rows .row');
+    var sourceRow = rows[state.row], targetRow = rows[rowIndex];
+    var source = sourceRow && sourceRow.querySelector('.tile.focus');
+    var wrap = targetRow && targetRow.querySelector('.wrap');
+    if (!source || !wrap) return 0;
+    if (!verticalAnchor) {
+      var bounds = source.getBoundingClientRect();
+      verticalAnchor = { left: bounds.left, right: bounds.right };
+    }
+    var from = verticalAnchor, clip = wrap.getBoundingClientRect();
+    var tiles = targetRow.querySelectorAll('.tile');
+    var best = 0, foundOverlap = false, bestGap = Infinity, bestLeft = Infinity;
+    for (var i = 0; i < tiles.length; i++) {
+      var tileBounds = tiles[i].getBoundingClientRect();
+      var left = Math.max(tileBounds.left, clip.left), right = Math.min(tileBounds.right, clip.right);
+      if (right <= left) continue;
+      var overlaps = Math.min(from.right, right) > Math.max(from.left, left);
+      var gap = Math.max(left - from.right, from.left - right, 0);
+      if ((overlaps && (!foundOverlap || left < bestLeft)) ||
+          (!overlaps && !foundOverlap && (gap < bestGap || (gap === bestGap && left < bestLeft)))) {
+        best = i;
+        foundOverlap = overlaps;
+        bestGap = gap;
+        bestLeft = left;
+      }
+    }
+    return best;
+  }
+
   function move(dr, dc) {
     var onSort = colOf(rowKey()) === -1;
     if (dr) {
       var to = nextShown(state.row + dr, dr);
-      if (to >= 0 && to < layout.rows.length && shown(to)) state.row = to;
+      if (to >= 0 && to < layout.rows.length && shown(to)) {
+        if (!state.arranging) state.col[layout.rows[to]] = columnForVerticalMove(to);
+        state.row = to;
+      }
     }
     // Up and down from a row's Order go to the next row's.
     if (dr && onSort) state.col[rowKey()] = -1;
     if (dc) {
+      verticalAnchor = null;
       var kind = rowKey();
       state.col[kind] = Math.max(state.arranging ? -1 : 0, Math.min(items(kind).length - 1, colOf(kind) + dc));
     }
@@ -757,6 +795,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 
   function openRecents() {
     if (recents.busy) return;
+    verticalAnchor = null;
     recents.busy = true;
     recents.loading = true;
     var revision = ++recents.revision;
@@ -908,6 +947,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 
   function setArranging(on) {
     if (layoutBusy) return;
+    verticalAnchor = null;
     layoutRevision++;
     // The focus stays on the same item as hidden tiles appear or go.
     var kind = rowKey(), cur = items(kind)[colOf(kind)];
@@ -1111,6 +1151,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
     while (rowEl && !/\brow\b/.test(rowEl.className)) rowEl = rowEl.parentNode;
     var r = +rowEl.getAttribute('data-row'), c = +tile.getAttribute('data-c'), kind = layout.rows[r];
     if (state.row !== r || colOf(kind) !== c || state.bar >= 0) {
+      verticalAnchor = null;
       state.row = r; state.col[kind] = c; state.bar = -1;
       applyFocus();
     }
@@ -1314,6 +1355,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   }
 
   function returned() {
+    verticalAnchor = null;
     initialEscape = false;
     clearTimeout(okTimer);
     okDownAt = 0; backDown = false;
