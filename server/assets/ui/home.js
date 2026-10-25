@@ -92,6 +92,14 @@ function renderHome() {
   const hideRow = q('home-hide-lg-row');
   // webOS 9 only: newer TVs have no layout file for LG's Home to start on.
   if (hideRow) hideRow.hidden = !st.supported.ok || st.hideLgHomeAtStartAvailable === false;
+  const notesRow = q('home-row-notes-row');
+  if (notesRow) notesRow.hidden = !st.supported.ok;
+  const notes = q('home-row-notes');
+  if (notes) {
+    const on = !st.layout || st.layout.rowNotes !== false;
+    updateToggle(notes, { cls: on ? 'good' : 'idle', label: on ? t('common.on', 'On') : t('common.off', 'Off') });
+    notes.disabled = !homeWritable();
+  }
   const picRow = q('home-picture-row');
   if (picRow) picRow.hidden = !st.supported.ok;
   const pic = q('home-picture');
@@ -333,6 +341,10 @@ async function homeHideLg() {
 
 function homePicture() {
   homeSaveLayout({ picture: homeLayout.picture !== true });
+}
+
+function homeRowNotes() {
+  homeSaveLayout({ rowNotes: homeLayout.rowNotes === false });
 }
 
 // Added channels are the Channels row; this finds more to add. Built once, then only its list redraws.
