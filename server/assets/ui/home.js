@@ -100,6 +100,13 @@ function renderHome() {
     updateToggle(notes, { cls: on ? 'good' : 'idle', label: on ? t('common.on', 'On') : t('common.off', 'Off') });
     notes.disabled = !homeWritable();
   }
+  const clockRow = q('home-clock-size-row');
+  if (clockRow) clockRow.hidden = !st.supported.ok;
+  const clockSize = q('home-clock-size');
+  if (clockSize) {
+    clockSize.value = st.layout && st.layout.clockSize === 'small' ? 'small' : 'standard';
+    clockSize.disabled = !homeWritable();
+  }
   const sourceRow = q('home-last-source-row');
   if (sourceRow) sourceRow.hidden = !st.supported.ok;
   const source = q('home-last-source');
@@ -357,6 +364,10 @@ function homeRowNotes() {
 
 function homeLastSource() {
   homeSaveLayout({ showLastSource: homeLayout.showLastSource === false });
+}
+
+function homeClockSize(value) {
+  homeSaveLayout({ clockSize: value });
 }
 
 // Added channels are the Channels row; this finds more to add. Built once, then only its list redraws.

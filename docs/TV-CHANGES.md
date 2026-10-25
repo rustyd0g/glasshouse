@@ -70,7 +70,7 @@ Home wallpapers uploaded through the browser go into `/var/lib/tvweb/home-wallpa
 
 Glasshouse Home leaves empty rows out and centres the remaining rows below the clock. Empty rows reappear as movable strips while arranging. The **Row details** choice is saved as `rowNotes` in `/var/lib/tvweb/home.json`; switching it off hides the counts and HDMI input notes beside the headings, while empty-row messages remain visible during arranging.
 
-The **Last source** choice is saved as `showLastSource` in `/var/lib/tvweb/home.json` and shows or hides the last app, input or channel beside the clock.
+The **Last source** choice is saved as `showLastSource` in `/var/lib/tvweb/home.json` and shows or hides the last app, input or channel beside the clock. **Clock size** is saved there as `clockSize`, either `standard` (the default) or `small`.
 
 Glasshouse Home's text and accent colours are saved in `/var/lib/tvweb/home.json` and applied to its view within a few seconds. **Use the default colours** clears the choice.
 
