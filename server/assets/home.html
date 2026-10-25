@@ -28,6 +28,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 #wall .layer{position:absolute;left:-3%;top:-3%;right:-3%;bottom:-3%;background-position:center;background-size:cover;
   background-repeat:no-repeat;opacity:0;-webkit-transition:opacity 2.4s ease;transition:opacity 2.4s ease;
   -webkit-animation:drift 180s ease-in-out infinite alternate;animation:drift 180s ease-in-out infinite alternate}
+.page-hidden #wall .layer{-webkit-animation-play-state:paused;animation-play-state:paused}
 @-webkit-keyframes drift{from{-webkit-transform:scale(1) translate(0,0)}to{-webkit-transform:scale(1.04) translate(-1.2%,-.8%)}}
 @keyframes drift{from{transform:scale(1) translate(0,0)}to{transform:scale(1.04) translate(-1.2%,-.8%)}}
 #scrim{position:absolute;left:0;top:0;right:0;bottom:0;
@@ -274,6 +275,8 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   var BEAT_MS = 5000;
 
   var data = null;       // the catalogue: apps, devices, channels, order
+  var indexedData = null, itemIndex = null;
+  var rowsMarkup = null, focusShown = null;
   var layout = null;     // rows, order, sort, hidden, channels, hintSeen, picture
   var guideData = {};
   var lastOn = { kind: null };
@@ -292,6 +295,10 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   var wallSlots = null, wallRevision = '';
 
   function $(id) { return document.getElementById(id); }
+  function setText(id, value) {
+    var element = $(id);
+    if (element.textContent !== value) element.textContent = value;
+  }
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function hm(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
   function esc(s) {
@@ -338,15 +345,18 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   // ---------------------------------------------------------------- items
 
   function byId(kind, id) {
-    if (kind === 'app') {
-      if (id === LG_HOME_TILE) return { id: LG_HOME_TILE, title: t('home.lgHome', 'LG Home'), lg: true };
-      return find(data.apps, id);
+    if (kind === 'app' && id === LG_HOME_TILE) return { id: LG_HOME_TILE, title: t('home.lgHome', 'LG Home'), lg: true };
+    if (indexedData !== data) {
+      itemIndex = { app: Object.create(null), dev: Object.create(null), ch: Object.create(null) };
+      ['app', 'dev', 'ch'].forEach(function (row) {
+        var list = row === 'app' ? data.apps : row === 'dev' ? data.devices : data.channels;
+        (list || []).forEach(function (item) {
+          if (!itemIndex[row][item.id]) itemIndex[row][item.id] = item;
+        });
+      });
+      indexedData = data;
     }
-    return find(kind === 'dev' ? data.devices : data.channels, id);
-  }
-  function find(list, id) {
-    for (var i = 0; i < (list || []).length; i++) if (list[i].id === id) return list[i];
-    return null;
+    return itemIndex[kind][id] || null;
   }
   function hidden(kind, id) { return layout.hidden[kind].indexOf(id) !== -1; }
   // The server puts a Last opened row in that order; the view shows it as sent.
@@ -402,15 +412,40 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
       var list = items(kind);
       var tiles = '';
       list.forEach(function (it, i) { tiles += TILE[kind](it, i); });
-      var note = esc(rowNote(kind, list));
+      var note = list.length && layout.rowNotes === false ? '' : esc(rowNote(kind, list));
       html += '<section class="row"' + (list.length ? '' : ' data-empty="1"') + ' data-row="' + ri + '" data-key="' + kind + '">' +
         '<h2>' + esc(ROW_TITLES[kind]) + (list.length && layout.rowNotes !== false ? '<span>' + note + '</span>' : '') +
         '<em class="sort">' + esc(sortLabel(kind)) + '</em></h2>' +
         (list.length ? '<div class="wrap"><div class="track">' + tiles + '</div></div>' : '<div class="slot">' + note + '</div>') +
         '</section>';
     });
-    $('rows').innerHTML = html;
-    applyFocus(true);
+    // Progress changes do not replace the tiles or disturb their animations.
+    if (html !== rowsMarkup) {
+      $('rows').innerHTML = html;
+      rowsMarkup = html;
+      applyFocus(true);
+    } else if (state.arranging || focusShown !== focusSignature()) applyFocus(false);
+    updateChannelProgress();
+  }
+
+  function focusSignature() {
+    return [state.row, state.bar, state.arranging, state.held].join('/') + '/' +
+      layout.rows.map(function (kind) { return colOf(kind); }).join(',');
+  }
+
+  function updateChannelProgress() {
+    if (document.hidden || !data || !layout) return;
+    var row = $('rows').querySelector('[data-key="ch"]');
+    if (!row) return;
+    var tiles = row.querySelectorAll('.ch'), channels = items('ch'), now = Date.now();
+    for (var i = 0; i < tiles.length; i++) {
+      var channel = channels[+tiles[i].getAttribute('data-c')];
+      var shows = channel && guideData[channel.id], bar = tiles[i].querySelector('.bar i');
+      if (!bar || !shows || !shows.length) continue;
+      var on = shows[0], percent = on.end > on.start ? Math.max(0, Math.min(100, (now - on.start) / (on.end - on.start) * 100)) : 0;
+      var width = percent.toFixed(1) + '%';
+      if (bar.style.width !== width) bar.style.width = width;
+    }
   }
 
   var hiddenLabel = '<span class="hid">' + esc(t('home.hidden', 'Hidden')) + '</span>';
@@ -437,8 +472,8 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
       var shows = guideData[c.id] || [];
       var body = '<div class="num">' + esc(c.number) + '</div><div class="nm"><span class="scroll-text">' + esc(c.name) + '</span></div>';
       if (shows.length) {
-        var on = shows[0], pct = Math.max(0, Math.min(100, (Date.now() - on.start) / (on.end - on.start) * 100));
-        body += '<div class="prog"><span class="scroll-text">' + esc(on.title) + '</span></div><div class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>';
+        var on = shows[0];
+        body += '<div class="prog"><span class="scroll-text">' + esc(on.title) + '</span></div><div class="bar"><i style="width:0%"></i></div>';
         if (shows[1]) body += '<div class="next"><span class="scroll-text">' + esc(hm(new Date(shows[1].start)) + ' ' + shows[1].title) + '</span></div>';
       }
       return '<div class="' + cls + '" data-c="' + i + '">' + body + hiddenLabel + '</div>';
@@ -491,6 +526,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
       stage.className = stage.className.replace(/ instant-focus\b/g, '');
     }
     queueChannelTitles(instant ? 0 : 200);
+    focusShown = focusSignature();
   }
 
   var channelScroll = { tile: null, key: '', started: 0, labels: [] };
@@ -622,10 +658,11 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   // ---------------------------------------------------------------- top strip
 
   function renderNow() {
-    $('when').className = layout && layout.clockSize === 'small' ? 'small' : '';
+    var clockClass = layout && layout.clockSize === 'small' ? 'small' : '';
+    if ($('when').className !== clockClass) $('when').className = clockClass;
     var d = new Date();
-    $('clock').textContent = hm(d);
-    $('date').textContent = dateText(d);
+    setText('clock', hm(d));
+    setText('date', dateText(d));
     var kind = '', title = '', via = '';
     if (lastOn.kind === 'input') {
       kind = t('home.now.lastWatched', 'Last watched');
@@ -641,10 +678,11 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
       title = lastOn.title;
       via = t('home.now.app', 'App on this TV');
     }
-    $('source').className = title && layout && layout.showLastSource !== false ? '' : 'none';
-    $('srcKind').textContent = kind || ' ';
-    $('srcTitle').textContent = title || ' ';
-    $('srcVia').textContent = via || ' ';
+    var sourceClass = title && layout && layout.showLastSource !== false ? '' : 'none';
+    if ($('source').className !== sourceClass) $('source').className = sourceClass;
+    setText('srcKind', kind || ' ');
+    setText('srcTitle', title || ' ');
+    setText('srcVia', via || ' ');
   }
 
   /*
@@ -656,13 +694,16 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   var picture = null;
   var pictureRevision = 0;
   var pictureSource = null;
+  var picturePending = null;
   var HDR_NAMES = { hdr10: 'HDR10', hlg: 'HLG', dolby_vision: t('home.plate.dolby', 'Dolby Vision') };
 
   function refreshPicture() {
-    var revision = ++pictureRevision;
+    if (document.hidden) return;
     var kind = lastOn.kind;
     if (!layout || layout.picture !== true) kind = null;
     if (kind !== 'input' && kind !== 'channel' && kind !== 'app') {
+      pictureRevision++;
+      picturePending = null;
       pictureSource = null;
       picture = null;
       return renderPicture();
@@ -674,8 +715,13 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
       picture = null;
       renderPicture();
     }
+    if (picturePending === source) return;
+    var revision = ++pictureRevision;
+    picturePending = source;
     getJson('/api/home/picture?kind=' + kind + which, function (r) {
       if (revision !== pictureRevision) return;
+      picturePending = null;
+      if (document.hidden) return;
       picture = r && r.ok ? r : null;
       renderPicture();
     });
@@ -780,8 +826,11 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   }
 
   function stageClass() {
-    $('stage').className = (state.arranging ? 'arranging' : '') + (recents.open ? ' recents' : '');
-    queueChannelTitles(200);
+    var value = (state.arranging ? 'arranging' : '') + (recents.open ? ' recents' : '') + (document.hidden ? ' page-hidden' : '');
+    if ($('stage').className !== value) {
+      $('stage').className = value;
+      queueChannelTitles(200);
+    }
   }
 
   // ---------------------------------------------------------------- recent apps
@@ -1182,7 +1231,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
     { key: 'evening', from: 17, strength: 0.72 },
     { key: 'night', from: 21, strength: 0.65 }
   ];
-  var wallShown = null, wallFront = 0;
+  var wallShown = null, wallFront = 0, wallLoading = null, wallRequest = 0;
   /*
    * ?wall=morning or ?hour=19 shows another slot, to check each one, as does
    * launching the app with { wall } or { hour }: a running app gets them at
@@ -1202,27 +1251,40 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
     return slot;
   }
   function updateWall() {
+    if (document.hidden) return;
     var slot = wallSlot();
     if (!wallAvailable || (wallSlots && !wallSlots[slot.key])) {
+      if (wallShown === null && wallLoading === null) return;
+      wallRequest++;
+      wallLoading = null;
       var blank = $('wall').querySelectorAll('.layer');
       for (var b = 0; b < blank.length; b++) { blank[b].style.opacity = 0; blank[b].style.backgroundImage = ''; }
       wallShown = null;
       return;
     }
     var revision = wallRevision, id = slot.key + '@' + slot.strength + '@' + revision;
-    if (id === wallShown) return;
+    if (id === wallShown) {
+      if (wallLoading !== null) { wallRequest++; wallLoading = null; }
+      return;
+    }
+    if (id === wallLoading) return;
+    var request = ++wallRequest;
+    wallLoading = id;
     var layers = $('wall').querySelectorAll('.layer');
     var next = layers[1 - wallFront], prev = layers[wallFront];
     var src = '/api/home/wallpaper?slot=' + slot.key + '&v=' + encodeURIComponent(revision);
     var img = new Image();
     img.onload = function () {
-      if (!wallAvailable || wallRevision !== revision || wallSlot().key !== slot.key) return;
+      if (request !== wallRequest) return;
+      wallLoading = null;
+      if (document.hidden || !wallAvailable || wallRevision !== revision || wallSlot().key !== slot.key) return;
       wallShown = id;
       next.style.backgroundImage = 'url(' + src + ')';
       next.style.opacity = slot.strength;
       prev.style.opacity = 0;
       wallFront = 1 - wallFront;
     };
+    img.onerror = function () { if (request === wallRequest) wallLoading = null; };
     img.src = src;
   }
 
@@ -1306,8 +1368,9 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   }
 
   function refreshNow() {
+    if (document.hidden) return;
     getJson('/api/home/now', function (r) {
-      if (!r) return;
+      if (!r || document.hidden) return;
       lastOn = r;
       renderNow();
       refreshPicture();
@@ -1316,9 +1379,9 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   }
 
   function refreshGuide() {
-    if (!layout || !layout.channels.length) return;
+    if (document.hidden || !layout || !layout.channels.length) return;
     getJson('/api/home/guide', function (r) {
-      if (!r || !r.guide) return;
+      if (!r || !r.guide || document.hidden) return;
       guideData = r.guide;
       if (!state.arranging && data) render();
     });
@@ -1343,11 +1406,11 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
         $('fault').className = '';
         // A new release of the server: the page is the old one's until reloaded.
         if (build && r.build && r.build !== build) {
-          if (!state.arranging && !layoutBusy) location.reload();
+          if (!document.hidden && !state.arranging && !layoutBusy) location.reload();
           return;
         }
         build = r.build || build;
-        if (r.layoutVersion && layoutVersion && r.layoutVersion !== layoutVersion && !state.arranging && !layoutBusy) load();
+        if (!document.hidden && r.layoutVersion && layoutVersion && r.layoutVersion !== layoutVersion && !state.arranging && !layoutBusy) load();
         return;
       }
       if (++beatFails === 3) $('fault').className = 'show';
@@ -1378,7 +1441,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   document.addEventListener('click', onClick);
   // Home pressed with the view already open reaches it as a relaunch.
   document.addEventListener('webOSRelaunch', returned);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) returned(); else clearChannelScroll(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) returned(); else stageClass(); });
 
   fit();
   renderNow();
@@ -1386,9 +1449,12 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   beat();
   load();
   setInterval(beat, BEAT_MS);
-  setInterval(function () { renderNow(); updateWall(); if (!document.hidden) refreshPicture(); }, 15000);
-  setInterval(function () { refreshNow(); refreshGuide(); }, 60000);
-  setInterval(function () { if (!state.arranging) load(); }, 5 * 60000);
+  setInterval(function () {
+    if (document.hidden) return;
+    renderNow(); updateWall(); updateChannelProgress(); refreshPicture();
+  }, 15000);
+  setInterval(function () { if (!document.hidden) { refreshNow(); refreshGuide(); } }, 60000);
+  setInterval(function () { if (!document.hidden && !state.arranging) load(); }, 5 * 60000);
 })();
 </script>
 </body>
