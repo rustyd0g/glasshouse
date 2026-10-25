@@ -370,6 +370,14 @@ function homeClockSize(value) {
   homeSaveLayout({ clockSize: value });
 }
 
+function homeDimmingInput(value) {
+  q('home-wall-dimming-value').textContent = value + '%';
+}
+
+function homeWallpaperDimming(value) {
+  homeSaveLayout({ wallpaperDimming: Number(value) });
+}
+
 // Added channels are the Channels row; this finds more to add. Built once, then only its list redraws.
 function homeChannelPicker() {
   return `<div class="home-ch-add">
@@ -426,6 +434,14 @@ function renderHomeWalls() {
   const box = q('home-walls');
   if (!box) return;
   const walls = homeStatus.wallpapers || {};
+  const dimming = q('home-wall-dimming');
+  if (dimming) {
+    if (document.activeElement !== dimming) {
+      dimming.value = homeLayout && typeof homeLayout.wallpaperDimming === 'number' ? homeLayout.wallpaperDimming : 50;
+    }
+    dimming.disabled = !homeWritable();
+    homeDimmingInput(dimming.value);
+  }
   const busy = !homeWritable() || homeWallUploading || walls.uploading;
   q('home-wall-slot').disabled = busy;
   q('home-wall-file').disabled = busy;

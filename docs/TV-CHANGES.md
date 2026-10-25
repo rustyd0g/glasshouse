@@ -72,6 +72,8 @@ Glasshouse Home leaves empty rows out and centres the remaining rows below the c
 
 The **Last source** choice is saved as `showLastSource` in `/var/lib/tvweb/home.json` and shows or hides the last app, input or channel beside the clock. **Clock size** is saved there as `clockSize`, either `standard` (the default) or `small`.
 
+**Wallpaper dimming** is saved as `wallpaperDimming` in `/var/lib/tvweb/home.json`, from 0 to 100 in steps of 5, defaulting to 50. It adjusts the wallpaper and its shading without changing the image files.
+
 Glasshouse Home's text and accent colours are saved in `/var/lib/tvweb/home.json` and applied to its view within a few seconds. **Use the default colours** clears the choice.
 
 While Glasshouse Home and its picture details (off by default) are on and the TV is out of standby, a read-only `videooutput/getStatus` subscription records the last video each app plays for the plate. It starts before the first Home visit and stops when either is switched off or the TV goes into standby. Recorded videos stay in memory until the server restarts. HDMI signal and picture-mode reads change no TV settings.

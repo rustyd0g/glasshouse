@@ -972,12 +972,35 @@ function homeRows(d) {
     });
     var walls = d.wallpapers || {};
     r.push(head(t('home.wall.title', 'Wallpaper')));
+    r.push({ label: t('home.wall.dimming', 'Wallpaper dimming'),
+             value: (typeof lay.wallpaperDimming === 'number' ? lay.wallpaperDimming : 50) + '%',
+             cls: 'act', act: can ? 'open' : null, key: 'homeDimming',
+             press: t('tv.home.wall.dimming.open', 'Press OK to choose a dimming level'),
+             hint: t('home.wall.dimmingDesc', 'Lower values show more of the wallpaper. 50% keeps the time-of-day shading; 100% gives a black background.') });
     r.push({ label: t('home.wall.title', 'Wallpaper'), value: walls.available ? t('home.wall.uploadedValue', 'Uploaded') : t('home.wall.black', 'Black'),
              hint: t('home.wall.tvHint', 'Images for each time of day are uploaded on the browser dashboard\u2019s Home tab.') });
     r.push(head(t('tv.home.head.more', 'More')));
     r.push({ label: t('home.reset', 'Reset the layout'), value: '', act: can ? 'homeReset' : null,
              press: t('tv.home.reset.press', 'Press OK, then again, to reset'),
              hint: t('home.resetDesc', 'The rows, apps and inputs go back to their first order, with LG\u2019s promotions hidden again. Channels stay as they are.') });
+  }
+  return r;
+}
+
+function homeDimmingRows(d) {
+  homeData = d;
+  var layout = d && d.layout || {};
+  var current = typeof layout.wallpaperDimming === 'number' ? layout.wallpaperDimming : 50;
+  var r = [{ label: t('tv.backRow.home', '\u2039 Home'), value: '', act: 'close',
+             press: t('tv.backRow.privacy.press', 'Press OK or Back to return'),
+             hint: t('tv.backRow.home.hint', 'Back to the Home tab.') }];
+  for (var level = 0; level <= 100; level += 5) {
+    r.push({ label: level === 50 ? t('home.wall.dimmingDefault', '{n}% (default)', { n: level }) : level + '%',
+             value: level === current ? t('home.wall.dimmingSelected', 'Selected') : '',
+             cls: level === current ? 'on' : '', on: level === current,
+             act: d && d.writable !== false ? 'homeDimmingValue' : null, key: level,
+             press: t('tv.home.wall.dimming.choose', 'Press OK to use this dimming level'),
+             hint: t('home.wall.dimmingDesc', 'Lower values show more of the wallpaper. 50% keeps the time-of-day shading; 100% gives a black background.') });
   }
   return r;
 }
@@ -1364,8 +1387,8 @@ function privacyRows(d) {
  * the first row, returns to it. A switch that changes the TV reloads the list,
  * since LG ties some consents together and one can take others with it.
  */
-var SUBLISTS = { consents: consentRows, services: serviceRows, catalog: catalogRows, homeChannels: homeChannelRows };
-var SUBTAB = { consents: 'privacy', services: 'privacy', catalog: 'apps', homeChannels: 'home' };
+var SUBLISTS = { consents: consentRows, services: serviceRows, catalog: catalogRows, homeChannels: homeChannelRows, homeDimming: homeDimmingRows };
+var SUBTAB = { consents: 'privacy', services: 'privacy', catalog: 'apps', homeChannels: 'home', homeDimming: 'home' };
 var sub = null, subFrom = 0;
 
 function buildRows(section, d) {
@@ -1378,6 +1401,9 @@ function openSub(key) {
   if (key === 'catalog') enterCatalog();
   rows = buildRows(T(), data[T().key]);
   sel = nextRow(firstSel());           // the first entry, past the way back
+  if (key === 'homeDimming') {
+    for (var i = 0; i < rows.length; i++) if (rows[i].on) { sel = i; break; }
+  }
   render();
 }
 
@@ -2481,6 +2507,8 @@ function activate() {
       return homeLayout({ showLastSource: !r.on });
     case 'homeClockSize':
       return homeLayout({ clockSize: r.key });
+    case 'homeDimmingValue':
+      return homeLayout({ wallpaperDimming: r.key });
     case 'homeColours':
       // The first preset is the view's own colours, saved as none chosen.
       return homeLayout({ colours: r.key.id === homeData.colourPresets[0].id ? null : { text: r.key.text, accent: r.key.accent } });

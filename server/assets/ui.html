@@ -1038,6 +1038,18 @@
 
   <div class="grp grp-sec" data-t="home.wall.title">Wallpaper</div>
   <div class="sub" data-t="home.wall.optional">Optional: upload an image for each time of day. A time of day without one has a black background.</div>
+  <div class="prot-table">
+    <div class="prot-row">
+      <div class="prot-main">
+        <div class="prot-title"><label for="home-wall-dimming" data-t="home.wall.dimming">Wallpaper dimming</label></div>
+        <div class="prot-desc" data-t="home.wall.dimmingDesc">Lower values show more of the wallpaper. 50% keeps the time-of-day shading; 100% gives a black background.</div>
+      </div>
+      <div class="prot-status lgs-range">
+        <input type="range" id="home-wall-dimming" min="0" max="100" step="5" value="50" oninput="homeDimmingInput(this.value)" onchange="homeWallpaperDimming(this.value)">
+        <output class="num" id="home-wall-dimming-value" for="home-wall-dimming">&mdash;</output>
+      </div>
+    </div>
+  </div>
   <div class="home-upload">
     <label for="home-wall-slot" data-t="home.wall.slot">Time of day</label>
     <select id="home-wall-slot" class="pill-sel">

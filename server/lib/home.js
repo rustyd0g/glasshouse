@@ -206,6 +206,7 @@ function defaults() {
     rowNotes: true,
     showLastSource: true,
     clockSize: 'standard',
+    wallpaperDimming: 50,
     // The plate describing the picture of what was last on: detail many
     // won't want on a home screen, so it waits to be switched on.
     picture: false,
@@ -255,6 +256,9 @@ function normalise(raw) {
   d.rowNotes = raw.rowNotes !== false;
   d.showLastSource = raw.showLastSource !== false;
   d.clockSize = raw.clockSize === 'small' ? 'small' : 'standard';
+  if (typeof raw.wallpaperDimming === 'number' && isFinite(raw.wallpaperDimming)) {
+    d.wallpaperDimming = Math.max(0, Math.min(100, Math.round(raw.wallpaperDimming / 5) * 5));
+  }
   d.picture = raw.picture === true;
   d.colours = validColours(raw.colours);
   if (typeof raw.hideLgHomeAtStart === 'boolean') d.hideLgHomeAtStart = raw.hideLgHomeAtStart;
@@ -362,6 +366,7 @@ function setLayout(body, cb) {
     rowNotes: typeof body.rowNotes === 'boolean' ? body.rowNotes : c.rowNotes,
     showLastSource: typeof body.showLastSource === 'boolean' ? body.showLastSource : c.showLastSource,
     clockSize: body.clockSize === 'small' || body.clockSize === 'standard' ? body.clockSize : c.clockSize,
+    wallpaperDimming: typeof body.wallpaperDimming === 'number' && isFinite(body.wallpaperDimming) ? body.wallpaperDimming : c.wallpaperDimming,
     picture: typeof body.picture === 'boolean' ? body.picture : c.picture,
     // null puts the view's own colours back.
     colours: body.colours !== undefined ? body.colours : c.colours
@@ -386,7 +391,8 @@ function setLayout(body, cb) {
 
 function layoutOf(c) {
   return { rows: c.rows, order: c.order, sort: c.sort, hidden: c.hidden, channels: c.channels, hintSeen: c.hintSeen, picture: c.picture,
-    rowNotes: c.rowNotes, showLastSource: c.showLastSource, clockSize: c.clockSize, colours: c.colours };
+    rowNotes: c.rowNotes, showLastSource: c.showLastSource, clockSize: c.clockSize,
+    wallpaperDimming: c.wallpaperDimming, colours: c.colours };
 }
 
 // ---------------------------------------------------------------- what it shows

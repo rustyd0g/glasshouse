@@ -23,6 +23,8 @@ App video tracking runs while Glasshouse Home and **Picture details** are on and
 
 The background is black. The browser dashboard can add an image for each time of day (morning 06:00, afternoon 11:00, evening 17:00, night 21:00): choose a **Time of day**, select a JPEG, PNG or WebP file up to 25 MB, then press **Upload image**. The browser fits it within 1920 × 1080 pixels, the size Glasshouse Home is drawn at, and prepares a JPEG before sending it to the TV. Images fill the screen, may be cropped, and drift slowly. **Remove uploaded images** puts black back. None are included with Glasshouse.
 
+**Wallpaper dimming**, on the Home tab or in the TV app's Wallpaper section, runs from 0% (brightest) to 100% (black), in steps of 5%. The default, 50%, keeps the existing time-of-day shading. Changes apply while Home is open, without uploading the image again.
+
 Uploads are stored in `/var/lib/tvweb/home-wallpaper-uploads`, outside the update and rollback payload. A failed or interrupted upload leaves the previous image intact. The directory is removed when Glasshouse is uninstalled; the layout backup does not include image files.
 
 ![Personal wallpapers uploaded for all four time-of-day slots](../screenshots/home-wallpaper-upload.png)
