@@ -139,6 +139,164 @@ async function visitAll(browser, jobs, problems) {
   await Promise.all([worker(), worker(), worker(), worker()]);
 }
 
+async function visitHomeRendering(browser, base, problems) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => problems.push('Home rendering: ' + e.message));
+  const layout = { rows: ['app', 'dev', 'ch'], order: { app: [], dev: [], ch: [] },
+    hidden: { app: [], dev: [], ch: [] }, channels: ['channel'], hintSeen: true };
+  const apps = Array.from({ length: 12 }, (_, i) => ({ id: 'app' + i, title: 'App ' + i,
+    icon: '/assets/dashboard-app/assets/icon80.png' }));
+  const devices = [1, 2].map(port => ({ id: 'hdmi' + port, port, name: 'HDMI ' + port }));
+  const channels = [{ id: 'channel', number: '1', name: 'A long channel name that should scroll through its complete title' }];
+  let source = { kind: 'input', port: 1, title: 'HDMI 1' }, version = 'one';
+  let title = 'A programme title long enough to scroll continuously through this channel card';
+  const reads = {}, hold = {}, releases = {};
+  await page.route('**/api/home/**', route => {
+    const key = new URL(route.request().url()).pathname.split('/').pop();
+    const time = Date.now();
+    const body = key === 'catalogue'
+      ? { ok: true, layout, layoutVersion: version, apps, devices, channels, sources: { channels: 1 },
+          order: { app: apps.map(a => a.id).concat('lg-home'), dev: devices.map(d => d.id), ch: ['channel'] } }
+      : key === 'now' ? source
+      : key === 'guide' ? { ok: true, guide: { channel: [{ title, start: time - 600000, end: time + 3600000 }] } }
+      : { ok: true, build: 'one', layoutVersion: version };
+    const response = { contentType: 'application/json', body: JSON.stringify(body) };
+    if (route.request().method() === 'GET') reads[key] = (reads[key] || 0) + 1;
+    if (hold[key]) {
+      delete hold[key];
+      releases[key] = override => route.fulfill(override || response);
+      return;
+    }
+    return route.fulfill(response);
+  });
+  const check = (ok, detail) => { if (!ok) problems.push('Home rendering: ' + detail); };
+  async function advanceRefresh(ms) {
+    const now = page.waitForResponse(r => new URL(r.url()).pathname === '/api/home/now');
+    const guide = page.waitForResponse(r => new URL(r.url()).pathname === '/api/home/guide');
+    await page.clock.fastForward(ms);
+    await Promise.all([now, guide]);
+    await page.waitForTimeout(50);
+  }
+  try {
+    await page.clock.install();
+    await page.goto(base + '/assets/home.html');
+    await page.waitForSelector('.tile.focus');
+    await page.waitForSelector('.ch .prog');
+    await page.waitForFunction(() => document.getElementById('srcTitle').textContent === 'HDMI 1');
+    await page.evaluate(async () => { await document.fonts.ready; });
+    await page.evaluate(() => {
+      window.measuredHomeRows = [];
+      const width = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth').get;
+      for (const row of document.querySelectorAll('#rows .row')) {
+        const key = row.getAttribute('data-key'), wrap = row.querySelector('.wrap');
+        Object.defineProperty(wrap, 'clientWidth', { get() { window.measuredHomeRows.push(key); return width.call(this); } });
+      }
+    });
+    await page.keyboard.press('ArrowRight');
+    check(await page.evaluate(() => window.measuredHomeRows.join(',') === 'app'),
+      'a horizontal app move measured another row');
+    await page.keyboard.press('ArrowLeft');
+    await page.evaluate(() => { window.measuredHomeRows = []; });
+    await page.keyboard.press('ArrowLeft');
+    check(await page.evaluate(() => window.measuredHomeRows.length === 0), 'moving past a row edge measured its layout again');
+    await page.keyboard.press('ArrowRight');
+    await page.evaluate(() => { window.measuredHomeRows = []; });
+    await page.keyboard.press('ArrowDown');
+    check(await page.evaluate(() => window.measuredHomeRows.join(',') === 'app,dev'),
+      'a vertical move measured an unaffected row');
+    await page.keyboard.press('ArrowDown');
+    await page.waitForSelector('.ch.focus .scrolling');
+    await page.evaluate(() => {
+      window.savedHome = {
+        app: document.querySelector('.app'), icon: document.querySelector('.app img'), dev: document.querySelector('.dev'),
+        ch: document.querySelector('.ch'), text: document.querySelector('.ch.focus .scrolling .scroll-text')
+      };
+    });
+    source = { kind: 'input', port: 2, title: 'HDMI 2' };
+    await advanceRefresh(60000);
+    check(await page.evaluate(() => window.savedHome.app === document.querySelector('.app') &&
+      window.savedHome.icon === document.querySelector('.app img') && window.savedHome.dev !== document.querySelector('.dev') &&
+      window.savedHome.ch === document.querySelector('.ch') && window.savedHome.text.isConnected),
+      'an input status update replaced app icons or the focused channel marquee');
+    await page.evaluate(() => { window.savedHome.dev = document.querySelector('.dev'); });
+    title = 'A different programme title which should replace just the Channels row';
+    await advanceRefresh(60000);
+    check(await page.evaluate(() => window.savedHome.app === document.querySelector('.app') &&
+      window.savedHome.dev === document.querySelector('.dev') && window.savedHome.ch !== document.querySelector('.ch') &&
+      Math.round(document.querySelector('.ch.focus').getBoundingClientRect().width) === 340),
+      'a programme update replaced another row or replayed channel expansion');
+
+    // A catalogue refresh and the minute timer ask for the same source and guide.
+    hold.now = hold.guide = true;
+    const before = Object.assign({}, reads);
+    const catalogue = page.waitForResponse(r => new URL(r.url()).pathname === '/api/home/catalogue');
+    await page.clock.fastForward(300000);
+    await catalogue;
+    await page.waitForTimeout(100);
+    check(reads.now === before.now + 1 && reads.guide === before.guide + 1,
+      'overlapping catalogue and minute refreshes duplicated source or guide reads');
+    await Promise.all([releases.now(), releases.guide()]);
+    await page.waitForTimeout(50);
+
+    // Heartbeats can notice the same new version before its catalogue arrives.
+    version = 'two';
+    hold.catalogue = true;
+    const catalogueBefore = reads.catalogue;
+    await page.clock.fastForward(5000);
+    await page.waitForTimeout(50);
+    await page.clock.fastForward(5000);
+    await page.waitForTimeout(50);
+    check(reads.catalogue === catalogueBefore + 1, 'heartbeats duplicated a pending catalogue read');
+    await releases.catalogue({ status: 503, contentType: 'application/json', body: '{}' });
+    await page.waitForTimeout(50);
+    await page.clock.fastForward(5000);
+    await page.waitForTimeout(100);
+    check(reads.catalogue === catalogueBefore + 2, 'a failed shared catalogue read blocked the retry');
+
+    version = 'three';
+    hold.catalogue = true;
+    await page.clock.fastForward(5000);
+    await page.waitForTimeout(50);
+    const olderCatalogue = releases.catalogue;
+    version = 'four';
+    layout.rowNotes = false;
+    await page.clock.fastForward(5000);
+    await page.waitForFunction(() => document.querySelectorAll('#rows h2 span').length === 0);
+    await olderCatalogue();
+    await page.waitForTimeout(50);
+    check(await page.locator('#rows h2 span').count() === 0, 'an older pending catalogue undid a newer dashboard change');
+
+    // A relaunch needs a fresh source; an older pending reply must not undo it.
+    source = { kind: 'input', port: 1, title: 'Old source' };
+    hold.now = true;
+    await page.clock.fastForward(60000);
+    await page.waitForTimeout(50);
+    source = { kind: 'input', port: 2, title: 'New source' };
+    await page.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
+    await page.waitForFunction(() => document.getElementById('srcTitle').textContent === 'New source');
+    await releases.now();
+    await page.waitForTimeout(50);
+    check(await page.locator('#srcTitle').textContent() === 'New source', 'a pre-relaunch reply restored the old source');
+
+    await page.evaluate(() => {
+      window.savedRows = [...document.querySelectorAll('#rows .row')];
+      window.savedIcons = [...document.querySelectorAll('.app img')];
+    });
+    await page.keyboard.down('Enter');
+    await page.clock.fastForward(900);
+    await page.keyboard.up('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowDown');
+    check(await page.evaluate(() => document.querySelector('#rows .row').getAttribute('data-key') === 'dev' &&
+      window.savedRows.every(row => row.isConnected) && window.savedIcons.every(icon => icon.isConnected)),
+      'moving a row replaced its elements or app icons');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    check(await page.locator('.sort.focus').count() === 1, 'arranging could not focus the row Order control');
+  } finally { await page.close(); }
+}
+
 async function visitHomePicture(browser, base, problems) {
   const page = await browser.newPage();
   page.on('pageerror', e => problems.push('Home picture: ' + e.message));
@@ -251,6 +409,10 @@ async function visitHomeColours(browser, base, problems) {
   });
   const rgb = hex => 'rgb(' + hex.slice(1).match(/../g).map(v => parseInt(v, 16)).join(', ') + ')';
   async function check(text, accent) {
+    // Preserved cards finish their outline-colour transition after the text changes.
+    await page.waitForFunction(expected => getComputedStyle(document.getElementById('clock')).color === expected.text &&
+      getComputedStyle(document.querySelector('.tile.focus')).outlineColor === expected.accent,
+    { text: rgb(text), accent: rgb(accent) });
     const actual = await page.evaluate(() => ({
       text: getComputedStyle(document.getElementById('clock')).color,
       focus: getComputedStyle(document.querySelector('.tile.focus')).outlineColor
@@ -273,7 +435,6 @@ async function visitHomeColours(browser, base, problems) {
       version++;
       await page.clock.fastForward(5000);
       const text = colours ? colours.text : '#ece7df';
-      await page.waitForFunction(expected => getComputedStyle(document.getElementById('clock')).color === expected, rgb(text));
       await check(text, colours ? colours.accent : text);
     }
   } finally { await page.close(); }
@@ -904,6 +1065,7 @@ async function visitTvNonOled(browser, base, problems) {
   await visitTvDashboard(browser, base, problems);
   await visitTvNonOled(browser, base, problems);
   await visitHomeArrangement(browser, base, problems);
+  await visitHomeRendering(browser, base, problems);
   await visitHomePicture(browser, base, problems);
   await visitHomeColours(browser, base, problems);
   await visitHomeEditor(browser, base, problems);
@@ -915,6 +1077,6 @@ async function visitTvNonOled(browser, base, problems) {
   await browser.close();
   for (const p of problems) console.log(p);
   console.log((web.length + tv.length) + ' tabs opened (' + web.length + ' web, ' + tv.length + ' TV app), ' +
-              'TV navigation and LCD profile, Home arranging, picture, colours, update, editing, order, uploads, readiness, availability and recents checked, ' + problems.length + ' problem' + (problems.length === 1 ? '' : 's'));
+              'TV navigation and LCD profile, Home rendering, refreshes, arranging, picture, colours, update, editing, order, uploads, readiness, availability and recents checked, ' + problems.length + ' problem' + (problems.length === 1 ? '' : 's'));
   process.exit(problems.length ? 1 : 0);
 })().catch(e => { console.error(e.message); process.exit(1); });

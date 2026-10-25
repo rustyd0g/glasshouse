@@ -278,7 +278,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 
   var data = null;       // the catalogue: apps, devices, channels, order
   var indexedData = null, itemIndex = null;
-  var rowsMarkup = null, focusShown = null;
+  var rowViews = {}, focusShown = null;
   var layout = null;     // rows, order, sort, hidden, channels, hintSeen, picture
   var guideData = {};
   var lastOn = { kind: null };
@@ -295,6 +295,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   var layoutVersion = null;
   var loadRetry = null, wallAvailable = false, initialEscape = false;
   var wallSlots = null, wallRevision = '';
+  var refreshGeneration = 0, refreshVersion = null, pendingRefreshes = Object.create(null);
 
   function $(id) { return document.getElementById(id); }
   function setText(id, value) {
@@ -333,6 +334,21 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   }
   function getJson(url, cb) { request('GET', url + (url.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now(), null, cb); }
   function postJson(url, body, cb) { request('POST', url, body || {}, cb || function () {}); }
+
+  // Apply a shared read once. Saves and relaunches need a new read, even if an
+  // older one is still pending, and must not accept that older reply.
+  function refreshJson(url, apply, done) {
+    var generation = refreshGeneration, revision = layoutRevision;
+    var key = url + '@' + generation + '/' + revision;
+    var waiting = pendingRefreshes[key];
+    if (waiting) { if (done) waiting.push(done); return; }
+    waiting = pendingRefreshes[key] = done ? [done] : [];
+    getJson(url, function (r) {
+      delete pendingRefreshes[key];
+      var accepted = generation === refreshGeneration && revision === layoutRevision && apply(r) !== false;
+      waiting.forEach(function (cb) { cb(accepted); });
+    });
+  }
 
   // ---------------------------------------------------------------- stage
 
@@ -408,31 +424,43 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 
   function render() {
     stageClass();
-    var html = '';
+    var container = $('rows'), changed = false;
     if (!shown(state.row)) { state.row = nextShown(0, 1); verticalAnchor = null; }
     layout.rows.forEach(function (kind, ri) {
+      var view = rowViews[kind];
+      if (!view) {
+        view = rowViews[kind] = { element: document.createElement('section'), markup: null, dirty: true };
+        view.element.className = 'row';
+        view.element.setAttribute('data-key', kind);
+      }
       var list = items(kind);
       var tiles = '';
       list.forEach(function (it, i) { tiles += TILE[kind](it, i); });
       var note = list.length && layout.rowNotes === false ? '' : esc(rowNote(kind, list));
-      html += '<section class="row"' + (list.length ? '' : ' data-empty="1"') + ' data-row="' + ri + '" data-key="' + kind + '">' +
-        '<h2>' + esc(ROW_TITLES[kind]) + (list.length && layout.rowNotes !== false ? '<span>' + note + '</span>' : '') +
+      var html = '<h2>' + esc(ROW_TITLES[kind]) + (list.length && layout.rowNotes !== false ? '<span>' + note + '</span>' : '') +
         '<em class="sort">' + esc(sortLabel(kind)) + '</em></h2>' +
-        (list.length ? '<div class="wrap"><div class="track">' + tiles + '</div></div>' : '<div class="slot">' + note + '</div>') +
-        '</section>';
+        (list.length ? '<div class="wrap"><div class="track">' + tiles + '</div></div>' : '<div class="slot">' + note + '</div>');
+      if (html !== view.markup) {
+        view.element.innerHTML = html;
+        view.markup = html;
+        view.tiles = view.element.querySelectorAll('.tile');
+        view.sort = view.element.querySelector('.sort');
+        view.focusTile = null;
+        view.dirty = true;
+        changed = true;
+      }
+      if (view.element.getAttribute('data-row') !== String(ri)) view.element.setAttribute('data-row', ri);
+      if (!list.length && !view.element.getAttribute('data-empty')) view.element.setAttribute('data-empty', '1');
+      else if (list.length && view.element.getAttribute('data-empty')) view.element.removeAttribute('data-empty');
+      if (container.children[ri] !== view.element) container.insertBefore(view.element, container.children[ri] || null);
     });
-    // Progress changes do not replace the tiles or disturb their animations.
-    if (html !== rowsMarkup) {
-      $('rows').innerHTML = html;
-      rowsMarkup = html;
-      applyFocus(true);
-    } else if (state.arranging || focusShown !== focusSignature()) applyFocus(false);
+    if (changed || state.arranging || focusShown !== focusSignature()) applyFocus(changed);
     updateChannelProgress();
   }
 
   function focusSignature() {
     return [state.row, state.bar, state.arranging, state.held].join('/') + '/' +
-      layout.rows.map(function (kind) { return colOf(kind); }).join(',');
+      layout.rows.map(function (kind) { return kind + ':' + (state.col[kind] || 0); }).join(',');
   }
 
   function updateChannelProgress() {
@@ -483,30 +511,47 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   };
 
   function applyFocus(instant) {
-    var rows = document.querySelectorAll('.row'), tracks = [], plans = [], stage = $('stage');
-    if (instant) stage.className += ' instant-focus';
-    for (var ri = 0; ri < rows.length; ri++) {
-      var rowEl = rows[ri], kind = rowEl.getAttribute('data-key'), active = ri === state.row && state.bar < 0;
-      var rowClass = 'row' + (rowEl.getAttribute('data-empty') ? ' empty' : '') + (active ? ' active' : '') + (active && state.held ? ' held-row' : '');
+    var tracks = [], plans = [], instantRows = [], channelChanged = false, channelImmediate = false;
+    for (var ri = 0; ri < layout.rows.length; ri++) {
+      var kind = layout.rows[ri], view = rowViews[kind], active = ri === state.row && state.bar < 0;
+      if (!view) continue;
+      if (!view.dirty && !active && !view.active && view.arranging === state.arranging) continue;
+      var c = colOf(kind), held = active && state.held;
+      if (!view.dirty && view.active === active && view.column === c && view.held === held && view.arranging === state.arranging) continue;
+      var rowEl = view.element, immediate = !!(instant && view.dirty);
+      var rowClass = 'row' + (rowEl.getAttribute('data-empty') ? ' empty' : '') + (active ? ' active' : '') + (held ? ' held-row' : '') + (immediate ? ' instant-focus' : '');
       if (rowEl.className !== rowClass) rowEl.className = rowClass;
-      var tiles = rowEl.querySelectorAll('.tile'), c = colOf(kind);
-      for (var ci = 0; ci < tiles.length; ci++) {
-        var on = active && ci === c;
-        var tileClass = tiles[ci].className.replace(/ (focus|held)\b/g, '') + (on ? ' focus' : '') + (on && state.held ? ' held' : '');
-        if (tiles[ci].className !== tileClass) tiles[ci].className = tileClass;
+      var tile = active && c >= 0 ? view.tiles[c] : null;
+      if (view.focusTile && view.focusTile !== tile) {
+        view.focusTile.className = view.focusTile.className.replace(/ (focus|held)\b/g, '');
       }
-      var sort = rowEl.querySelector('.sort'), sortClass = 'sort' + (active && c === -1 ? ' focus' : '');
-      if (sort.className !== sortClass) sort.className = sortClass;
-      tracks.push({ row: rowEl, tile: tiles[c] });
+      if (tile) {
+        var tileClass = tile.className.replace(/ (focus|held)\b/g, '') + ' focus' + (held ? ' held' : '');
+        if (tile.className !== tileClass) tile.className = tileClass;
+      }
+      var sortClass = 'sort' + (active && c === -1 ? ' focus' : '');
+      if (view.sort.className !== sortClass) view.sort.className = sortClass;
+      tracks.push({ row: rowEl, tile: view.tiles[c], instant: immediate });
+      if (immediate) instantRows.push(view);
+      if (kind === 'ch') { channelChanged = true; channelImmediate = immediate; }
+      view.focusTile = tile;
+      view.active = active;
+      view.column = c;
+      view.held = held;
+      view.arranging = state.arranging;
+      view.dirty = false;
     }
-    for (var b = 0; b < BAR.length; b++) $(BAR[b]).className = 'btn' + (state.bar === b ? ' focus' : '');
+    for (var b = 0; b < BAR.length; b++) {
+      var buttonClass = 'btn' + (state.bar === b ? ' focus' : '');
+      if ($(BAR[b]).className !== buttonClass) $(BAR[b]).className = buttonClass;
+    }
     if (state.bar < 0) {
       var focused = items(rowKey())[colOf(rowKey())];
       state.last = focused ? { kind: rowKey(), id: focused.id } : null;
     }
     // Apps and inputs come from the TV and can only be hidden; channels were added, so they are removed.
-    $('btnHide').textContent = state.last && state.last.kind === 'ch'
-      ? t('home.arrange.removeChannel', 'Remove channel') : t('home.arrange.hide', 'Hide or show');
+    setText('btnHide', state.last && state.last.kind === 'ch'
+      ? t('home.arrange.removeChannel', 'Remove channel') : t('home.arrange.hide', 'Hide or show'));
     if (state.arranging) {
       var it = items(rowKey())[colOf(rowKey())];
       $('bannerState').textContent = colOf(rowKey()) === -1
@@ -518,16 +563,18 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
     // Finish all focus writes before measuring any row, then apply all scrolls
     // together. Width transitions otherwise force a layout between each row.
     for (var ti = 0; ti < tracks.length; ti++) plans.push(measureTrackScroll(tracks[ti].row, tracks[ti].tile));
-    for (var pi = 0; pi < plans.length; pi++) applyTrackScroll(plans[pi], instant);
-    if (instant) {
-      // A refreshed card is already focused; do not replay its expansion.
-      void stage.offsetWidth;
+    for (var pi = 0; pi < plans.length; pi++) applyTrackScroll(plans[pi], tracks[pi].instant);
+    if (instantRows.length) {
+      // Suppress expansion only in rebuilt rows; another row may still animate.
+      void $('stage').offsetWidth;
       for (var si = 0; si < plans.length; si++) {
-        if (plans[si]) plans[si].track.style.webkitTransition = plans[si].track.style.transition = '';
+        if (plans[si] && tracks[si].instant) plans[si].track.style.webkitTransition = plans[si].track.style.transition = '';
       }
-      stage.className = stage.className.replace(/ instant-focus\b/g, '');
+      for (var ii = 0; ii < instantRows.length; ii++) {
+        instantRows[ii].element.className = instantRows[ii].element.className.replace(/ instant-focus\b/g, '');
+      }
     }
-    queueChannelTitles(instant ? 0 : 200);
+    if (channelChanged) queueChannelTitles(channelImmediate ? 0 : 200);
     focusShown = focusSignature();
   }
 
@@ -1349,7 +1396,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   function load(cb, whileArranging) {
     if ((layoutBusy || state.arranging) && !whileArranging) return;
     var revision = layoutRevision;
-    getJson('/api/home/catalogue', function (r) {
+    refreshJson('/api/home/catalogue', function (r) {
       if (!r || !r.ok) {
         if (!data) {
           $('fault').className = 'show';
@@ -1361,16 +1408,16 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
           clearTimeout(loadRetry);
           loadRetry = setTimeout(function () { if (!document.hidden) load(); }, 2000);
         }
-        return cb && cb(false);
+        return false;
       }
       // A reply sent before arranging or saving must not replace local edits.
-      if (revision !== layoutRevision || ((layoutBusy || state.arranging) && !whileArranging)) return;
+      if (revision !== layoutRevision || ((layoutBusy || state.arranging) && !whileArranging)) return false;
       var firstLoad = !data;
       data = r;
       layout = r.layout;
       applyColours(layout.colours);
       renderNow();
-      if (r.layoutVersion) layoutVersion = r.layoutVersion;
+      if (r.layoutVersion) layoutVersion = refreshVersion = r.layoutVersion;
       refreshPicture();
       clearTimeout(loadRetry);
       wallAvailable = !!(r.wallpapers && r.wallpapers.available);
@@ -1385,15 +1432,15 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
         layout.hintSeen = true;
       }
       refreshGuide();
-      if (cb) cb(true);
-    });
+      return true;
+    }, cb);
     refreshNow();
   }
 
   function refreshNow() {
     if (document.hidden) return;
-    getJson('/api/home/now', function (r) {
-      if (!r || document.hidden) return;
+    refreshJson('/api/home/now', function (r) {
+      if (!r || document.hidden) return false;
       lastOn = r;
       renderNow();
       refreshPicture();
@@ -1403,8 +1450,8 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 
   function refreshGuide() {
     if (document.hidden || !layout || !layout.channels.length) return;
-    getJson('/api/home/guide', function (r) {
-      if (!r || !r.guide || document.hidden) return;
+    refreshJson('/api/home/guide', function (r) {
+      if (!r || !r.guide || document.hidden) return false;
       guideData = r.guide;
       if (!state.arranging && data) render();
     });
@@ -1433,7 +1480,10 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
           return;
         }
         build = r.build || build;
-        if (!document.hidden && r.layoutVersion && layoutVersion && r.layoutVersion !== layoutVersion && !state.arranging && !layoutBusy) load();
+        if (!document.hidden && r.layoutVersion && layoutVersion && r.layoutVersion !== layoutVersion && !state.arranging && !layoutBusy) {
+          if (refreshVersion !== r.layoutVersion) { refreshVersion = r.layoutVersion; refreshGeneration++; }
+          load();
+        }
         return;
       }
       if (++beatFails === 3) $('fault').className = 'show';
@@ -1441,6 +1491,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   }
 
   function returned() {
+    refreshGeneration++;
     verticalAnchor = null;
     initialEscape = false;
     clearTimeout(okTimer);

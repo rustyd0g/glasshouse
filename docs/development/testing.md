@@ -91,6 +91,10 @@ For the Home view, arranging checks cover a late catalogue reply, resetting afte
 
 Home colour checks cover custom accents matching the stylesheet's original colours, changes and reset arriving through the heartbeat, and malformed colour values being discarded without stopping the server.
 
+Home rendering checks cover focus measurements limited to affected rows, input and programme updates preserving other rows and channel scrolling, row moves retaining app icons, shared catalogue, source and guide reads, retry after a failed shared read, an older catalogue reply arriving after a dashboard change, and an older source reply arriving after a relaunch.
+
+`test-home-refresh.js` checks that shared reads apply once and release every waiting caller, that failures allow retry, and that saves and relaunches reject older replies without releasing a newer pending read.
+
 For the TV app dashboard, checks verify the two-column layout geometry (the row list on the left and the hint pane on the right with non-zero dimensions and horizontal adjacency), remote D-pad navigation (`ArrowDown`, `ArrowUp`, `PageDown`), list translateY scrolling with the scroll arrow indicator, tab switching (`ArrowRight`, `ArrowLeft`), and that the OLED Care tab is dropped when running on a non-OLED (LCD) TV profile.
 
 ## Documentation
