@@ -109,7 +109,13 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 .row .dev.unused.focus{opacity:.6}
 .dev.last .st em:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#e9ad55;margin-right:10px;vertical-align:2px}
 
-.ch{width:224px;height:176px}
+.ch{width:224px;height:176px;
+  -webkit-transition:background-color .12s,outline-color .12s,-webkit-transform .12s,width .18s ease;
+  transition:background-color .12s,outline-color .12s,transform .12s,width .18s ease}
+.ch.focus{width:340px}
+.arranging .ch.focus,.recents .ch.focus{width:224px}
+.arranging .ch,.recents .ch,.instant-focus .ch{-webkit-transition-property:background-color,outline-color,-webkit-transform;
+  transition-property:background-color,outline-color,transform}
 .ch .num{font-family:'Outfit',sans-serif;font-size:48px;line-height:.9;font-weight:300}
 .ch .nm{font-size:21px;color:#a39d93;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ch .prog{font-size:21px;font-weight:600;margin-top:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -117,6 +123,9 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 .ch .bar i{display:block;height:100%;background:#a39d93}
 .ch.focus .bar i{background:#ece7df}
 .ch .next{font-size:17px;color:#6b665e;margin-top:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch .scrolling .scroll-text{display:inline-block;min-width:100%;vertical-align:top;position:relative}
+.ch .scroll-copy{position:absolute;left:100%;top:0;margin-left:48px}
+.ch .scrolling{text-overflow:clip}
 
 /* Arranging */
 .arranging .row h2{color:#ece7df}
@@ -188,8 +197,12 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 @media (prefers-reduced-motion:reduce){
   .track,#toast,.tile{-webkit-transition:none;transition:none}
   #wall .layer{-webkit-animation:none;animation:none}
+  .ch .scroll-text{display:inline!important;-webkit-animation:none!important;animation:none!important}
+  .ch .scroll-copy{display:none}
+  .ch .scrolling{text-overflow:ellipsis}
 }
 </style>
+<style id="channel-title-scroll"></style>
 </head>
 <body>
 <div id="stage">
@@ -420,28 +433,32 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
     ch: function (c, i) {
       var cls = 'tile ch' + (hidden('ch', c.id) ? ' hidden' : '');
       var shows = guideData[c.id] || [];
-      var body = '<div class="num">' + esc(c.number) + '</div><div class="nm">' + esc(c.name) + '</div>';
+      var body = '<div class="num">' + esc(c.number) + '</div><div class="nm"><span class="scroll-text">' + esc(c.name) + '</span></div>';
       if (shows.length) {
         var on = shows[0], pct = Math.max(0, Math.min(100, (Date.now() - on.start) / (on.end - on.start) * 100));
-        body += '<div class="prog">' + esc(on.title) + '</div><div class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>';
-        if (shows[1]) body += '<div class="next">' + esc(hm(new Date(shows[1].start)) + ' ' + shows[1].title) + '</div>';
+        body += '<div class="prog"><span class="scroll-text">' + esc(on.title) + '</span></div><div class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>';
+        if (shows[1]) body += '<div class="next"><span class="scroll-text">' + esc(hm(new Date(shows[1].start)) + ' ' + shows[1].title) + '</span></div>';
       }
       return '<div class="' + cls + '" data-c="' + i + '">' + body + hiddenLabel + '</div>';
     }
   };
 
   function applyFocus(instant) {
-    var rows = document.querySelectorAll('.row');
+    var rows = document.querySelectorAll('.row'), tracks = [], plans = [], stage = $('stage');
+    if (instant) stage.className += ' instant-focus';
     for (var ri = 0; ri < rows.length; ri++) {
       var rowEl = rows[ri], kind = rowEl.getAttribute('data-key'), active = ri === state.row && state.bar < 0;
-      rowEl.className = 'row' + (rowEl.getAttribute('data-empty') ? ' empty' : '') + (active ? ' active' : '') + (active && state.held ? ' held-row' : '');
+      var rowClass = 'row' + (rowEl.getAttribute('data-empty') ? ' empty' : '') + (active ? ' active' : '') + (active && state.held ? ' held-row' : '');
+      if (rowEl.className !== rowClass) rowEl.className = rowClass;
       var tiles = rowEl.querySelectorAll('.tile'), c = colOf(kind);
       for (var ci = 0; ci < tiles.length; ci++) {
         var on = active && ci === c;
-        tiles[ci].className = tiles[ci].className.replace(/ (focus|held)\b/g, '') + (on ? ' focus' : '') + (on && state.held ? ' held' : '');
+        var tileClass = tiles[ci].className.replace(/ (focus|held)\b/g, '') + (on ? ' focus' : '') + (on && state.held ? ' held' : '');
+        if (tiles[ci].className !== tileClass) tiles[ci].className = tileClass;
       }
-      rowEl.querySelector('.sort').className = 'sort' + (active && c === -1 ? ' focus' : '');
-      scrollTrack(rowEl, tiles[c], instant);
+      var sort = rowEl.querySelector('.sort'), sortClass = 'sort' + (active && c === -1 ? ' focus' : '');
+      if (sort.className !== sortClass) sort.className = sortClass;
+      tracks.push({ row: rowEl, tile: tiles[c] });
     }
     for (var b = 0; b < BAR.length; b++) $(BAR[b]).className = 'btn' + (state.bar === b ? ' focus' : '');
     if (state.bar < 0) {
@@ -459,10 +476,117 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
         : state.held ? t('home.arrange.moving', 'Moving {name}', { name: it.title || it.name })
         : (it.title || it.name) + (hidden(rowKey(), it.id) ? ' ' + t('home.arrange.isHidden', '(hidden)') : '');
     }
+    // Finish all focus writes before measuring any row, then apply all scrolls
+    // together. Width transitions otherwise force a layout between each row.
+    for (var ti = 0; ti < tracks.length; ti++) plans.push(measureTrackScroll(tracks[ti].row, tracks[ti].tile));
+    for (var pi = 0; pi < plans.length; pi++) applyTrackScroll(plans[pi], instant);
+    if (instant) {
+      // A refreshed card is already focused; do not replay its expansion.
+      void stage.offsetWidth;
+      for (var si = 0; si < plans.length; si++) {
+        if (plans[si]) plans[si].track.style.webkitTransition = plans[si].track.style.transition = '';
+      }
+      stage.className = stage.className.replace(/ instant-focus\b/g, '');
+    }
+    queueChannelTitles(instant ? 0 : 200);
   }
 
-  // Keeps the focused tile in view by moving the track, not the page.
-  function scrollTrack(rowEl, tile, instant) {
+  var channelScroll = { tile: null, key: '', started: 0, labels: [] };
+  var channelTitleTimer = null, channelWidthFrame = null;
+
+  function queueChannelTitles(delay) {
+    clearTimeout(channelTitleTimer);
+    channelTitleTimer = null;
+    if (!layout || rowKey() !== 'ch' || state.bar >= 0 || document.hidden || state.arranging || recents.open || recents.loading) {
+      return clearChannelScroll();
+    }
+    if (channelScroll.tile && !/\bfocus\b/.test(channelScroll.tile.className)) clearChannelScroll();
+    channelTitleTimer = setTimeout(function () {
+      channelTitleTimer = null;
+      scrollChannelTitles();
+    }, delay);
+  }
+
+  function clearChannelScroll() {
+    clearTimeout(channelTitleTimer);
+    channelTitleTimer = null;
+    channelScroll.labels.forEach(function (label) {
+      var copy = label.querySelector('.scroll-copy');
+      if (copy) copy.parentNode.removeChild(copy);
+      label.className = label.className.replace(/ scrolling\b/g, '');
+    });
+    $('channel-title-scroll').textContent = '';
+    channelScroll = { tile: null, key: '', started: 0, labels: [] };
+  }
+
+  function scrollChannelTitles() {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var tile = !document.hidden && !state.arranging && !recents.open && !recents.loading && !reduce
+      ? document.querySelector('#rows .row.active .ch.focus') : null;
+    if (!tile) return clearChannelScroll();
+    var channel = items('ch')[colOf('ch')];
+    if (!channel) return clearChannelScroll();
+    var labels = tile.querySelectorAll('.nm,.prog,.next'), measured = [], key = channel.id;
+    for (var i = 0; i < labels.length; i++) {
+      var text = labels[i].querySelector('.scroll-text');
+      if (!text) continue;
+      var title = text.firstChild ? text.firstChild.nodeValue : '';
+      var width = text.offsetWidth || labels[i].scrollWidth;
+      var distance = Math.ceil(width - labels[i].clientWidth);
+      key += '|' + title.length + ':' + title + ':' + distance;
+      if (distance > 1) measured.push({ label: labels[i], text: text, title: title, width: width, index: i });
+    }
+    if (channelScroll.tile === tile && channelScroll.key === key) return;
+    // Catalogue and guide refreshes replace the tiles; keep the same title's
+    // animation phase so a refresh does not jump back to its beginning.
+    var started = channelScroll.key === key ? channelScroll.started : Date.now();
+    clearChannelScroll();
+    channelScroll.tile = tile;
+    channelScroll.key = key;
+    channelScroll.started = started;
+    var rules = [];
+    measured.forEach(function (entry) {
+      var duration = Math.round((entry.width + 48) / 45 * 1000);
+      var elapsed = Math.max(0, Date.now() - started);
+      var delay = elapsed < 700 ? 700 - elapsed : -((elapsed - 700) % duration);
+      var first = '-webkit-transform:translateX(0);transform:translateX(0)';
+      var last = '-webkit-transform:translateX(-' + (entry.width + 48) + 'px);transform:translateX(-' + (entry.width + 48) + 'px)';
+      var frames = '0%{' + first + '}100%{' + last + '}';
+      var name = 'channelTitle' + entry.index;
+      var animation = name + ' ' + duration + 'ms linear ' + delay + 'ms infinite';
+      entry.label.className += ' scrolling';
+      var copy = document.createElement('span');
+      copy.className = 'scroll-copy';
+      copy.setAttribute('aria-hidden', 'true');
+      copy.textContent = entry.title;
+      entry.text.appendChild(copy);
+      channelScroll.labels.push(entry.label);
+      var selector = '.ch.focus .' + ['nm', 'prog', 'next'][entry.index] + '.scrolling .scroll-text';
+      rules.push('@-webkit-keyframes ' + name + '{' + frames + '}@keyframes ' + name + '{' + frames + '}' +
+        selector + '{-webkit-animation:' + animation + ';animation:' + animation + '}');
+    });
+    $('channel-title-scroll').textContent = rules.join('\n');
+  }
+
+  // The width settles after focus is applied; recheck the visible area and
+  // title overflow using the card's final size.
+  function channelWidthChanged(e) {
+    var tile = e.target;
+    if (e.propertyName !== 'width' || !/\bch\b/.test(tile.className) || !/\bfocus\b/.test(tile.className)) return;
+    if (channelWidthFrame !== null) return;
+    var row = tile.parentNode;
+    while (row && !/\brow\b/.test(row.className || '')) row = row.parentNode;
+    if (!row) return;
+    channelWidthFrame = window.requestAnimationFrame(function () {
+      channelWidthFrame = null;
+      var focused = row.querySelector('.tile.focus');
+      if (!focused || row.parentNode !== $('rows')) return;
+      scrollTrack(row, focused, false);
+      queueChannelTitles(0);
+    });
+  }
+
+  function measureTrackScroll(rowEl, tile) {
     var track = rowEl.querySelector('.track'), wrap = rowEl.querySelector('.wrap');
     if (!track) return;
     if (!tile) tile = track.querySelector('.tile');
@@ -472,10 +596,25 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
     if (tile.offsetLeft + tile.offsetWidth > cur + viewW) x = tile.offsetLeft + tile.offsetWidth - viewW;
     if (tile.offsetLeft < cur) x = tile.offsetLeft;
     x = Math.max(0, Math.min(x, track.scrollWidth - viewW));
+    return { track: track, x: x, current: cur };
+  }
+
+  function applyTrackScroll(plan, instant) {
+    if (!plan || (!instant && plan.x === plan.current)) return;
+    var track = plan.track;
     if (instant) track.style.webkitTransition = track.style.transition = 'none';
-    track.setAttribute('data-x', -x);
-    track.style.webkitTransform = track.style.transform = 'translateX(' + (-x) + 'px)';
-    if (instant) { void track.offsetWidth; track.style.webkitTransition = track.style.transition = ''; }
+    track.setAttribute('data-x', -plan.x);
+    track.style.webkitTransform = track.style.transform = 'translateX(' + (-plan.x) + 'px)';
+  }
+
+  // Keeps the focused tile in view by moving the track, not the page.
+  function scrollTrack(rowEl, tile, instant) {
+    var plan = measureTrackScroll(rowEl, tile);
+    applyTrackScroll(plan, instant);
+    if (instant && plan) {
+      void plan.track.offsetWidth;
+      plan.track.style.webkitTransition = plan.track.style.transition = '';
+    }
   }
 
   // ---------------------------------------------------------------- top strip
@@ -604,6 +743,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 
   function stageClass() {
     $('stage').className = (state.arranging ? 'arranging' : '') + (recents.open ? ' recents' : '');
+    queueChannelTitles(200);
   }
 
   // ---------------------------------------------------------------- recent apps
@@ -1187,13 +1327,16 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
   }
 
   window.addEventListener('resize', fit);
+  window.addEventListener('load', function () { queueChannelTitles(200); });
+  document.addEventListener('transitionend', channelWidthChanged);
+  document.addEventListener('webkitTransitionEnd', channelWidthChanged);
   document.addEventListener('keydown', onKeyDown, true);
   document.addEventListener('keyup', onKeyUp, true);
   document.addEventListener('mousemove', onPointer);
   document.addEventListener('click', onClick);
   // Home pressed with the view already open reaches it as a relaunch.
   document.addEventListener('webOSRelaunch', returned);
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) returned(); });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) returned(); else clearChannelScroll(); });
 
   fit();
   renderNow();
