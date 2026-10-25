@@ -204,6 +204,7 @@ function defaults() {
     channels: [],
     hintSeen: false,
     rowNotes: true,
+    showLastSource: true,
     // The plate describing the picture of what was last on: detail many
     // won't want on a home screen, so it waits to be switched on.
     picture: false,
@@ -251,6 +252,7 @@ function normalise(raw) {
   d.restorePending = raw.restorePending === true;
   d.hintSeen = raw.hintSeen === true;
   d.rowNotes = raw.rowNotes !== false;
+  d.showLastSource = raw.showLastSource !== false;
   d.picture = raw.picture === true;
   d.colours = validColours(raw.colours);
   if (typeof raw.hideLgHomeAtStart === 'boolean') d.hideLgHomeAtStart = raw.hideLgHomeAtStart;
@@ -356,6 +358,7 @@ function setLayout(body, cb) {
                       body.channels !== undefined ? stringList(body.channels, MAX_CHANNELS) : c.channels),
     hintSeen: body.hintSeen !== undefined ? body.hintSeen : c.hintSeen,
     rowNotes: typeof body.rowNotes === 'boolean' ? body.rowNotes : c.rowNotes,
+    showLastSource: typeof body.showLastSource === 'boolean' ? body.showLastSource : c.showLastSource,
     picture: typeof body.picture === 'boolean' ? body.picture : c.picture,
     // null puts the view's own colours back.
     colours: body.colours !== undefined ? body.colours : c.colours
@@ -380,7 +383,7 @@ function setLayout(body, cb) {
 
 function layoutOf(c) {
   return { rows: c.rows, order: c.order, sort: c.sort, hidden: c.hidden, channels: c.channels, hintSeen: c.hintSeen, picture: c.picture,
-    rowNotes: c.rowNotes, colours: c.colours };
+    rowNotes: c.rowNotes, showLastSource: c.showLastSource, colours: c.colours };
 }
 
 // ---------------------------------------------------------------- what it shows

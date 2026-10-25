@@ -497,7 +497,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
       title = lastOn.title;
       via = t('home.now.app', 'App on this TV');
     }
-    $('source').className = title ? '' : 'none';
+    $('source').className = title && layout && layout.showLastSource !== false ? '' : 'none';
     $('srcKind').textContent = kind || ' ';
     $('srcTitle').textContent = title || ' ';
     $('srcVia').textContent = via || ' ';
@@ -1100,6 +1100,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
       data = r;
       layout = r.layout;
       applyColours(layout.colours);
+      renderNow();
       if (r.layoutVersion) layoutVersion = r.layoutVersion;
       refreshPicture();
       clearTimeout(loadRetry);
