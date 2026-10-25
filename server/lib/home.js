@@ -81,6 +81,7 @@ var WAKE_SETTLE_MS = 1500;
  */
 var COLOUR_PRESETS = [
   { id: 'warm', text: '#ece7df', accent: '#e9ad55' },
+  { id: 'sage', text: '#ece7df', accent: '#9fbea8' },
   { id: 'glasshouse', text: '#ece7df', accent: '#30de61' },
   { id: 'white', text: '#f4f4f4', accent: '#8fb8ff' },
   { id: 'ice', text: '#d4e6f4', accent: '#5fc4ee' },
