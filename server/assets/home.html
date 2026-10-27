@@ -795,7 +795,11 @@ html.faded #stage{opacity:0}
     }
     for (var si = 0; si < scrolls.length; si++) scrollTrack(scrolls[si].row, scrolls[si].tile, scrolls[si].instant);
     $('rail').className = state.rail && !finder.open ? 'focus' : '';
-    if (channelChanged) queueChannelTitles(channelImmediate ? 0 : 200);
+    if (channelChanged) {
+      // These modes snap widths without a transitionend event.
+      if (state.arranging || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) placeRows(['ch']);
+      queueChannelTitles(channelImmediate ? 0 : 200);
+    }
     focusShown = focusSignature();
   }
 
@@ -847,7 +851,7 @@ html.faded #stage{opacity:0}
     if (channelScroll.tile === tile && channelScroll.key === key) return;
     // Catalogue and guide refreshes replace the tiles; keep the same title's
     // animation phase so a refresh does not jump back to its beginning.
-    var started = channelScroll.key === key ? channelScroll.started : Date.now();
+    var started = channelScroll.key === key ? channelScroll.started : motionNow();
     clearChannelScroll();
     channelScroll.tile = tile;
     channelScroll.key = key;
@@ -855,7 +859,7 @@ html.faded #stage{opacity:0}
     var rules = [];
     measured.forEach(function (entry) {
       var duration = Math.round((entry.width + 48) / 45 * 1000);
-      var elapsed = Math.max(0, Date.now() - started);
+      var elapsed = Math.max(0, motionNow() - started);
       var delay = elapsed < 700 ? 700 - elapsed : -((elapsed - 700) % duration);
       var first = '-webkit-transform:translateX(0);transform:translateX(0)';
       var last = '-webkit-transform:translateX(-' + (entry.width + 48) + 'px);transform:translateX(-' + (entry.width + 48) + 'px)';
@@ -880,17 +884,18 @@ html.faded #stage{opacity:0}
   // title overflow using the card's final size.
   function channelWidthChanged(e) {
     var tile = e.target;
-    if (e.propertyName !== 'width' || !/\bch\b/.test(tile.className) || !/\bfocus\b/.test(tile.className)) return;
+    if (e.propertyName !== 'width' || !/\bch\b/.test(tile.className)) return;
     if (channelWidthFrame !== null) return;
     var row = tile.parentNode;
     while (row && !/\brow\b/.test(row.className || '')) row = row.parentNode;
     if (!row) return;
     channelWidthFrame = nextFrame(function () {
       channelWidthFrame = null;
+      if (row.parentNode !== $('rows')) return;
       var focused = row.querySelector('.tile.focus');
-      if (!focused || row.parentNode !== $('rows')) return;
-      if (!pointing) scrollTrack(row, focused, false);
-      else { measure('ch'); edges(); }
+      if (focused && !pointing) scrollTrack(row, focused, false);
+      // A card shrinking after focus leaves the row can shorten its scroll range.
+      else placeRows(['ch']);
       queueChannelTitles(0);
     });
   }
@@ -919,7 +924,7 @@ html.faded #stage{opacity:0}
    */
   var tracks = {};
   var nextFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame ||
-    function (f) { return setTimeout(function () { f(Date.now()); }, 16); };
+    function (f) { return setTimeout(function () { f(motionNow()); }, 16); };
   var animating = false, lastFrame = 0, lastHover = 0;
   var EDGE = 150;          // stage px in from a row's end where it glides
   var GLIDE_MAX = 1400;    // stage px a second, pointing at the very end
@@ -1241,13 +1246,15 @@ html.faded #stage{opacity:0}
       picture = null;
       renderPicture();
     }
-    if (picturePending === source) return;
+    var generation = refreshGeneration, layoutAtStart = layoutRevision;
+    var pending = source + '@' + generation + '/' + layoutAtStart;
+    if (picturePending === pending) return;
     var revision = ++pictureRevision;
-    picturePending = source;
+    picturePending = pending;
     getJson('/api/home/picture?kind=' + kind + which, function (r) {
       if (revision !== pictureRevision) return;
       picturePending = null;
-      if (document.hidden) return;
+      if (document.hidden || generation !== refreshGeneration || layoutAtStart !== layoutRevision) return;
       picture = r && r.ok ? r : null;
       renderPicture();
     });
@@ -2337,20 +2344,26 @@ html.faded #stage{opacity:0}
   var WALL_DRIFT_KEY = 'glasshouse.home.drift';
   var wallDriftElapsed = 0, wallDriftSince = null, wallDriftMedia = null;
 
+  function motionNow() {
+    // The TV can correct its clock after boot; CSS motion follows elapsed time.
+    var clock = window.performance;
+    return clock && typeof clock.now === 'function' ? Math.floor(clock.now()) : Date.now();
+  }
+
   function wallpaperDriftPhase(now) {
     return (wallDriftElapsed + (wallDriftSince === null ? 0 : Math.max(0, now - wallDriftSince))) % WALL_DRIFT_MS;
   }
 
   function rememberWallpaperDrift() {
-    try { window.localStorage.setItem(WALL_DRIFT_KEY, String(wallpaperDriftPhase(Date.now()))); } catch (e) {}
+    try { window.localStorage.setItem(WALL_DRIFT_KEY, String(wallpaperDriftPhase(motionNow()))); } catch (e) {}
   }
 
   function syncWallpaperDrift() {
     var running = !document.hidden && wallShown !== null && !(wallDriftMedia && wallDriftMedia.matches);
     if (running === (wallDriftSince !== null)) return;
-    if (running) wallDriftSince = Date.now();
+    if (running) wallDriftSince = motionNow();
     else {
-      wallDriftElapsed = wallpaperDriftPhase(Date.now());
+      wallDriftElapsed = wallpaperDriftPhase(motionNow());
       wallDriftSince = null;
       rememberWallpaperDrift();
     }

@@ -301,6 +301,95 @@ async function visitHomeRendering(browser, base, problems) {
   } finally { await page.close(); }
 }
 
+async function visitHomeChannelBounds(browser, base, problems) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => problems.push('Home channel bounds: ' + e.message));
+  const channels = Array.from({ length: 12 }, (_, i) => ({ id: 'ch' + i, number: String(i + 1), name: 'Channel ' + i }));
+  const layout = { rows: ['app', 'ch', 'dev'], hidden: { app: [], dev: [], ch: [] },
+    channels: channels.map(c => c.id), hintSeen: true, searchHintSeen: true };
+  await page.route('**/api/home/**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    const body = pathname.endsWith('/catalogue')
+      ? { ok: true, layout, apps: [], channels, devices: [{ id: 'hdmi1', port: 1, name: 'HDMI 1' }], sources: { channels: channels.length },
+          order: { app: ['lg-home'], ch: channels.map(c => c.id), dev: ['hdmi1'] } }
+      : pathname.endsWith('/now') ? { kind: null }
+      : pathname.endsWith('/guide') ? { ok: true, guide: {} } : { ok: true, build: 'one' };
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  async function checkBounds(detail) {
+    const overscroll = await page.evaluate(() => {
+      const row = document.querySelector('.row[data-key="ch"]');
+      const track = row.querySelector('.track'), wrap = row.querySelector('.wrap'), style = getComputedStyle(wrap);
+      const viewport = wrap.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const x = -new DOMMatrixReadOnly(getComputedStyle(track).transform).m41;
+      return x - Math.max(0, track.scrollWidth - viewport);
+    });
+    if (overscroll > 1) problems.push('Home channel bounds: ' + detail + ' overscrolled the row by ' + overscroll + ' px');
+  }
+  try {
+    for (const reduced of [false, true]) {
+      await page.emulateMedia({ reducedMotion: reduced ? 'reduce' : 'no-preference' });
+      await page.goto(base + '/assets/home.html');
+      await page.waitForSelector('.tile.focus');
+      await page.keyboard.press('ArrowDown');
+      for (let i = 0; i < channels.length - 1; i++) await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(700);
+      await page.keyboard.press('ArrowDown');
+      await page.waitForTimeout(400);
+      await checkBounds('leaving an expanded end card, reduced motion ' + reduced);
+      await page.keyboard.press('ArrowUp');
+      for (let i = 0; i < channels.length; i++) await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(700);
+      await page.keyboard.down('Enter');
+      await page.waitForTimeout(900);
+      await page.keyboard.up('Enter');
+      await page.waitForSelector('#stage.arranging');
+      await checkBounds('arranging an expanded end card, reduced motion ' + reduced);
+    }
+  } finally { await page.close(); }
+}
+
+async function visitHomeVerticalNavigation(browser, base, problems) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => problems.push('Home vertical navigation: ' + e.message));
+  const apps = Array.from({ length: 30 }, (_, i) => ({ id: 'app' + i, title: 'App ' + i }));
+  const devices = Array.from({ length: 6 }, (_, i) => ({ id: 'dev' + i, name: 'Input ' + i, port: i + 1 }));
+  const channels = Array.from({ length: 12 }, (_, i) => ({ id: 'ch' + i, name: 'Channel ' + i, number: String(i + 1) }));
+  const layout = { rows: ['app', 'dev', 'ch'], hidden: { app: [], dev: [], ch: [] },
+    channels: channels.map(c => c.id), hintSeen: true, searchHintSeen: true };
+  await page.route('**/api/home/**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    const body = pathname.endsWith('/catalogue')
+      ? { ok: true, layout, apps, devices, channels, sources: { channels: channels.length },
+          order: { app: apps.map(a => a.id), dev: devices.map(d => d.id), ch: channels.map(c => c.id) } }
+      : pathname.endsWith('/now') ? { kind: null }
+      : pathname.endsWith('/guide') ? { ok: true, guide: {} } : { ok: true, build: 'one' };
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  async function expect(kind, column) {
+    const actual = await page.locator('#rows .row.active .tile.focus').evaluate(el => ({
+      kind: el.closest('.row').getAttribute('data-key'), column: Number(el.getAttribute('data-c'))
+    }));
+    if (actual.kind !== kind || actual.column !== column) problems.push('Home vertical navigation: expected ' + kind + ' ' + column + ', got ' + JSON.stringify(actual));
+  }
+  try {
+    await page.goto(base + '/assets/home.html');
+    await page.waitForSelector('.tile.focus');
+    for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowRight');
+    for (let i = 0; i < 3; i++) {
+      await page.keyboard.press('ArrowDown'); await expect('dev', 3);
+      await page.keyboard.press('ArrowDown'); await expect('ch', 5);
+      await page.waitForTimeout(220);
+      await page.keyboard.press('ArrowUp'); await expect('dev', 3);
+      await page.keyboard.press('ArrowUp'); await expect('app', 8);
+    }
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowUp');
+    await expect('app', 4);
+  } finally { await page.close(); }
+}
+
 async function visitHomeFolder(browser, base, problems) {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   page.on('pageerror', e => problems.push('Home folder: ' + e.message));
@@ -445,6 +534,7 @@ async function visitHomePicture(browser, base, problems) {
     signal: { width: 3840, height: 2160, hz: 24, chroma: 'YCbCr 4:4:4', bits: 10, hdr: 'hdr10' } };
   const netflix = { ok: true, range: 'dolbyHdr', mode: { display: 'Dolby Vision Cinema Bright' }, light: 100, oled: true,
     signal: { width: 3840, height: 2160, hz: 23.98, hdr: 'dolby_vision', played: true } };
+  let appPicture = netflix;
   const asleep = { ok: true, range: null, mode: null, light: null, oled: true, signal: null };
   let source = { kind: 'input', port: 4, title: 'HDMI 4' };
   let releaseCatalogue = null, latePicture = null, holdPicture = false, pictureReads = 0;
@@ -464,7 +554,7 @@ async function visitHomePicture(browser, base, problems) {
     if (url.pathname.endsWith('/now')) return reply(route, source);
     if (url.pathname.endsWith('/picture')) {
       pictureReads++;
-      const body = url.searchParams.get('kind') === 'app' ? netflix : url.searchParams.get('port') === '2' ? asleep : hdmi4;
+      const body = url.searchParams.get('kind') === 'app' ? appPicture : url.searchParams.get('port') === '2' ? asleep : hdmi4;
       if (holdPicture) {
         holdPicture = false;
         latePicture = () => reply(route, body);
@@ -524,6 +614,14 @@ async function visitHomePicture(browser, base, problems) {
     await latePicture();
     await page.waitForTimeout(100);
     if (await page.locator('#plMode').textContent() !== 'Dolby Vision Cinema Bright') problems.push('Home picture: a late HDMI reply replaced the app picture');
+    await delayPicture();
+    appPicture = Object.assign({}, netflix, { mode: { display: 'Dolby Vision Cinema Dark' } });
+    const beforeReturn = pictureReads;
+    await returned();
+    if (pictureReads === beforeReturn) problems.push('Home picture: returning to the same source reused a pre-return picture read');
+    await latePicture();
+    await page.waitForTimeout(100);
+    if (await page.locator('#plMode').textContent() !== 'Dolby Vision Cinema Dark') problems.push('Home picture: a pre-return reply restored stale details for the same source');
     await delayPicture();
     layout.picture = false;
     await returned();
@@ -1915,6 +2013,8 @@ async function visitTvNonOled(browser, base, problems) {
   await visitTvNonOled(browser, base, problems);
   await visitHomeArrangement(browser, base, problems);
   await visitHomeRendering(browser, base, problems);
+  await visitHomeChannelBounds(browser, base, problems);
+  await visitHomeVerticalNavigation(browser, base, problems);
   await visitHomeFolder(browser, base, problems);
   await visitHomeWallpaperDrift(browser, base, problems);
   await visitHomePicture(browser, base, problems);

@@ -107,7 +107,7 @@ installed apps have no icon files. A function a page calls that has gone, or an
 element it reaches for that has moved, breaks only when that tab opens, which
 no unit test does. It runs when the server, the pages or the fake TV change.
 
-For the Home view, arranging checks cover a late catalogue reply, resetting after moving a tile, and an update noticed while arranging. Picture checks cover a layout with picture details left at their default (off), the plate's single mode and OLED light, an input with no signal keeping its line level with the source's first line, a delayed reply after changing source, and a delayed reply after switching picture details off. Its service replies are simulated; the page and its timers run in Chromium.
+For the Home view, arranging checks cover a late catalogue reply, resetting after moving a tile, and an update noticed while arranging. Picture checks cover a layout with picture details left at their default (off), the plate's single mode and OLED light, an input with no signal keeping its line level with the source's first line, a delayed reply after changing source, returning to the same source while an older picture read is pending, and a delayed reply after switching picture details off. Its service replies are simulated; the page and its timers run in Chromium.
 
 Scrolling checks, on a row of 30 apps under the pointer, cover hovering a tile leaving its row in place, the pointer resting at the screen's side gliding the row and coming to rest when it moves away, a click held still while the row glides opening the tile under the pointer, the wheel moving the row a tile a notch and a click after it opening the tile now under the pointer, moving down a row leaving the scrolled row where it is, the keys focusing a tile in view, and the rows still gliding after Recent apps closes while its cards glide. Motion checks read the row's place every frame: a flick to the screen's side gathers speed over several frames instead of starting at full speed, the row brakes into its last tile, and moving the pointer away lets it slow to a stop. A guide check moves a channel's programme on through the minute's refresh and finds its tile left in place rather than the rows rebuilt.
 
@@ -115,13 +115,15 @@ Home colour checks cover custom accents matching the stylesheet's original colou
 
 Home rendering checks cover focus measurements limited to affected rows, input and programme updates preserving other rows and channel scrolling, row moves retaining app icons, shared catalogue, source and guide reads, retry after a failed shared read, an older catalogue reply arriving after a dashboard change, and an older source reply arriving after a relaunch.
 
+Channel bounds checks leave an expanded end card for another row or enter arranging, with normal and reduced motion, and verify that shrinking leaves no excess horizontal scroll. Vertical navigation checks move repeatedly through differently sized rows without drifting left, and verify that Left/Right establishes a new horizontal anchor. Home appearance checks in `test-home.js` cover defaults for older layouts, saved choices surviving unrelated edits and Reset, invalid updates, and wallpaper dimming rounding and limits.
+
 More apps checks cover the nine-column grid with compact cards, remote navigation and opening apps, Back closing the folder, saving an app moved with the green key, and preserving other rows and the compact clock while arranging.
 
 `test-home-refresh.js` checks that shared reads apply once and release every waiting caller, that failures allow retry, and that saves and relaunches reject older replies without releasing a newer pending read.
 
 `test-home-return.js` checks that interrupted row scrolls settle visually before refresh replies, with fading on or off, while preserving focus. It also covers glide landing, row-end limits, prefixed transforms and missing rows.
 
-`test-home-wallpaper-drift.js` checks saved motion phase and direction, pausing while hidden or without a picture, reduced motion, cycle wrap and unavailable storage. Browser checks cover the shared moving frame, colour and image updates preserving its animation, hidden pauses, reloads restoring the phase, and reduced motion holding the crop.
+`test-home-wallpaper-drift.js` checks saved motion phase and direction, pausing while hidden or without a picture, reduced motion, cycle wrap, system clock corrections, and unavailable storage or monotonic timing. Browser checks cover the shared moving frame, colour and image updates preserving its animation, hidden pauses, reloads restoring the phase, and reduced motion holding the crop.
 
 Home visibility checks delay the layout reply behind the source reply: last watched stays hidden until its saved switch is known and updates as soon as a changed layout arrives. They also cover app counts, CEC addresses, older layouts with no switches, and the clock keeping its place. `test-home.js` covers saving each switch, switching them back on and ignoring non-boolean updates.
 

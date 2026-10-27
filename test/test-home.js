@@ -1544,6 +1544,31 @@ step('last watched, the app count and CEC addresses show until switched off, one
   });
 });
 
+step('Home appearance choices survive unrelated saves and row resets, and reject invalid updates', function (done) {
+  start(null);
+  function appearance(layout) { return [layout.rowNotes, layout.showLastSource, layout.clockSize, layout.wallpaperDimming]; }
+  assert.deepEqual(appearance(home.layout()), [true, true, 'standard', 50], 'older layouts retain the original appearance');
+  home.setLayout({ rowNotes: false, showLastSource: false, clockSize: 'small', wallpaperDimming: 37 }, function (r) {
+    assert.ok(r.ok, r.error);
+    assert.deepEqual(appearance(r.layout), [false, false, 'small', 35]);
+    home.setLayout({ hintSeen: true, rowNotes: 'no', showLastSource: 1, clockSize: 'huge', wallpaperDimming: Infinity }, function (invalid) {
+      assert.deepEqual(appearance(invalid.layout), [false, false, 'small', 35], 'invalid updates leave the saved choices alone');
+      home.setLayout({ reset: true }, function (reset) {
+        assert.deepEqual(appearance(reset.layout), [false, false, 'small', 35], 'Reset changes rows and tiles');
+        var saved = home.normalise(JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8')));
+        assert.deepEqual(appearance(saved), [false, false, 'small', 35], 'all four choices survive reloading the saved file');
+        home.setLayout({ rowNotes: true, showLastSource: true, clockSize: 'standard', wallpaperDimming: 1000 }, function (restored) {
+          assert.deepEqual(appearance(restored.layout), [true, true, 'standard', 100]);
+          assert.strictEqual(home.normalise({ wallpaperDimming: -20 }).wallpaperDimming, 0);
+          assert.strictEqual(home.normalise({ wallpaperDimming: 37.5 }).wallpaperDimming, 40);
+          assert.strictEqual(home.normalise({ wallpaperDimming: Infinity }).wallpaperDimming, 50);
+          done();
+        });
+      });
+    });
+  });
+});
+
 step('fading, search and leaving out inputs with nothing plugged in stay off until switched on, are saved, and outlast a reset, beside hiding inputs one by one', function (done) {
   start(null);
   assert.strictEqual(home.layout().fade, false);
