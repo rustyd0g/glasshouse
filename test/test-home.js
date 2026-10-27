@@ -1544,6 +1544,24 @@ step('last watched, the app count and CEC addresses show until switched off, one
   });
 });
 
+step('the clock shows until switched off, the rows sit along the bottom only when switched on, and both are saved', function (done) {
+  start(null);
+  var l = home.layout();
+  assert.deepEqual([l.showClock, l.rowsBottom], [true, false]);
+  home.setLayout({ showClock: false, rowsBottom: true }, function (r) {
+    assert.deepEqual([r.layout.showClock, r.layout.rowsBottom], [false, true]);
+    var saved = home.normalise(JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8')));
+    assert.deepEqual([saved.showClock, saved.rowsBottom], [false, true]);
+    home.setLayout({ showClock: 'no', rowsBottom: 1 }, function (r2) {
+      assert.deepEqual([r2.layout.showClock, r2.layout.rowsBottom], [false, true], 'only true or false changes them');
+      home.setLayout({ showClock: true, rowsBottom: false }, function (r3) {
+        assert.deepEqual([r3.layout.showClock, r3.layout.rowsBottom], [true, false]);
+        done();
+      });
+    });
+  });
+});
+
 step('Home appearance choices survive unrelated saves and row resets, and reject invalid updates', function (done) {
   start(null);
   function appearance(layout) { return [layout.showAppCount, layout.showLastOn, layout.clockSize, layout.wallpaperDimming]; }

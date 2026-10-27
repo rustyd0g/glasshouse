@@ -45,7 +45,7 @@ var SETTINGS = 'com.webos.service.settings/';
 var ROWS = ['app', 'dev', 'ch'];
 // How a row is ordered: as arranged ('custom'), or the tile opened last first ('recent').
 var SORTS = ['custom', 'recent'];
-var SHOW_KEYS = ['showLastOn', 'showAppCount', 'showCec'];
+var SHOW_KEYS = ['showClock', 'showLastOn', 'showAppCount', 'showCec'];
 // An input opened from its tile is recorded as that device, not as the whole input.
 var TILE_OPEN_MS = 15000;
 /*
@@ -258,12 +258,16 @@ function defaults() {
     // The plate describing the picture of what was last on: detail many
     // won't want on a home screen, so it waits to be switched on.
     picture: false,
-    // What the view shows beyond the rows: the last source in the top strip
-    // and on its input's tile, the "n of total" beside Apps, and each CEC
-    // device's address. On unless switched off, as before they could be.
+    // What the view shows beyond the rows: the clock and date, the last
+    // source in the top strip and on its input's tile, the "n of total"
+    // beside Apps, and each CEC device's address. On unless switched off, as
+    // before they could be.
+    showClock: true,
     showLastOn: true,
     showAppCount: true,
     showCec: true,
+    // The rows centred below the top strip, or along the bottom as on LG's Home.
+    rowsBottom: false,
     // Search on the view (lib/home-search): off by default, so nothing typed reaches LG unless switched on.
     search: false,
     // The view fading in as it comes on screen, and out as a tile opens.
@@ -327,6 +331,7 @@ function normalise(raw) {
   // Fold the earlier duplicate switches into the choices the dashboards now edit.
   if (raw.rowNotes === false) d.showAppCount = false;
   if (raw.showLastSource === false) d.showLastOn = false;
+  d.rowsBottom = raw.rowsBottom === true;
   d.search = raw.search === true;
   d.fade = raw.fade === true;
   d.hideUnused = raw.hideUnused === true;
@@ -449,6 +454,8 @@ function setLayout(body, cb) {
     wallpaperDimming: typeof body.wallpaperDimming === 'number' && isFinite(body.wallpaperDimming) ? body.wallpaperDimming : c.wallpaperDimming,
     searchHintSeen: body.searchHintSeen !== undefined ? body.searchHintSeen : c.searchHintSeen,
     picture: typeof body.picture === 'boolean' ? body.picture : c.picture,
+    showClock: typeof body.showClock === 'boolean' ? body.showClock : c.showClock,
+    rowsBottom: typeof body.rowsBottom === 'boolean' ? body.rowsBottom : c.rowsBottom,
     showLastOn: typeof body.showLastOn === 'boolean' ? body.showLastOn : c.showLastOn,
     showAppCount: typeof body.showAppCount === 'boolean' ? body.showAppCount : c.showAppCount,
     showCec: typeof body.showCec === 'boolean' ? body.showCec : c.showCec,
@@ -481,6 +488,7 @@ function layoutOf(c) {
   return { rows: c.rows, order: c.order, sort: c.sort, hidden: c.hidden, folder: c.folder, channels: c.channels, hintSeen: c.hintSeen,
     clockSize: c.clockSize, wallpaperDimming: c.wallpaperDimming,
     searchHintSeen: c.searchHintSeen, picture: c.picture, search: c.search, fade: c.fade, hideUnused: c.hideUnused,
+    showClock: c.showClock, rowsBottom: c.rowsBottom,
     showLastOn: c.showLastOn, showAppCount: c.showAppCount, showCec: c.showCec, colours: c.colours,
     // Not saved: { host, by } while the ad blocker blocks LG's search (lib/home-search).
     searchBlocked: search.blocked() };

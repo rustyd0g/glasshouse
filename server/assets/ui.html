@@ -1019,6 +1019,20 @@
       </div>
       <div class="prot-status"><button type="button" class="pill idle" id="home-hide-lg" onclick="homeHideLg()">&mdash;</button></div>
     </div>
+    <div class="prot-row home-gh-row" id="home-picture-row" hidden>
+      <div class="prot-main">
+        <div class="prot-title" data-t="home.picture">Picture details</div>
+        <div class="prot-desc" data-t="home.pictureDesc">In the top right of Glasshouse Home: the resolution, refresh rate and HDR of what was last on, and the picture mode and brightness it gets.</div>
+      </div>
+      <div class="prot-status"><button type="button" class="pill idle" id="home-picture" onclick="homePicture()">&mdash;</button></div>
+    </div>
+    <div class="prot-row home-gh-row home-show-row" hidden>
+      <div class="prot-main">
+        <div class="prot-title" data-t="home.showClock">Clock and date</div>
+        <div class="prot-desc" data-t="home.showClockDesc">At the top left of Glasshouse Home. Switched off, the space stays empty.</div>
+      </div>
+      <div class="prot-status"><button type="button" class="pill idle" id="home-show-clock" onclick="homeShow('showClock')">&mdash;</button></div>
+    </div>
     <div class="prot-row home-gh-row" id="home-clock-size-row" hidden>
       <div class="prot-main">
         <div class="prot-title"><label for="home-clock-size" data-t="home.clockSize">Clock size</label></div>
@@ -1029,12 +1043,12 @@
         <option value="small" data-t="home.clockSize.small">Small</option>
       </select></div>
     </div>
-    <div class="prot-row home-gh-row" id="home-picture-row" hidden>
+    <div class="prot-row home-gh-row" id="home-rows-bottom-row" hidden>
       <div class="prot-main">
-        <div class="prot-title" data-t="home.picture">Picture details</div>
-        <div class="prot-desc" data-t="home.pictureDesc">In the top right of Glasshouse Home: the resolution, refresh rate and HDR of what was last on, and the picture mode and brightness it gets.</div>
+        <div class="prot-title" data-t="home.rowsBottom">Rows along the bottom</div>
+        <div class="prot-desc" data-t="home.rowsBottomDesc">The rows of apps and inputs sit along the bottom of the screen, as on LG’s Home, rather than in the middle.</div>
       </div>
-      <div class="prot-status"><button type="button" class="pill idle" id="home-picture" onclick="homePicture()">&mdash;</button></div>
+      <div class="prot-status"><button type="button" class="pill idle" id="home-rows-bottom" onclick="homeRowsBottom()">&mdash;</button></div>
     </div>
     <div class="prot-row home-gh-row home-show-row" hidden>
       <div class="prot-main">

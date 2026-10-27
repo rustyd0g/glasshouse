@@ -74,6 +74,8 @@ The worker itself stays Python 2.7 compatible for the TV.
 
 `test-routes.js` checks that an upload aborted before its file opens leaves no staged file, including a disconnect while disk space is being reserved.
 
+`test-stats-timeout.js` checks that a stats collection past its limit answers its callers with the last complete one, or the empty stand-in when none has finished, and carries on with no second collection started beside it; that `expireStats` does not take that fallback away; and that one given up on after 60 s answers no caller of the next.
+
 The Home suite also checks auto-launch restoration with a delayed settings
 read, no write when auto launch was already off, and a refused takeover with
 and without an earlier hold. Wake cases cover source changes, standby,
@@ -117,7 +119,7 @@ Home rendering checks cover focus measurements limited to affected rows, input a
 
 Channel bounds checks leave an expanded end card for another row or enter arranging, with normal and reduced motion, and verify that shrinking leaves no excess horizontal scroll. Vertical navigation checks move repeatedly through differently sized rows without drifting left, and verify that Left/Right establishes a new horizontal anchor. Home appearance checks in `test-home.js` cover defaults for older layouts, saved choices surviving unrelated edits and Reset, invalid updates, and wallpaper dimming rounding and limits.
 
-Home toggle checks click Last watched, App count and Fade in and out in the browser dashboard and TV app, verify the saved values and their effects on an open Home view, and open an app to check fade-out timing and return. `test-home.js` also checks that earlier duplicate visibility keys migrate and cannot mask later switch changes.
+Home toggle checks click Clock and date, Rows along the bottom, Last watched, App count and Fade in and out in the browser dashboard and TV app, verify the saved values and their effects on an open Home view, and open an app to check fade-out timing and return. Clock size is hidden with the clock off and restored with its saved choice when switched on, without moving the TV app's focus away from the clock switch. `test-home.js` also checks that earlier duplicate visibility keys migrate and cannot mask later switch changes.
 
 More apps checks cover the nine-column grid with compact cards, remote navigation and opening apps, Back closing the folder, saving an app moved with the green key, and preserving other rows and the compact clock while arranging.
 
@@ -127,7 +129,7 @@ More apps checks cover the nine-column grid with compact cards, remote navigatio
 
 `test-home-wallpaper-drift.js` checks saved motion phase and direction, pausing while hidden or without a picture, reduced motion, cycle wrap, system clock corrections, and unavailable storage or monotonic timing. Browser checks cover the shared moving frame, colour and image updates preserving its animation, hidden pauses, reloads restoring the phase, and reduced motion holding the crop.
 
-Home visibility checks delay the layout reply behind the source reply: last watched stays hidden until its saved switch is known and updates as soon as a changed layout arrives. They also cover app counts, CEC addresses, older layouts with no switches, and the clock keeping its place. `test-home.js` covers saving each switch, switching them back on and ignoring non-boolean updates.
+Home visibility checks delay the layout reply behind the source reply: last watched stays hidden until its saved switch is known and updates as soon as a changed layout arrives. They also cover app counts, CEC addresses, older layouts with no switches, the clock keeping its place, and with the clock switched off and the rows along the bottom, the clock hidden and the rows lower. `test-home.js` covers saving each switch, switching them back on and ignoring non-boolean updates.
 
 The Home availability check covers a TV with neither Glasshouse Home nor LG's Home's options, which has no Home tab; one with LG's Home's options alone, which shows them, Open Home at power-on usable among them, without Glasshouse Home's switch or options; and Glasshouse Home switched on, which leaves LG's Home's layout and hidden system apps out. `test-home-lg-options.js` checks the server's side: the Home tab offered for hiding system apps on webOS 4.4, and for Open Home at power-on alone, the options only sent when asked for, no tab with none of them, and hiding system apps neither offered nor switched on under Glasshouse Home. `test-tile-hiding-handover.js` checks its handover to Glasshouse Home: the apps it hid hidden there, those in More apps kept, and sam never restarted for it.
 

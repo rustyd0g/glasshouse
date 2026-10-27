@@ -134,7 +134,7 @@ function renderHome() {
   // webOS 9 only: newer TVs have no layout file for LG's Home to start on.
   if (hideRow) hideRow.hidden = !st.supported.ok || st.hideLgHomeAtStartAvailable === false;
   const clockRow = q('home-clock-size-row');
-  if (clockRow) clockRow.hidden = !st.supported.ok;
+  if (clockRow) clockRow.hidden = !st.supported.ok || (st.layout && st.layout.showClock === false);
   const clockSize = q('home-clock-size');
   if (clockSize) {
     clockSize.value = st.layout && st.layout.clockSize === 'small' ? 'small' : 'standard';
@@ -174,7 +174,7 @@ function renderHome() {
       : t('home.searchBlockedLevel', 'Unavailable: the ad blocker\u2019s Everything setting blocks {host}, which LG\u2019s search needs, so the search mark is hidden on Glasshouse Home. Set the ad blocker to Ads & telemetry or off to use it. This switch keeps its setting.', { host: searchBlocked.host });
   }
   // Fading, as Picture details.
-  [['home-fade', 'fade']].forEach(([id, field]) => {
+  [['home-fade', 'fade'], ['home-rows-bottom', 'rowsBottom']].forEach(([id, field]) => {
     const row = q(id + '-row');
     if (row) row.hidden = !st.supported.ok;
     const btn = q(id);
@@ -503,7 +503,7 @@ function homeWallpaperDimming(value) {
 }
 
 // The details Glasshouse Home shows unless switched off, and their toggles.
-const HOME_SHOW = [['showLastOn', 'home-show-last'], ['showAppCount', 'home-show-count'], ['showCec', 'home-show-cec']];
+const HOME_SHOW = [['showClock', 'home-show-clock'], ['showLastOn', 'home-show-last'], ['showAppCount', 'home-show-count'], ['showCec', 'home-show-cec']];
 
 function homeShow(key) {
   homeSaveLayout({ [key]: homeLayout[key] === false });
@@ -511,6 +511,10 @@ function homeShow(key) {
 
 function homeSearch() {
   homeSaveLayout({ search: homeLayout.search !== true });
+}
+
+function homeRowsBottom() {
+  homeSaveLayout({ rowsBottom: homeLayout.rowsBottom !== true });
 }
 
 function homeFade() {

@@ -697,6 +697,27 @@ async function visitHomeVisibility(browser, base, problems) {
     await page.clock.fastForward(5000);
     await release();
     if (await check(false) !== clock) problems.push('Home visibility: the clock moved when last watched was hidden');
+    // The clock switched off keeps its space; the rows along the bottom sit lower.
+    const place = () => page.evaluate(() => ({
+      when: getComputedStyle(document.getElementById('when')).visibility,
+      rowTop: document.querySelector('.row').getBoundingClientRect().top,
+      rowsBottom: document.getElementById('rows').getBoundingClientRect().bottom,
+      // The last row shown: an empty one is left out.
+      lastBottom: [].slice.call(document.querySelectorAll('.row')).filter(r => r.offsetHeight).pop().getBoundingClientRect().bottom
+    }));
+    const centred = await place();
+    layout.showClock = false;
+    layout.rowsBottom = true;
+    version++;
+    await page.clock.fastForward(5000);
+    await release();
+    const bottom = await place();
+    if (bottom.when !== 'hidden') problems.push('Home visibility: the clock stayed with it switched off');
+    // Only a row's own margin is left below the last row.
+    const gap = p => p.rowsBottom - p.lastBottom;
+    if (!(bottom.rowTop > centred.rowTop) || !(gap(bottom) < gap(centred) / 3)) {
+      problems.push('Home visibility: the rows are not along the bottom: ' + JSON.stringify({ centred, bottom }));
+    }
   } finally { await page.close(); }
 }
 
@@ -1127,7 +1148,7 @@ async function visitHomeToggles(browser, base, problems) {
   for (const page of [dashboard, view, tv]) page.on('pageerror', e => problems.push('Home toggles: ' + e.message));
   const layout = { rows: ['app', 'dev', 'ch'], order: { app: [], dev: [], ch: [] },
     hidden: { app: [], dev: [], ch: [] }, channels: [], hintSeen: true, searchHintSeen: true,
-    showLastOn: false, showAppCount: false, showCec: true, fade: false };
+    showLastOn: false, showAppCount: false, showCec: true, fade: false, showClock: true, rowsBottom: false, clockSize: 'small' };
   let version = 1, opens = 0;
   await context.route('**/api/home**', route => {
     const pathname = new URL(route.request().url()).pathname;
@@ -1149,6 +1170,8 @@ async function visitHomeToggles(browser, base, problems) {
     await view.waitForFunction(({ key, on }) => key === 'showLastOn'
       ? document.getElementById('source').classList.contains('none') !== on
       : key === 'showAppCount' ? !!document.querySelector('[data-key="app"] h2 span') === on
+      : key === 'showClock' ? (getComputedStyle(document.getElementById('when')).visibility !== 'hidden') === on
+      : key === 'rowsBottom' ? document.getElementById('stage').classList.contains('rows-bottom') === on
       : localStorage.getItem('glasshouse.home.fade') === (on ? '1' : '0'), { key, on });
     if (key === 'showAppCount') check(await view.locator('[data-key="dev"] h2 span').count() === 1,
       'App count also hid upstream input notes');
@@ -1171,6 +1194,13 @@ async function visitHomeToggles(browser, base, problems) {
       await clickWeb(id, key, true);
       await clickWeb(id, key, false);
     }
+    await clickWeb('home-show-clock', 'showClock', false);
+    check(!await dashboard.locator('#home-clock-size-row').isVisible(), 'clock size remained usable with the clock hidden');
+    await clickWeb('home-show-clock', 'showClock', true);
+    check(await dashboard.locator('#home-clock-size-row').isVisible() && await dashboard.locator('#home-clock-size').inputValue() === 'small',
+      'showing the clock lost its size choice');
+    await clickWeb('home-rows-bottom', 'rowsBottom', true);
+    await clickWeb('home-rows-bottom', 'rowsBottom', false);
     await clickWeb('home-fade', 'fade', true);
     const opening = view.waitForRequest(r => new URL(r.url()).pathname === '/api/home/open');
     await view.keyboard.press('Enter');
@@ -1189,16 +1219,23 @@ async function visitHomeToggles(browser, base, problems) {
 
     await tv.goto(base + '/assets/dashboard.html?tab=home');
     await tv.waitForFunction(() => typeof rows !== 'undefined' && rows.some(r => r.act === 'homeShow'));
-    for (const key of ['showLastOn', 'showAppCount', 'fade']) {
-      for (const on of [true, false]) {
+    for (const key of ['showClock', 'rowsBottom', 'showLastOn', 'showAppCount', 'fade']) {
+      for (const on of [!layout[key], layout[key]]) {
         await tv.evaluate(key => {
           sel = rows.findIndex(r => key === 'fade' ? r.act === 'homeFade' : r.act === 'homeShow' && r.key === key);
+          if (sel < 0) throw new Error('Home toggle missing: ' + key);
           render();
         }, key);
         const sent = tv.waitForRequest(r => new URL(r.url()).pathname === '/api/home/layout' && r.method() === 'POST');
         await tv.keyboard.press('Enter');
         check((await sent).postDataJSON()[key] === on, 'TV app did not save ' + key);
         await tv.waitForFunction(({ key, on }) => rows.some(r => (key === 'fade' ? r.act === 'homeFade' : r.act === 'homeShow' && r.key === key) && r.on === on), { key, on });
+        if (key === 'showClock') {
+          check(await tv.evaluate(() => rows.some(r => r.act === 'homeClockSize')) === on,
+            'TV app clock size did not follow clock visibility');
+          check(await tv.evaluate(() => rows[sel].act === 'homeShow' && rows[sel].key === 'showClock'),
+            'TV app moved focus away from the clock switch');
+        }
         await effect(key, on);
       }
     }
