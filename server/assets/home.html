@@ -2401,6 +2401,8 @@ html.faded #stage{opacity:0}
       if (!tracks.hasOwnProperty(key)) continue;
       tracks[key].x = tracks[key].target;
       tracks[key].v = 0;
+      // Unchanged rows skip rendering, so settle their transforms here.
+      paint(key);
     }
     if (state.arranging) setArranging(false);
     beat();

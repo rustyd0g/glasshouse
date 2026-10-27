@@ -23,7 +23,7 @@ Glasshouse Home displays a clock and date (following the TV's 12-hour or 24-hour
 
     ---
 
-    With the Magic Remote's pointer, hovering a tile focuses it and clicking opens it. Resting the pointer near either end of a row glides the row that way — faster the further out it points, with a soft arrow at the edge where there is more off-screen — gathering speed smoothly and braking into the last tile. The scroll wheel steps the hovered row one tile per notch, arrow keys continue from the tiles currently in view, and returning from an app preserves the focused tile and every row's scroll position.
+    With the Magic Remote's pointer, hovering a tile focuses it and clicking opens it. Resting the pointer near either end of a row glides the row that way — faster the further out it points, with a soft arrow at the edge where there is more off-screen — gathering speed smoothly and braking into the last tile. The scroll wheel steps the hovered row one tile per notch, and arrow keys continue from the tiles currently in view. Returning from an app preserves the focused tile and every row's scroll destination, settling any interrupted movement immediately.
 
 -   **Inputs & HDMI-CEC devices**
 
