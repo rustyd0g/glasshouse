@@ -51,11 +51,11 @@ Glasshouse Home displays a clock and date (following the TV's 12-hour or 24-hour
 
     When **Picture details** is switched on, a top-right badge shows the active picture preset, OLED light / backlight level, and signal format — live HDMI resolution, refresh rate, chroma, bit depth, HDR format, and VRR, or the last video format played in an app. Returning to Home refreshes these details even when the source has not changed.
 
--   **Last watched, app count and CEC addresses**
+-   **Last watched, row counts and CEC addresses**
 
     ---
 
-    **Last watched** (the top strip and the marker on that input's tile), **App count** (the "4 of 18 shown" beside Apps) and **CEC addresses** (on each input tile) are on by default, and each can be switched off from either dashboard's Home tab.
+    **Last watched** (the top strip and the marker on that input's tile), **App count** (the "4 of 18 shown" beside Apps), **Input count** (the HDMI device note beside Inputs), **Channel count** (the number added beside Channels) and **CEC addresses** (on each input tile) are on by default. Each can be switched off independently from either dashboard's Home tab.
 
     The top strip stays empty until the saved layout loads. Switching **Last watched** off leaves the clock in place.
 
@@ -71,7 +71,7 @@ Glasshouse Home displays a clock and date (following the TV's 12-hour or 24-hour
 
     ---
 
-    A smaller clock on the right, with Last watched and the Picture details plate to its left, and the rows as rounded, translucent tiles. Row titles show only while arranging, so **App count** is greyed out in this view. It is off by default, and works with **Rows along the bottom** and the other switches. Thanks to @wkirby86.
+    A smaller clock on the right, with Last watched and the Picture details plate to its left, and the rows as rounded, translucent tiles. Row titles show only while arranging, so **App count**, **Input count** and **Channel count** are greyed out in this view. It is off by default, and works with **Rows along the bottom** and the other switches. Thanks to @wkirby86.
 
     ![Glasshouse Home in Alternative View with the rows along the bottom](../screenshots/home-alternative.jpg)
 
@@ -185,7 +185,7 @@ Rows and tiles can be arranged from the **web dashboard**, the **TV app**, or **
 
 The Home tab's **Home customisation** section holds what applies to whichever Home is the TV's, in one column with each switch on the right:
 
-* While Glasshouse Home is on: **Open Home at power-on**, Glasshouse Home's own options (**Hide LG's Home while the TV starts**, **Picture details**, **Clock and date**, **Rows along the bottom**, **Alternative View**, **Clock size** while the standard view’s clock is shown, **Last watched**, **App count**, **CEC addresses**, **Search**, **Fade in and out**).
+* While Glasshouse Home is on: **Open Home at power-on**, Glasshouse Home's own options (**Hide LG's Home while the TV starts**, **Picture details**, **Clock and date**, **Rows along the bottom**, **Alternative View**, **Clock size** while the standard view’s clock is shown, **Last watched**, **App count**, **Input count**, **Channel count**, **CEC addresses**, **Search**, **Fade in and out**).
 * While LG's Home is: **Open Home at power-on**, **Home screen layout** and **Hide home screen system apps**.
 
 Each appears where the TV has it. A TV Glasshouse Home is not offered on, such as a B8 with webOS 4.4, still has the Home tab for these; there it holds Open Home at power-on and Hide home screen system apps. The TV app's Home section has the same rows.

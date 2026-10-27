@@ -1544,6 +1544,33 @@ step('last watched, the app count and CEC addresses show until switched off, one
   });
 });
 
+step('input and channel counts default on, save independently, and accept only booleans', function (done) {
+  start(null);
+  function counts(layout) { return [layout.showAppCount, layout.showInputCount, layout.showChannelCount]; }
+  assert.deepEqual(counts(home.layout()), [true, true, true]);
+  home.setLayout({ showInputCount: false }, function (r) {
+    assert.deepEqual(counts(r.layout), [true, false, true]);
+    home.setLayout({ showChannelCount: false }, function (r2) {
+      assert.deepEqual(counts(r2.layout), [true, false, false]);
+      home.setLayout({ showInputCount: true }, function (r3) {
+        assert.deepEqual(counts(r3.layout), [true, true, false]);
+        home.setLayout({ showInputCount: 'no', showChannelCount: 1 }, function (invalid) {
+          assert.deepEqual(counts(invalid.layout), [true, true, false]);
+          var saved = home.normalise(JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8')));
+          assert.deepEqual(counts(saved), [true, true, false]);
+          home.setLayout({ reset: true }, function (reset) {
+            assert.deepEqual(counts(reset.layout), [true, true, false]);
+            home.setLayout({ showChannelCount: true }, function (restored) {
+              assert.deepEqual(counts(restored.layout), [true, true, true]);
+              done();
+            });
+          });
+        });
+      });
+    });
+  });
+});
+
 step('the clock shows until switched off, the rows sit along the bottom only when switched on, and both are saved', function (done) {
   start(null);
   var l = home.layout();
@@ -1608,9 +1635,11 @@ step('earlier duplicate switches migrate to upstream choices and cannot mask lat
   start({ rowNotes: false, showLastSource: false, showAppCount: true, showLastOn: true });
   assert.strictEqual(home.layout().showLastOn, false);
   assert.strictEqual(home.layout().showAppCount, false);
+  assert.strictEqual(home.layout().showInputCount, false);
+  assert.strictEqual(home.layout().showChannelCount, false);
   assert.strictEqual(home.layout().showLastSource, undefined);
   assert.strictEqual(home.layout().rowNotes, undefined);
-  home.setLayout({ showLastOn: true, showAppCount: true }, function (r) {
+  home.setLayout({ showLastOn: true, showAppCount: true, showInputCount: true, showChannelCount: true }, function (r) {
     assert.ok(r.ok, r.error);
     assert.strictEqual(r.layout.showLastOn, true);
     assert.strictEqual(r.layout.showAppCount, true);
@@ -1619,6 +1648,8 @@ step('earlier duplicate switches migrate to upstream choices and cannot mask lat
     assert.strictEqual(saved.rowNotes, undefined);
     assert.strictEqual(home.normalise(saved).showLastOn, true);
     assert.strictEqual(home.normalise(saved).showAppCount, true);
+    assert.strictEqual(home.normalise(saved).showInputCount, true);
+    assert.strictEqual(home.normalise(saved).showChannelCount, true);
     done();
   });
 });

@@ -1160,8 +1160,10 @@ async function visitHomeToggles(browser, base, problems) {
   for (const page of [dashboard, view, tv]) page.on('pageerror', e => problems.push('Home toggles: ' + e.message));
   const layout = { rows: ['app', 'dev', 'ch'], order: { app: [], dev: [], ch: [] },
     hidden: { app: [], dev: [], ch: [] }, channels: [], hintSeen: true, searchHintSeen: true,
-    showLastOn: false, showAppCount: false, showCec: true, fade: false, showClock: true, rowsBottom: false, clockSize: 'small', view: 'standard' };
+    showLastOn: false, showAppCount: false, showInputCount: true, showChannelCount: true, showCec: true,
+    fade: false, showClock: true, rowsBottom: false, clockSize: 'small', view: 'standard' };
   const devices = Array.from({ length: 8 }, (_, i) => ({ id: 'hdmi' + (i + 1), port: i + 1, name: 'Player ' + i, address: '1.0.0.0' }));
+  const channels = [{ id: 'ch1', number: '1', name: 'Channel 1' }];
   let version = 1, opens = 0;
   await context.route('**/api/home**', route => {
     const pathname = new URL(route.request().url()).pathname;
@@ -1171,8 +1173,8 @@ async function visitHomeToggles(browser, base, problems) {
       ? { ok: true, supported: { ok: true }, installed: true, enabled: true, active: true, writable: true, layout }
       : pathname.endsWith('/catalogue')
         ? { ok: true, layout, layoutVersion: String(version), apps: [{ id: 'netflix', title: 'Netflix' }],
-            devices, channels: [], sources: { channels: 0 },
-            order: { app: ['netflix', 'lg-home'], dev: devices.map(d => d.id), ch: [] } }
+            devices, channels, sources: { channels: 1 },
+            order: { app: ['netflix', 'lg-home'], dev: devices.map(d => d.id), ch: ['ch1'] } }
         : pathname.endsWith('/now') ? { kind: 'input', port: 1, title: 'Player' }
         : { ok: true, layout, layoutVersion: String(version), build: 'one', channels: [] };
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
@@ -1183,12 +1185,16 @@ async function visitHomeToggles(browser, base, problems) {
     await view.waitForFunction(({ key, on }) => key === 'showLastOn'
       ? document.getElementById('source').classList.contains('none') !== on
       : key === 'showAppCount' ? !!document.querySelector('[data-key="app"] h2 span') === on
+      : key === 'showInputCount' ? !!document.querySelector('[data-key="dev"] h2 span') === on
+      : key === 'showChannelCount' ? !!document.querySelector('[data-key="ch"] h2 span') === on
       : key === 'showClock' ? (getComputedStyle(document.getElementById('when')).visibility !== 'hidden') === on
       : key === 'rowsBottom' ? document.getElementById('stage').classList.contains('rows-bottom') === on
       : key === 'view' ? document.getElementById('stage').classList.contains('alternative') === (on === 'alternative')
       : localStorage.getItem('glasshouse.home.fade') === (on ? '1' : '0'), { key, on });
-    if (key === 'showAppCount') check(await view.locator('[data-key="dev"] h2 span').count() === 1,
-      'App count also hid upstream input notes');
+    for (const [countKey, kind] of [['showAppCount', 'app'], ['showInputCount', 'dev'], ['showChannelCount', 'ch']]) {
+      if (key !== countKey) check(!!await view.locator('[data-key="' + kind + '"] h2 span').count() === layout[countKey],
+        key + ' also changed the ' + kind + ' count');
+    }
   }
   async function clickWeb(id, key, on) {
     const sent = dashboard.waitForRequest(r => new URL(r.url()).pathname === '/api/home/layout' && r.method() === 'POST');
@@ -1204,9 +1210,9 @@ async function visitHomeToggles(browser, base, problems) {
     await view.goto(base + '/assets/home.html');
     await view.waitForSelector('.tile.focus');
     check(await dashboard.locator('#home-last-source,#home-row-notes').count() === 0, 'duplicate switches remain');
-    for (const [id, key] of [['home-show-last', 'showLastOn'], ['home-show-count', 'showAppCount']]) {
-      await clickWeb(id, key, true);
-      await clickWeb(id, key, false);
+    for (const [id, key] of [['home-show-last', 'showLastOn'], ['home-show-count', 'showAppCount'],
+      ['home-show-input-count', 'showInputCount'], ['home-show-channel-count', 'showChannelCount']]) {
+      for (const on of [!layout[key], layout[key]]) await clickWeb(id, key, on);
     }
     await clickWeb('home-show-clock', 'showClock', false);
     check(!await dashboard.locator('#home-clock-size-row').isVisible(), 'clock size remained usable with the clock hidden');
@@ -1250,12 +1256,14 @@ async function visitHomeToggles(browser, base, problems) {
       check(bounds.retained, 'changing view rebuilt cached tiles');
       check(bounds.clock === (mode === 'alternative' ? '100px' : '128px'), mode + ' view used the wrong clock size');
       check(await dashboard.locator('#home-clock-size-row').isVisible() === (mode === 'standard'), 'clock size was offered where the view sets it');
-      check(await dashboard.locator('#home-show-count').isDisabled() === (mode === 'alternative'), 'App count did not follow Alternative View');
+      for (const id of ['home-show-count', 'home-show-input-count', 'home-show-channel-count']) {
+        check(await dashboard.locator('#' + id).isDisabled() === (mode === 'alternative'), id + ' did not follow Alternative View');
+      }
     }
 
     await tv.goto(base + '/assets/dashboard.html?tab=home');
     await tv.waitForFunction(() => typeof rows !== 'undefined' && rows.some(r => r.act === 'homeShow'));
-    for (const key of ['showClock', 'rowsBottom', 'showLastOn', 'showAppCount', 'fade', 'view']) {
+    for (const key of ['showClock', 'rowsBottom', 'showLastOn', 'showAppCount', 'showInputCount', 'showChannelCount', 'fade', 'view']) {
       for (const on of key === 'view' ? ['alternative', 'standard'] : [!layout[key], layout[key]]) {
         await tv.evaluate(key => {
           sel = rows.findIndex(r => key === 'fade' ? r.act === 'homeFade' : key === 'view' ? r.act === 'homeAlternative' : r.act === 'homeShow' && r.key === key);
@@ -1275,7 +1283,9 @@ async function visitHomeToggles(browser, base, problems) {
         if (key === 'view') {
           check(await tv.evaluate(() => rows[sel].act === 'homeAlternative'), 'TV app moved focus away from the view switch');
           check(await tv.evaluate(() => rows.some(r => r.act === 'homeClockSize')) === (on === 'standard'), 'TV app offered clock size in Alternative View');
-          check(await tv.evaluate(() => rows.some(r => r.key === 'showAppCount' && r.act === 'homeShow')) === (on === 'standard'), 'TV app count did not follow Alternative View');
+          for (const countKey of ['showAppCount', 'showInputCount', 'showChannelCount']) {
+            check(await tv.evaluate(key => rows.some(r => r.key === key && r.act === 'homeShow'), countKey) === (on === 'standard'), 'TV ' + countKey + ' did not follow Alternative View');
+          }
         }
         await effect(key, on);
       }

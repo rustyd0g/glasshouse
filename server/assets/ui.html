@@ -1088,6 +1088,22 @@
     </div>
     <div class="prot-row home-gh-row home-show-row" hidden>
       <div class="prot-main">
+        <div class="prot-title" data-t="home.showInputCount">Input count</div>
+        <div class="prot-desc" data-t="home.showInputCountDesc">Beside the Inputs row: which HDMI inputs have devices.</div>
+        <div class="prot-desc" id="home-show-input-count-alt" hidden data-t="home.showAppCountAlt">Not shown in Alternative View, whose rows have no titles.</div>
+      </div>
+      <div class="prot-status"><button type="button" class="pill idle" id="home-show-input-count" onclick="homeShow('showInputCount')">&mdash;</button></div>
+    </div>
+    <div class="prot-row home-gh-row home-show-row" hidden>
+      <div class="prot-main">
+        <div class="prot-title" data-t="home.showChannelCount">Channel count</div>
+        <div class="prot-desc" data-t="home.showChannelCountDesc">Beside the Channels row: how many channels have been added.</div>
+        <div class="prot-desc" id="home-show-channel-count-alt" hidden data-t="home.showAppCountAlt">Not shown in Alternative View, whose rows have no titles.</div>
+      </div>
+      <div class="prot-status"><button type="button" class="pill idle" id="home-show-channel-count" onclick="homeShow('showChannelCount')">&mdash;</button></div>
+    </div>
+    <div class="prot-row home-gh-row home-show-row" hidden>
+      <div class="prot-main">
         <div class="prot-title" data-t="home.showCec">CEC addresses</div>
         <div class="prot-desc" data-t="home.showCecDesc">On each input’s tile: the HDMI-CEC address of the device behind it.</div>
       </div>
