@@ -75,7 +75,7 @@ Glasshouse Home displays a clock and date (following the TV's 12-hour or 24-hour
 
 </div>
 
-Channel and input cards have a faint neutral background to define their edges. Focus adds a stronger fill and outline. Up and Down retain the original horizontal position across rows, choosing the leftmost overlapping visible card or the nearest where none overlaps. Left, Right or selecting another card with the pointer establishes a new position.
+Channel and input cards have a faint neutral background to define their edges. Apps, channels and inputs share the same translucent fill and accent outline on focus. Up and Down retain the original horizontal position across rows, choosing the leftmost overlapping visible card or the nearest where none overlaps. Left, Right or selecting another card with the pointer establishes a new position.
 
 Each row refreshes independently, preserving other rows' tiles and animations; moving rows preserves their tiles too. Focus measures only affected rows, and programme progress updates directly. Overlapping catalogue, source and guide reads share a request; saves and relaunches discard older replies. Optional refreshes and wallpaper motion pause while Home is hidden; its health heartbeat continues.
 
