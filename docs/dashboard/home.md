@@ -17,7 +17,7 @@ Glasshouse Home displays a clock and date (following the TV's 12-hour or 24-hour
 
     ---
 
-    Every app from LG's launcher, including **Live TV**, with its native icon in a compact frame. LG's promotional tiles (LG Channels, Sports, Always Ready, Alexa, Camera) start hidden, and apps hidden under [Hide home screen system apps](#hide-home-screen-system-apps) stay hidden here. Includes **Notifications**, **Search**, and an always-present **LG Home** tile at the end.
+    Every app from LG's launcher, including **Live TV**, with its native icon in a compact frame and a translucent background on focus. LG's promotional tiles (LG Channels, Sports, Always Ready, Alexa, Camera) start hidden, and apps hidden under [Hide home screen system apps](#hide-home-screen-system-apps) stay hidden here. Includes **Notifications**, **Search**, and an always-present **LG Home** tile at the end.
 
 -   **Magic Remote & scrolling**
 
