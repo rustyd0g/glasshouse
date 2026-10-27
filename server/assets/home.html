@@ -21,16 +21,11 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 #stage{position:absolute;left:0;top:0;width:1920px;height:1080px;background:#000;overflow:hidden;
   -webkit-transform-origin:0 0;transform-origin:0 0}
 
-/* Two layers cross-fade when the slot changes. The drift keeps the picture
-   from sitting still on the panel; the scrim keeps the text side and the rows
-   dark. */
+/* Both pictures share a moving frame so a cross-fade keeps the same crop. */
 #wall{position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden}
-#wall .layer{position:absolute;left:-3%;top:-3%;right:-3%;bottom:-3%;background-position:center;background-size:cover;
-  background-repeat:no-repeat;opacity:0;-webkit-transition:opacity 2.4s ease;transition:opacity 2.4s ease;
-  -webkit-animation:drift 180s ease-in-out infinite alternate;animation:drift 180s ease-in-out infinite alternate}
-.page-hidden #wall .layer{-webkit-animation-play-state:paused;animation-play-state:paused}
-@-webkit-keyframes drift{from{-webkit-transform:scale(1) translate(0,0)}to{-webkit-transform:scale(1.04) translate(-1.2%,-.8%)}}
-@keyframes drift{from{transform:scale(1) translate(0,0)}to{transform:scale(1.04) translate(-1.2%,-.8%)}}
+#wall-drift{position:absolute;left:-3%;top:-3%;right:-3%;bottom:-3%}
+#wall .layer{position:absolute;left:0;top:0;right:0;bottom:0;background-position:center;background-size:cover;
+  background-repeat:no-repeat;opacity:0;-webkit-transition:opacity 2.4s ease;transition:opacity 2.4s ease}
 #scrim{position:absolute;left:0;top:0;right:0;bottom:0;
   -webkit-transition:opacity .2s;transition:opacity .2s;
   background:radial-gradient(ellipse 34% 30% at 92% 14%,rgba(0,0,0,.55),rgba(0,0,0,0)),
@@ -292,17 +287,24 @@ html.faded #stage{opacity:0}
 
 @media (prefers-reduced-motion:reduce){
   .track,#toast,.tile,#scrim,#hits,.hit,.chip,#finder,#rail,#rail svg,#ask,html.fades #stage{-webkit-transition:none;transition:none}
-  #wall .layer{-webkit-animation:none;animation:none}
   .ch .scroll-text{display:inline!important;-webkit-animation:none!important;animation:none!important}
   .ch .scroll-copy{display:none}
   .ch .scrolling{text-overflow:ellipsis}
 }
 </style>
+<!-- Keep the drift timeline outside the stylesheet replaced by colour changes. -->
+<style id="wall-drift-animation">
+#wall-drift{-webkit-animation:drift 180s ease-in-out infinite alternate;animation:drift 180s ease-in-out infinite alternate;
+  -webkit-animation-play-state:paused;animation-play-state:paused}
+@-webkit-keyframes drift{from{-webkit-transform:scale(1) translate(0,0)}to{-webkit-transform:scale(1.04) translate(-1.2%,-.8%)}}
+@keyframes drift{from{transform:scale(1) translate(0,0)}to{transform:scale(1.04) translate(-1.2%,-.8%)}}
+@media (prefers-reduced-motion:reduce){#wall-drift{-webkit-animation-play-state:paused!important;animation-play-state:paused!important}}
+</style>
 <style id="channel-title-scroll"></style>
 </head>
 <body>
 <div id="stage" class="no-search">
-  <div id="wall"><div class="layer"></div><div class="layer"></div></div>
+  <div id="wall"><div id="wall-drift"><div class="layer"></div><div class="layer"></div></div></div>
   <div id="scrim"></div>
 
   <section id="now">
@@ -2148,6 +2150,43 @@ html.faded #stage{opacity:0}
   var wallShown = null, wallFront = 0, wallLoading = null, wallRequest = 0;
   var wallStrengthShown = 1, wallDimmingShown = null;
 
+  var WALL_DRIFT_MS = 360000; // 180 seconds in each direction.
+  var WALL_DRIFT_KEY = 'glasshouse.home.drift';
+  var wallDriftElapsed = 0, wallDriftSince = null, wallDriftMedia = null;
+
+  function wallpaperDriftPhase(now) {
+    return (wallDriftElapsed + (wallDriftSince === null ? 0 : Math.max(0, now - wallDriftSince))) % WALL_DRIFT_MS;
+  }
+
+  function rememberWallpaperDrift() {
+    try { window.localStorage.setItem(WALL_DRIFT_KEY, String(wallpaperDriftPhase(Date.now()))); } catch (e) {}
+  }
+
+  function syncWallpaperDrift() {
+    var running = !document.hidden && wallShown !== null && !(wallDriftMedia && wallDriftMedia.matches);
+    if (running === (wallDriftSince !== null)) return;
+    if (running) wallDriftSince = Date.now();
+    else {
+      wallDriftElapsed = wallpaperDriftPhase(Date.now());
+      wallDriftSince = null;
+      rememberWallpaperDrift();
+    }
+    var motion = $('wall-drift');
+    motion.style.webkitAnimationPlayState = motion.style.animationPlayState = running ? 'running' : 'paused';
+  }
+
+  function restoreWallpaperDrift() {
+    try {
+      var saved = Number(window.localStorage.getItem(WALL_DRIFT_KEY));
+      if (isFinite(saved) && saved >= 0 && saved < WALL_DRIFT_MS) wallDriftElapsed = saved;
+    } catch (e) {}
+    // A negative delay restores the crop and direction before the image appears.
+    var motion = $('wall-drift');
+    motion.style.webkitAnimationDelay = motion.style.animationDelay = -wallDriftElapsed + 'ms';
+    wallDriftMedia = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (wallDriftMedia && wallDriftMedia.addListener) wallDriftMedia.addListener(syncWallpaperDrift);
+  }
+
   function wallpaperOpacity(strength, dimming) {
     // 50 keeps the existing time-of-day look. Below it, both the image and
     // scrim brighten; above it, the image fades toward the black background.
@@ -2183,6 +2222,7 @@ html.faded #stage{opacity:0}
     return slot;
   }
   function updateWall() {
+    syncWallpaperDrift();
     if (document.hidden) return;
     applyWallpaperDimming();
     var slot = wallSlot();
@@ -2193,6 +2233,7 @@ html.faded #stage{opacity:0}
       var blank = $('wall').querySelectorAll('.layer');
       for (var b = 0; b < blank.length; b++) { blank[b].style.opacity = 0; blank[b].style.backgroundImage = ''; }
       wallShown = null;
+      syncWallpaperDrift();
       return;
     }
     var revision = wallRevision, id = slot.key + '@' + slot.strength + '@' + revision;
@@ -2212,6 +2253,7 @@ html.faded #stage{opacity:0}
       wallLoading = null;
       if (document.hidden || !wallAvailable || wallRevision !== revision || wallSlot().key !== slot.key) return;
       wallShown = id;
+      syncWallpaperDrift();
       next.style.backgroundImage = 'url(' + src + ')';
       prev.style.opacity = 0;
       wallFront = 1 - wallFront;
@@ -2441,12 +2483,18 @@ html.faded #stage{opacity:0}
   document.addEventListener('click', onClick);
   // Home pressed with the view already open reaches it as a relaunch.
   document.addEventListener('webOSRelaunch', returned);
-  document.addEventListener('visibilitychange', function () { if (document.hidden) { darken(); stageClass(); } else returned(); });
+  document.addEventListener('visibilitychange', function () {
+    syncWallpaperDrift();
+    if (document.hidden) { darken(); stageClass(); } else returned();
+  });
+  window.addEventListener('pagehide', rememberWallpaperDrift);
+  window.addEventListener('beforeunload', rememberWallpaperDrift);
 
   // Started dark where fading is chosen; in at the first catalogue, or before
   // long without one.
   if (fadeOn) { faded = true; paintFade(false); setTimeout(fadeIn, 1500); }
   fit();
+  restoreWallpaperDrift();
   renderNow();
   updateWall();
   beat();

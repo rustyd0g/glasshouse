@@ -301,6 +301,77 @@ async function visitHomeRendering(browser, base, problems) {
   } finally { await page.close(); }
 }
 
+async function visitHomeWallpaperDrift(browser, base, problems) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => problems.push('Home wallpaper motion: ' + e.message));
+  const layout = { rows: ['app', 'dev', 'ch'], hidden: { app: [], dev: [], ch: [] }, channels: [],
+    hintSeen: true, searchHintSeen: true };
+  let revision = 'one';
+  const walls = () => ({ available: true, slots: { morning: true, afternoon: true, evening: true, night: true }, revision });
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem('wallpaper-motion-seeded')) {
+      localStorage.setItem('glasshouse.home.drift', '225000');
+      sessionStorage.setItem('wallpaper-motion-seeded', '1');
+    }
+  });
+  await page.route('**/api/home/**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/home/wallpaper') return route.fulfill({ contentType: 'image/jpeg',
+      body: fs.readFileSync(path.join(ROOT, 'test/fixtures/home-wallpaper.jpg')) });
+    const body = pathname.endsWith('/catalogue')
+      ? { ok: true, layout, layoutVersion: revision, apps: [{ id: 'one', title: 'One' }], devices: [], channels: [],
+          order: { app: ['one'], dev: [], ch: [] }, sources: { channels: 0 }, wallpapers: walls() }
+      : pathname.endsWith('/now') ? { kind: null }
+      : { ok: true, build: 'one', layoutVersion: revision, wallpapers: walls() };
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  const check = (ok, detail) => { if (!ok) problems.push('Home wallpaper motion: ' + detail); };
+  const running = () => page.waitForFunction(() => document.getElementById('wall-drift').style.animationPlayState === 'running');
+  async function hidden(value) {
+    await page.evaluate(value => {
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => value });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, value);
+  }
+  try {
+    await page.goto(base + '/assets/home.html?hour=8');
+    await running();
+    check(await page.evaluate(() => getComputedStyle(document.getElementById('wall-drift')).animationDelay === '-225s'),
+      'a reload did not restore the return half of the drift');
+    await page.evaluate(() => { window.savedWallpaperMotion = document.getElementById('wall-drift').getAnimations()[0]; });
+    layout.colours = { text: '#ffffff', accent: '#55bbff' };
+    revision = 'two';
+    await page.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
+    await page.waitForFunction(() => document.getElementById('look').textContent.includes('#55bbff'));
+    await page.waitForFunction(() => [...document.querySelectorAll('#wall .layer')].some(el => el.style.backgroundImage.includes('v=two')));
+    check(await page.evaluate(() => window.savedWallpaperMotion === document.getElementById('wall-drift').getAnimations()[0]),
+      'a colour or image update restarted the drift timeline');
+    check(await page.evaluate(() => [...document.querySelectorAll('#wall .layer')].every(el => getComputedStyle(el).animationName === 'none')),
+      'cross-fading pictures do not share one moving frame');
+    await hidden(true);
+    await page.waitForTimeout(50);
+    const paused = await page.evaluate(() => window.savedWallpaperMotion.currentTime);
+    await page.waitForTimeout(150);
+    check(await page.evaluate(time => window.savedWallpaperMotion.currentTime === time, paused), 'the hidden wallpaper kept moving');
+    await hidden(false);
+    await running();
+    check(await page.evaluate(() => window.savedWallpaperMotion === document.getElementById('wall-drift').getAnimations()[0]),
+      'returning from another app restarted the drift');
+    await hidden(true);
+    const saved = await page.evaluate(() => localStorage.getItem('glasshouse.home.drift'));
+    await page.reload();
+    await running();
+    check(await page.evaluate(saved => document.getElementById('wall-drift').style.animationDelay === -Number(saved) + 'ms', saved),
+      'a full page reload lost the saved position or direction');
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.waitForFunction(() => getComputedStyle(document.getElementById('wall-drift')).animationPlayState === 'paused');
+    const still = await page.locator('#wall-drift').evaluate(el => getComputedStyle(el).transform);
+    await page.waitForTimeout(100);
+    check(still === await page.locator('#wall-drift').evaluate(el => getComputedStyle(el).transform),
+      'the wallpaper moved with reduced motion enabled');
+  } finally { await page.close(); }
+}
+
 async function visitHomePicture(browser, base, problems) {
   const page = await browser.newPage();
   page.on('pageerror', e => problems.push('Home picture: ' + e.message));
@@ -1780,6 +1851,7 @@ async function visitTvNonOled(browser, base, problems) {
   await visitTvNonOled(browser, base, problems);
   await visitHomeArrangement(browser, base, problems);
   await visitHomeRendering(browser, base, problems);
+  await visitHomeWallpaperDrift(browser, base, problems);
   await visitHomePicture(browser, base, problems);
   await visitHomeVisibility(browser, base, problems);
   await visitHomeColours(browser, base, problems);
@@ -1799,6 +1871,6 @@ async function visitTvNonOled(browser, base, problems) {
   await browser.close();
   for (const p of problems) console.log(p);
   console.log((web.length + tv.length) + ' tabs opened (' + web.length + ' web, ' + tv.length + ' TV app), ' +
-              'TV navigation and LCD profile, Home rendering, refreshes, arranging, picture, visibility, colours, fading and inputs, update, editing, order, uploads, readiness, availability, recents, scrolling, motion, guide and search checked, ' + problems.length + ' problem' + (problems.length === 1 ? '' : 's'));
+              'TV navigation and LCD profile, Home rendering, refreshes, wallpaper motion, arranging, picture, visibility, colours, fading and inputs, update, editing, order, uploads, readiness, availability, recents, scrolling, motion, guide and search checked, ' + problems.length + ' problem' + (problems.length === 1 ? '' : 's'));
   process.exit(problems.length ? 1 : 0);
 })().catch(e => { console.error(e.message); process.exit(1); });

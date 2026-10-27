@@ -81,6 +81,8 @@ Switching Glasshouse Home off reports a Home-key restore failure, including a sa
 
 Home wallpapers uploaded through the browser go into `/var/lib/tvweb/home-wallpaper-uploads`, one for each time of day. The directory is excluded from packages and rollback copies and removed with the server. Failed LG Home restoration remains visible and retryable on both dashboards.
 
+Wallpaper motion pauses while Home is hidden and resumes from its saved position and direction in the TV app's browser storage after a page reload.
+
 Glasshouse Home leaves empty rows out and centres the remaining rows below the clock. Empty rows reappear as movable strips while arranging. The **Row details** choice is saved as `rowNotes` in `/var/lib/tvweb/home.json`; switching it off hides the counts and HDMI input notes beside the headings, while empty-row messages remain visible during arranging.
 
 The **Last source** choice is saved as `showLastSource` in `/var/lib/tvweb/home.json` and shows or hides the last app, input or channel beside the clock. **Clock size** is saved there as `clockSize`, either `standard` (the default) or `small`.

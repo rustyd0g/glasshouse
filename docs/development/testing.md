@@ -116,6 +116,8 @@ Home rendering checks cover focus measurements limited to affected rows, input a
 
 `test-home-return.js` checks that interrupted row scrolls settle visually before refresh replies, with fading on or off, while preserving focus. It also covers glide landing, row-end limits, prefixed transforms and missing rows.
 
+`test-home-wallpaper-drift.js` checks saved motion phase and direction, pausing while hidden or without a picture, reduced motion, cycle wrap and unavailable storage. Browser checks cover the shared moving frame, colour and image updates preserving its animation, hidden pauses, reloads restoring the phase, and reduced motion holding the crop.
+
 Home visibility checks delay the layout reply behind the source reply: last watched stays hidden until its saved switch is known and updates as soon as a changed layout arrives. They also cover app counts, CEC addresses, older layouts with no switches, and the clock keeping its place. `test-home.js` covers saving each switch, switching them back on and ignoring non-boolean updates.
 
 The Home availability check covers a TV with neither Glasshouse Home nor LG's Home's options, which has no Home tab; one with LG's Home's options alone, which shows them, Open Home at power-on usable among them, without Glasshouse Home's switch or options; and Glasshouse Home switched on, which leaves LG's Home's layout out and keeps hidden system apps. `test-home-lg-options.js` checks the server's side: the Home tab offered for hiding system apps on webOS 4.4, and for Open Home at power-on alone, the options only sent when asked for, and no tab with none of them.
