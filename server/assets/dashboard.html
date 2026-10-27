@@ -1104,7 +1104,7 @@ function glasshouseHomeRows(d) {
     var presets = d.colourPresets || [], cur = d.layout.colours, at = cur ? -1 : 0;
     for (var pi = 0; pi < presets.length; pi++) if (cur && presets[pi].text === cur.text && presets[pi].accent === cur.accent) at = pi;
     if (presets.length) {
-      var lookNames = { warm: t('home.colours.warm', 'Warm'), sage: t('home.colours.sage', 'Sage'), glasshouse: t('home.colours.glasshouse', 'Glasshouse'),
+      var lookNames = { warm: t('home.colours.warm', 'Warm'), glasshouse: t('home.colours.glasshouse', 'Glasshouse'),
                         pure: t('home.colours.pure', 'Pure white'), white: t('home.colours.white', 'White'),
                         ice: t('home.colours.ice', 'Ice'), rose: t('home.colours.rose', 'Rose'),
                         lilac: t('home.colours.lilac', 'Lilac') };

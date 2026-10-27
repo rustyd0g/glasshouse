@@ -244,7 +244,6 @@ function renderHome() {
 
 const HOME_LOOK_NAMES = () => ({
   warm: t('home.colours.warm', 'Warm'),
-  sage: t('home.colours.sage', 'Sage'),
   glasshouse: t('home.colours.glasshouse', 'Glasshouse'),
   pure: t('home.colours.pure', 'Pure white'),
   white: t('home.colours.white', 'White'),
