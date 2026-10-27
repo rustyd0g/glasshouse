@@ -84,17 +84,19 @@ Home wallpapers uploaded through the browser, or the example set downloaded from
 
 Wallpaper motion pauses while Home is hidden and resumes from its saved position and direction in the TV app's browser storage after a page reload.
 
-Glasshouse Home leaves empty rows out and centres the remaining rows below the clock. Empty rows reappear as movable strips while arranging. The **Row details** choice is saved as `rowNotes` in `/var/lib/tvweb/home.json`; switching it off hides the counts and HDMI input notes beside the headings, while empty-row messages remain visible during arranging.
+Glasshouse Home leaves empty rows out and centres the remaining rows below the clock. Empty rows reappear as movable strips while arranging.
 
 **More apps** membership is saved as `folder` in `/var/lib/tvweb/home.json`. Hiding an app takes it out of the folder, and **Reset** empties it.
 
-The **Last source** choice is saved as `showLastSource` in `/var/lib/tvweb/home.json` and shows or hides the last app, input or channel beside the clock. **Clock size** is saved there as `clockSize`, either `standard` (the default) or `small`.
+**Clock size** is saved in `/var/lib/tvweb/home.json` as `clockSize`, either `standard` (the default) or `small`.
 
 **Wallpaper dimming** is saved as `wallpaperDimming` in `/var/lib/tvweb/home.json`, from 0 to 100 in steps of 5, defaulting to 50. It adjusts the wallpaper and its shading without changing the image files.
 
 Glasshouse Home's text and accent colours are saved in `/var/lib/tvweb/home.json` and applied to its view within a few seconds. **Use the default colours** clears the choice.
 
 Glasshouse Home's **Last watched**, **App count** and **CEC addresses** switches are saved in `/var/lib/tvweb/home.json`, on unless switched off. Both dashboards edit the same choices, which reach an open Home view through its heartbeat. The source stays hidden until the saved layout loads.
+
+Earlier `showLastSource: false` and `rowNotes: false` choices become `showLastOn: false` and `showAppCount: false` when loaded; the duplicate keys are removed on the next save. Last watched and App count then work independently, with input and channel heading notes following the upstream layout.
 
 While Glasshouse Home and its picture details (off by default) are on and the TV is out of standby, a read-only `videooutput/getStatus` subscription records the last video each app plays for the plate. It starts before the first Home visit and stops when either is switched off or the TV goes into standby. Recorded videos stay in memory until the server restarts. HDMI signal and picture-mode reads change no TV settings.
 

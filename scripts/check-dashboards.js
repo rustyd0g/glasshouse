@@ -259,12 +259,12 @@ async function visitHomeRendering(browser, base, problems) {
     await page.waitForTimeout(50);
     const olderCatalogue = releases.catalogue;
     version = 'four';
-    layout.rowNotes = false;
+    layout.showAppCount = false;
     await page.clock.fastForward(5000);
-    await page.waitForFunction(() => document.querySelectorAll('#rows h2 span').length === 0);
+    await page.waitForFunction(() => document.querySelectorAll('#rows [data-key="app"] h2 span').length === 0);
     await olderCatalogue();
     await page.waitForTimeout(50);
-    check(await page.locator('#rows h2 span').count() === 0, 'an older pending catalogue undid a newer dashboard change');
+    check(await page.locator('#rows [data-key="app"] h2 span').count() === 0, 'an older pending catalogue undid a newer dashboard change');
 
     // A relaunch needs a fresh source; an older pending reply must not undo it.
     source = { kind: 'input', port: 1, title: 'Old source' };
@@ -395,7 +395,7 @@ async function visitHomeFolder(browser, base, problems) {
   page.on('pageerror', e => problems.push('Home folder: ' + e.message));
   const apps = Array.from({ length: 24 }, (_, i) => ({ id: 'app' + i, title: 'App ' + i }));
   const layout = { rows: ['app', 'dev', 'ch'], hidden: { app: [], dev: [], ch: [] }, channels: [],
-    folder: apps.slice(2).map(a => a.id), hintSeen: true, searchHintSeen: true, rowNotes: false, clockSize: 'small' };
+    folder: apps.slice(2).map(a => a.id), hintSeen: true, searchHintSeen: true, showAppCount: false, clockSize: 'small' };
   const saves = [], opened = [];
   await page.route('**/api/home/**', route => {
     const pathname = new URL(route.request().url()).pathname;
@@ -416,7 +416,7 @@ async function visitHomeFolder(browser, base, problems) {
     await page.goto(base + '/assets/home.html');
     await page.waitForSelector('.tile.focus');
     check(await page.locator('.row[data-key="app"] .tile').count() === 4, 'the row did not separate its apps from More apps');
-    check(await page.locator('#rows h2 span').count() === 0, 'folder counts ignored the Row details setting');
+    check(await page.locator('#rows [data-key="app"] h2 span').count() === 0, 'folder counts ignored the App count setting');
     await page.evaluate(() => { window.savedFolderInput = document.querySelector('.dev'); });
     for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');
     await page.keyboard.press('Enter');
@@ -1121,6 +1121,90 @@ async function visitHomeInputsEditor(browser, base, problems) {
   } finally { await page.close(); }
 }
 
+async function visitHomeToggles(browser, base, problems) {
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const dashboard = await context.newPage(), view = await context.newPage(), tv = await context.newPage();
+  for (const page of [dashboard, view, tv]) page.on('pageerror', e => problems.push('Home toggles: ' + e.message));
+  const layout = { rows: ['app', 'dev', 'ch'], order: { app: [], dev: [], ch: [] },
+    hidden: { app: [], dev: [], ch: [] }, channels: [], hintSeen: true, searchHintSeen: true,
+    showLastOn: false, showAppCount: false, showCec: true, fade: false };
+  let version = 1, opens = 0;
+  await context.route('**/api/home**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/home/layout') { Object.assign(layout, route.request().postDataJSON()); version++; }
+    if (pathname === '/api/home/open') opens++;
+    const body = pathname === '/api/home'
+      ? { ok: true, supported: { ok: true }, installed: true, enabled: true, active: true, writable: true, layout }
+      : pathname.endsWith('/catalogue')
+        ? { ok: true, layout, layoutVersion: String(version), apps: [{ id: 'netflix', title: 'Netflix' }],
+            devices: [{ id: 'hdmi1', port: 1, name: 'Player', address: '1.0.0.0' }], channels: [], sources: { channels: 0 },
+            order: { app: ['netflix', 'lg-home'], dev: ['hdmi1'], ch: [] } }
+        : pathname.endsWith('/now') ? { kind: 'input', port: 1, title: 'Player' }
+        : { ok: true, layout, layoutVersion: String(version), build: 'one', channels: [] };
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  const check = (ok, detail) => { if (!ok) problems.push('Home toggles: ' + detail); };
+  async function effect(key, on) {
+    await view.clock.fastForward(5000);
+    await view.waitForFunction(({ key, on }) => key === 'showLastOn'
+      ? document.getElementById('source').classList.contains('none') !== on
+      : key === 'showAppCount' ? !!document.querySelector('[data-key="app"] h2 span') === on
+      : localStorage.getItem('glasshouse.home.fade') === (on ? '1' : '0'), { key, on });
+    if (key === 'showAppCount') check(await view.locator('[data-key="dev"] h2 span').count() === 1,
+      'App count also hid upstream input notes');
+  }
+  async function clickWeb(id, key, on) {
+    const sent = dashboard.waitForRequest(r => new URL(r.url()).pathname === '/api/home/layout' && r.method() === 'POST');
+    await dashboard.locator('#' + id).click();
+    check((await sent).postDataJSON()[key] === on, id + ' did not save its new value');
+    await dashboard.waitForFunction(() => !homeSaving);
+    await effect(key, on);
+  }
+  try {
+    await view.clock.install();
+    await dashboard.goto(base + '/?tab=home');
+    await dashboard.waitForFunction(() => typeof homeStatus !== 'undefined' && homeStatus && !homeSaving && homeCat);
+    await view.goto(base + '/assets/home.html');
+    await view.waitForSelector('.tile.focus');
+    check(await dashboard.locator('#home-last-source,#home-row-notes').count() === 0, 'duplicate switches remain');
+    for (const [id, key] of [['home-show-last', 'showLastOn'], ['home-show-count', 'showAppCount']]) {
+      await clickWeb(id, key, true);
+      await clickWeb(id, key, false);
+    }
+    await clickWeb('home-fade', 'fade', true);
+    const opening = view.waitForRequest(r => new URL(r.url()).pathname === '/api/home/open');
+    await view.keyboard.press('Enter');
+    await view.clock.fastForward(100);
+    check(opens === 0, 'an app opened before the fade-out could finish');
+    await view.clock.fastForward(400);
+    await opening;
+    check(await view.evaluate(() => document.documentElement.classList.contains('faded')), 'opening an app did not fade Home out');
+    await view.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
+    await view.waitForFunction(() => !document.documentElement.classList.contains('faded'));
+    await clickWeb('home-fade', 'fade', false);
+    const immediate = view.waitForRequest(r => new URL(r.url()).pathname === '/api/home/open');
+    await view.keyboard.press('Enter');
+    await immediate;
+    check(!await view.evaluate(() => document.documentElement.classList.contains('faded')), 'Home still faded with the switch off');
+
+    await tv.goto(base + '/assets/dashboard.html?tab=home');
+    await tv.waitForFunction(() => typeof rows !== 'undefined' && rows.some(r => r.act === 'homeShow'));
+    for (const key of ['showLastOn', 'showAppCount', 'fade']) {
+      for (const on of [true, false]) {
+        await tv.evaluate(key => {
+          sel = rows.findIndex(r => key === 'fade' ? r.act === 'homeFade' : r.act === 'homeShow' && r.key === key);
+          render();
+        }, key);
+        const sent = tv.waitForRequest(r => new URL(r.url()).pathname === '/api/home/layout' && r.method() === 'POST');
+        await tv.keyboard.press('Enter');
+        check((await sent).postDataJSON()[key] === on, 'TV app did not save ' + key);
+        await tv.waitForFunction(({ key, on }) => rows.some(r => (key === 'fade' ? r.act === 'homeFade' : r.act === 'homeShow' && r.key === key) && r.on === on), { key, on });
+        await effect(key, on);
+      }
+    }
+  } finally { await context.close(); }
+}
+
 async function visitHomeColours(browser, base, problems) {
   const page = await browser.newPage();
   page.on('pageerror', e => problems.push('Home colours: ' + e.message));
@@ -1595,7 +1679,7 @@ async function visitHomeAvailability(browser, base, problems) {
       if (st.homeAutoLaunch !== undefined && (!await page.locator('#home-autolaunch').isVisible() || await page.locator('#home-autolaunch').isDisabled()))
         fail('Open Home at power-on missing or unusable');
       if (!c.glasshouse) {
-        for (const id of ['home-picture-row', 'home-row-notes-row', 'home-clock-size-row', 'home-last-source-row']) {
+        for (const id of ['home-picture-row', 'home-clock-size-row']) {
           if (await page.locator('#' + id).isVisible()) fail('Glasshouse Home\'s option shown without it: ' + id);
         }
       }
@@ -2019,6 +2103,7 @@ async function visitTvNonOled(browser, base, problems) {
   await visitHomeWallpaperDrift(browser, base, problems);
   await visitHomePicture(browser, base, problems);
   await visitHomeVisibility(browser, base, problems);
+  await visitHomeToggles(browser, base, problems);
   await visitHomeColours(browser, base, problems);
   await visitHomeFadeAndInputs(browser, base, problems);
   await visitHomeInputsEditor(browser, base, problems);

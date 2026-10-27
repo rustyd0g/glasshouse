@@ -629,7 +629,7 @@ html.faded #stage{opacity:0}
       var list = items(kind);
       var tiles = '';
       list.forEach(function (it, i) { tiles += TILE[kind](it, i); });
-      var note = list.length && layout.rowNotes === false ? '' : esc(rowNote(kind, list));
+      var note = esc(rowNote(kind, list));
       var html = '<h2>' + esc(ROW_TITLES[kind]) + (list.length && note ? '<span>' + note + '</span>' : '') +
         '<em class="sort">' + esc(sortLabel(kind)) + '</em></h2>' +
         (list.length ? '<div class="wrap"><i class="edge l"></i><i class="edge r"></i><div class="track">' + tiles + '</div></div>' : '<div class="slot">' + note + '</div>');
@@ -1195,7 +1195,7 @@ html.faded #stage{opacity:0}
     $('mer').hidden = !p[1];
     setText('date', dateText(d));
     var kind = '', title = '', via = '';
-    if (!layout || layout.showLastOn === false || layout.showLastSource === false) {
+    if (!layout || layout.showLastOn === false) {
       // The source can arrive before its saved visibility. Keep the clock's space.
     } else if (lastOn.kind === 'input') {
       kind = t('home.now.lastWatched', 'Last watched');

@@ -1059,12 +1059,6 @@ function glasshouseHomeRows(d) {
              warn: t('home.hideLgWarn', 'Warning: If Glasshouse stops running (for example after a firmware update removes root), LG\u2019s Home will stay black until it is put back over SSH.') });
   }
   if (d.supported.ok && d.layout) {
-    var notesOn = d.layout.rowNotes !== false;
-    r.push({ label: t('home.rowNotes', 'Row details'),
-             value: notesOn ? t('common.on', 'On') : t('common.off', 'Off'), cls: notesOn ? 'on' : 'off',
-             act: can ? 'homeRowNotes' : null, on: notesOn,
-             press: notesOn ? t('tv.press.switchOff', 'Press OK to switch off') : t('tv.press.switchOn', 'Press OK to switch on'),
-             hint: t('home.rowNotesDesc', 'Show counts and HDMI input notes beside the Apps, Inputs and Channels headings.') });
     var smallClock = d.layout.clockSize === 'small';
     var nextClock = smallClock ? t('home.clockSize.standard', 'Standard') : t('home.clockSize.small', 'Small');
     r.push({ label: t('home.clockSize', 'Clock size'),
@@ -1072,12 +1066,6 @@ function glasshouseHomeRows(d) {
              act: can ? 'homeClockSize' : null, key: smallClock ? 'standard' : 'small',
              press: t('tv.home.clockSize.press', 'Press OK for {name}', { name: nextClock }),
              hint: t('home.clockSizeDesc', 'Choose the size of the clock and date.') });
-    var sourceOn = d.layout.showLastSource !== false;
-    r.push({ label: t('home.lastSource', 'Last source'),
-             value: sourceOn ? t('common.on', 'On') : t('common.off', 'Off'), cls: sourceOn ? 'on' : 'off',
-             act: can ? 'homeLastSource' : null, on: sourceOn,
-             press: sourceOn ? t('tv.press.switchOff', 'Press OK to switch off') : t('tv.press.switchOn', 'Press OK to switch on'),
-             hint: t('home.lastSourceDesc', 'Show the last app, input or channel beside the clock.') });
     var picOn = d.layout.picture === true;
     r.push({ label: t('home.picture', 'Picture details'),
              value: picOn ? t('common.on', 'On') : t('common.off', 'Off'), cls: picOn ? 'on' : 'off',
@@ -2711,10 +2699,6 @@ function activate() {
                       r.on ? t('tv.flash.switchedOff', 'Switched off') : t('tv.flash.switchedOn', 'Switched on'));
     case 'homePicture':
       return homeLayout({ picture: !r.on });
-    case 'homeRowNotes':
-      return homeLayout({ rowNotes: !r.on });
-    case 'homeLastSource':
-      return homeLayout({ showLastSource: !r.on });
     case 'homeClockSize':
       return homeLayout({ clockSize: r.key });
     case 'homeDimmingValue':

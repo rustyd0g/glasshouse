@@ -252,8 +252,6 @@ function defaults() {
     folder: [],
     channels: [],
     hintSeen: false,
-    rowNotes: true,
-    showLastSource: true,
     clockSize: 'standard',
     wallpaperDimming: 50,
     searchHintSeen: false,
@@ -319,8 +317,6 @@ function normalise(raw) {
   d.enabled = raw.enabled === true;
   d.restorePending = raw.restorePending === true;
   d.hintSeen = raw.hintSeen === true;
-  d.rowNotes = raw.rowNotes !== false;
-  d.showLastSource = raw.showLastSource !== false;
   d.clockSize = raw.clockSize === 'small' ? 'small' : 'standard';
   if (typeof raw.wallpaperDimming === 'number' && isFinite(raw.wallpaperDimming)) {
     d.wallpaperDimming = Math.max(0, Math.min(100, Math.round(raw.wallpaperDimming / 5) * 5));
@@ -328,6 +324,9 @@ function normalise(raw) {
   d.searchHintSeen = raw.searchHintSeen === true;
   d.picture = raw.picture === true;
   SHOW_KEYS.forEach(function (k) { d[k] = raw[k] !== false; });
+  // Fold the earlier duplicate switches into the choices the dashboards now edit.
+  if (raw.rowNotes === false) d.showAppCount = false;
+  if (raw.showLastSource === false) d.showLastOn = false;
   d.search = raw.search === true;
   d.fade = raw.fade === true;
   d.hideUnused = raw.hideUnused === true;
@@ -446,8 +445,6 @@ function setLayout(body, cb) {
     channels: ordered(body.order && isArray(body.order.ch) ? body.order.ch : [],
                       body.channels !== undefined ? stringList(body.channels, MAX_CHANNELS) : c.channels),
     hintSeen: body.hintSeen !== undefined ? body.hintSeen : c.hintSeen,
-    rowNotes: typeof body.rowNotes === 'boolean' ? body.rowNotes : c.rowNotes,
-    showLastSource: typeof body.showLastSource === 'boolean' ? body.showLastSource : c.showLastSource,
     clockSize: body.clockSize === 'small' || body.clockSize === 'standard' ? body.clockSize : c.clockSize,
     wallpaperDimming: typeof body.wallpaperDimming === 'number' && isFinite(body.wallpaperDimming) ? body.wallpaperDimming : c.wallpaperDimming,
     searchHintSeen: body.searchHintSeen !== undefined ? body.searchHintSeen : c.searchHintSeen,
@@ -482,7 +479,7 @@ function setLayout(body, cb) {
 
 function layoutOf(c) {
   return { rows: c.rows, order: c.order, sort: c.sort, hidden: c.hidden, folder: c.folder, channels: c.channels, hintSeen: c.hintSeen,
-    rowNotes: c.rowNotes, showLastSource: c.showLastSource, clockSize: c.clockSize, wallpaperDimming: c.wallpaperDimming,
+    clockSize: c.clockSize, wallpaperDimming: c.wallpaperDimming,
     searchHintSeen: c.searchHintSeen, picture: c.picture, search: c.search, fade: c.fade, hideUnused: c.hideUnused,
     showLastOn: c.showLastOn, showAppCount: c.showAppCount, showCec: c.showCec, colours: c.colours,
     // Not saved: { host, by } while the ad blocker blocks LG's search (lib/home-search).

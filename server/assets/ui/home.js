@@ -133,28 +133,12 @@ function renderHome() {
   const hideRow = q('home-hide-lg-row');
   // webOS 9 only: newer TVs have no layout file for LG's Home to start on.
   if (hideRow) hideRow.hidden = !st.supported.ok || st.hideLgHomeAtStartAvailable === false;
-  const notesRow = q('home-row-notes-row');
-  if (notesRow) notesRow.hidden = !st.supported.ok;
-  const notes = q('home-row-notes');
-  if (notes) {
-    const on = !st.layout || st.layout.rowNotes !== false;
-    updateToggle(notes, { cls: on ? 'good' : 'idle', label: on ? t('common.on', 'On') : t('common.off', 'Off') });
-    notes.disabled = !homeWritable();
-  }
   const clockRow = q('home-clock-size-row');
   if (clockRow) clockRow.hidden = !st.supported.ok;
   const clockSize = q('home-clock-size');
   if (clockSize) {
     clockSize.value = st.layout && st.layout.clockSize === 'small' ? 'small' : 'standard';
     clockSize.disabled = !homeWritable();
-  }
-  const sourceRow = q('home-last-source-row');
-  if (sourceRow) sourceRow.hidden = !st.supported.ok;
-  const source = q('home-last-source');
-  if (source) {
-    const on = !st.layout || st.layout.showLastSource !== false;
-    updateToggle(source, { cls: on ? 'good' : 'idle', label: on ? t('common.on', 'On') : t('common.off', 'Off') });
-    source.disabled = !homeWritable();
   }
   const picRow = q('home-picture-row');
   if (picRow) picRow.hidden = !st.supported.ok;
@@ -504,14 +488,6 @@ async function homeHideLg() {
 
 function homePicture() {
   homeSaveLayout({ picture: homeLayout.picture !== true });
-}
-
-function homeRowNotes() {
-  homeSaveLayout({ rowNotes: homeLayout.rowNotes === false });
-}
-
-function homeLastSource() {
-  homeSaveLayout({ showLastSource: homeLayout.showLastSource === false });
 }
 
 function homeClockSize(value) {
