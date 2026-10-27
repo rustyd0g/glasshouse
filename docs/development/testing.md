@@ -51,6 +51,9 @@ gzips without `zlib.gzipSync`. The suites that run the repository's own scripts
 through `execSync`, `test-module-calls.js`, `test-tvwebctl.js` and
 `test-remote-worker.js`, skip on node 0.10.
 
+`test-installer.js` checks that Glasshouse's own package install holds the
+restart and install guards, then releases both before reporting success or failure.
+
 `test-remote-worker.js` runs the remote-button worker's Python tests
 (`test/test_remote_buttons.py`) under Python 3: a disconnected device and one at
 EOF are dropped rather than read in a busy loop, a device with nothing to read
@@ -112,6 +115,8 @@ Home colour checks cover custom accents matching the stylesheet's original colou
 
 Home rendering checks cover focus measurements limited to affected rows, input and programme updates preserving other rows and channel scrolling, row moves retaining app icons, shared catalogue, source and guide reads, retry after a failed shared read, an older catalogue reply arriving after a dashboard change, and an older source reply arriving after a relaunch.
 
+More apps checks cover the nine-column grid with compact cards, remote navigation and opening apps, Back closing the folder, saving an app moved with the green key, and preserving other rows and the compact clock while arranging.
+
 `test-home-refresh.js` checks that shared reads apply once and release every waiting caller, that failures allow retry, and that saves and relaunches reject older replies without releasing a newer pending read.
 
 `test-home-return.js` checks that interrupted row scrolls settle visually before refresh replies, with fading on or off, while preserving focus. It also covers glide landing, row-end limits, prefixed transforms and missing rows.
@@ -120,7 +125,7 @@ Home rendering checks cover focus measurements limited to affected rows, input a
 
 Home visibility checks delay the layout reply behind the source reply: last watched stays hidden until its saved switch is known and updates as soon as a changed layout arrives. They also cover app counts, CEC addresses, older layouts with no switches, and the clock keeping its place. `test-home.js` covers saving each switch, switching them back on and ignoring non-boolean updates.
 
-The Home availability check covers a TV with neither Glasshouse Home nor LG's Home's options, which has no Home tab; one with LG's Home's options alone, which shows them, Open Home at power-on usable among them, without Glasshouse Home's switch or options; and Glasshouse Home switched on, which leaves LG's Home's layout out and keeps hidden system apps. `test-home-lg-options.js` checks the server's side: the Home tab offered for hiding system apps on webOS 4.4, and for Open Home at power-on alone, the options only sent when asked for, and no tab with none of them.
+The Home availability check covers a TV with neither Glasshouse Home nor LG's Home's options, which has no Home tab; one with LG's Home's options alone, which shows them, Open Home at power-on usable among them, without Glasshouse Home's switch or options; and Glasshouse Home switched on, which leaves LG's Home's layout and hidden system apps out. `test-home-lg-options.js` checks the server's side: the Home tab offered for hiding system apps on webOS 4.4, and for Open Home at power-on alone, the options only sent when asked for, no tab with none of them, and hiding system apps neither offered nor switched on under Glasshouse Home. `test-tile-hiding-handover.js` checks its handover to Glasshouse Home: the apps it hid hidden there, those in More apps kept, and sam never restarted for it.
 
 For the TV app dashboard, checks verify the two-column layout geometry (the row list on the left and the hint pane on the right with non-zero dimensions and horizontal adjacency), remote D-pad navigation (`ArrowDown`, `ArrowUp`, `PageDown`), list translateY scrolling with the scroll arrow indicator, tab switching (`ArrowRight`, `ArrowLeft`), and that the OLED Care tab is dropped when running on a non-OLED (LCD) TV profile.
 
@@ -184,8 +189,10 @@ Use `NO_MKDOCS_2_WARNING=1 mkdocs serve` to preview the site locally at `http://
 
 ```bash
 npm run emulate
-node scripts/emulate-tv.js [--port 8080] [--model c2|b8|c3] [--open]
+node scripts/emulate-tv.js [--port 8080] [--model c2|b8|c3|cx|c1] [--webos 6.5.3] [--home on|off] [--open]
 ```
+
+The models are a C2 (webOS 9.2), a B8 (webOS 4.4), a C3 (webOS 10.3), a CX (webOS 5.6) and a C1 (webOS 6.5). `--webos` reports another version on the chosen model, for a version no profile covers. Glasshouse Home starts switched on from webOS 7, where main supports it; `--home on` starts it switched on elsewhere, for a branch that adds a version. Switching it in the emulator changes nothing, since nothing is mounted. The pages run in the computer's browser, not the TV's, so the emulator does not show what an older TV's browser gets wrong.
 
 
 Home recovery checks cover a switch-off cut short, failed layout restoration and its retry, failed migration without losing the snapshot or removing the old app, closing the old app when it is left running in the background, and a missing first heartbeat when Home already has the foreground id. A refused device tile is followed by a remote input switch to check that Last opened still records the whole input. Remote-key checks cover clearing the startup notice on escape and retrying a configd write after the local map was saved. Browser checks cover pending/failed layout edits, each row's Order on the view, the Home tab and the TV app, edits attempted during an Order save and refresh, keeping unsaved moves when Order changes, clicking Order while a tile is held, first-catalogue failure, delayed readiness, the Home tab left out where Glasshouse Home is not offered, and the Apps tab's notes while it is on.
@@ -194,7 +201,7 @@ Home recovery checks cover a switch-off cut short, failed layout restoration and
 console on the same port select their own device IDs, a direct source selects
 its ID, and missing or unusable IDs and non-CEC inputs open the port alone.
 
-`test-home-wallpaper-upload.js` exercises the real HTTP boundary: rejected and interrupted uploads preserve the previous image, concurrent uploads are refused, the lock is released after an abort, an uploaded JPEG survives reinitialisation and is served with its image type, and one time of day's picture is removed alone, an unknown one refused. The dashboard check changes dimming while preserving the four wallpaper cards, chooses Morning and uploads to it, preparing a PNG as JPEG, shows the pending upload in a second tab and the picture once done, drops an image on Evening, removes Morning alone and then all of them. Home availability checks also keep the compact-clock, row-details and last-source controls hidden with LG's Home alone.
+`test-home-wallpaper-upload.js` exercises the real HTTP boundary: rejected and interrupted uploads preserve the previous image, concurrent uploads are refused, the lock is released after an abort, an uploaded JPEG survives reinitialisation and is served with its image type, and one time of day's picture is removed alone, an unknown one refused. The example set, with the download stubbed, fills only the times of day without a picture, and a picture that fails its checksum or download is not kept and releases the lock. The dashboard check changes dimming while preserving the four wallpaper cards, chooses Morning and uploads to it, preparing a PNG as JPEG, shows the pending upload in a second tab and the picture once done, drops an image on Evening, removes Morning alone and then all of them. Home availability checks also keep the compact-clock, row-details and last-source controls hidden with LG's Home alone.
 
 `test-home-recent-apps.js` exercises the recent-app HTTP routes: refused and
 unconfirmed stops retain their cards for retry, unavailable running lists

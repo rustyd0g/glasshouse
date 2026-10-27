@@ -1582,6 +1582,7 @@ button.wall-link{min-height:0;padding:0;border:0;background:none;font-size:12px;
 button.wall-link:hover:not(:disabled){color:var(--w100);text-decoration:underline;text-underline-offset:3px}
 .wall-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px 20px;margin-top:24px}
 .wall-foot .sub{max-width:64ch;margin:0}
+.wall-foot-btns{display:flex;gap:10px;flex-wrap:wrap}
 .home-upload{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:16px 0 8px}
 .home-upload input[type=file]{min-width:0;max-width:100%;flex:1 1 220px}
 .home-looks{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0 10px}

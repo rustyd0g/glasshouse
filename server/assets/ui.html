@@ -1164,7 +1164,10 @@
   <input type="file" id="home-wall-file" accept="image/jpeg,image/png,image/webp" hidden onchange="homeWallPicked(this)">
   <div class="wall-foot">
     <div class="sub" data-t="home.wall.uploadHelp">JPEG, PNG or WebP, up to 25 MB. Images are resized to fit 1920 × 1080, the size Glasshouse Home is drawn at, before upload, and fill the screen.</div>
-    <button type="button" class="pill idle" id="home-wall-clear" onclick="homeClearUploads()" data-t="home.wall.clearAll">Remove all</button>
+    <div class="wall-foot-btns">
+      <button type="button" class="pill idle" id="home-wall-examples" onclick="homeAddExamples()" data-t="home.wall.examples">Add example pictures</button>
+      <button type="button" class="pill idle" id="home-wall-clear" onclick="homeClearUploads()" data-t="home.wall.clearAll">Remove all</button>
+    </div>
   </div>
   <div class="sub" id="home-wall-upload-note" role="status"></div>
   </div>

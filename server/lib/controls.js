@@ -832,6 +832,9 @@ function doControl(action, value, cb) {
 
     case 'tileHiding':
       if (isFromHbc()) return cb({ ok: false, error: tileHidingOffMsg });
+      if (value && homeModule && homeModule.enabled()) {
+        return cb({ ok: false, error: msg('srv.apps.tilesGlasshouseHome', 'Glasshouse Home hides apps itself: arrange them there') });
+      }
       return appsModule.setTileHidingEnabled(!!value, function (r) {
         telemetry.clearCache();
         cb(r);
@@ -928,7 +931,8 @@ function doControl(action, value, cb) {
 
     case 'update':
       return updater.installUpdate(function (r) {
-        if (r && r.ok && r.updated) {
+        // A package update's own installer restarts the server once its files are in.
+        if (r && r.ok && r.updated && !r.restarting) {
           setTimeout(function () {
             if (!doRestartSelf()) console.error('update: no tvwebctl found - restart manually to apply');
           }, 600);

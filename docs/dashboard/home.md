@@ -17,7 +17,7 @@ Glasshouse Home displays a clock and date (following the TV's 12-hour or 24-hour
 
     ---
 
-    Every app from LG's launcher, including **Live TV**, with its native icon in a compact frame and a translucent background on focus. LG's promotional tiles (LG Channels, Sports, Always Ready, Alexa, Camera) start hidden, and apps hidden under [Hide home screen system apps](#hide-home-screen-system-apps) stay hidden here. Includes **Notifications**, **Search**, and an always-present **LG Home** tile at the end.
+    Every app from LG's launcher, including **Live TV**, with its native icon in a compact frame and a translucent background on focus. LG's promotional tiles (LG Channels, Sports, Always Ready, Alexa, Camera) start hidden, and apps [Hide home screen system apps](#hide-home-screen-system-apps) was hiding stay hidden here. Includes **Notifications**, **Search**, and an always-present **LG Home** tile at the end.
 
 -   **Magic Remote & scrolling**
 
@@ -98,6 +98,7 @@ The web dashboard's **Wallpaper** section shows the day as a strip from midnight
 
 * Choosing a time of day, on the strip or its preview, or dropping an image on it, sets its picture. JPEG, PNG and WebP images up to 25 MB are taken; the browser scales each to fit 1920 × 1080 as a JPEG before saving it to `/var/lib/tvweb/home-wallpaper-uploads` on the TV.
 * **Replace** and **Remove** under a time of day change or remove its picture alone; one without a picture has the black background.
+* **Add example pictures** fills every time of day without a picture from an example set, a loch at four times of day, and leaves the ones already chosen. The set is downloaded to the TV only when the button is pressed, about 820 KB in all, from [glasshouse-wallpapers](https://github.com/rorygallagher2024/glasshouse-wallpapers). The button is hidden once every time of day has a picture.
 * **Remove all** puts the black background back for every time of day.
 
 **Wallpaper dimming**, in either dashboard's Home section, runs from 0% (brightest) to 100% (black), in steps of 5%. The default, 50%, keeps the time-of-day shading. Changes apply while Home is open without uploading the image again.
@@ -141,6 +142,7 @@ Click **Use Glasshouse Home** (and confirm on the second press) in the web dashb
 Rows and tiles can be arranged from the **web dashboard**, the **TV app**, or **directly on Glasshouse Home**:
 
 * **On the TV screen:** Hold **OK** on any tile to enter arrange mode. Use the D-pad (**Left/Right** to move a tile, **Up/Down** to reorder rows), **Back** to hide/show a tile or remove a channel, and the bottom bar for **Reset** and **Done**.
+* **More apps:** Apps that should not take up the Apps row can go into a folder instead of being hidden. While arranging, focus an app and choose **Into or out of More apps** in the bottom bar (or press the green button). The Apps row then ends with a **More apps** tile showing the first four icons; **OK** opens every app in it as a grid, and **Back** closes the grid. The LG Home tile can go into the folder too. Hiding an app takes it out of the folder, and **Reset** empties the folder. In the web dashboard's Home tab, each app in the Apps row has a choice of **Shown**, **In More apps** or **Hidden**.
 * **Row ordering (`Your order` vs `Last opened`):** Each row can be set to stay in a fixed custom order (**Your order**) or automatically move the most recently used app, input, or channel to the front (**Last opened**, keeping **LG Home** pinned at the end).
 * **Adding and removing channels:** Apps and inputs are discovered automatically from the TV and toggled between shown and hidden (inputs with nothing plugged in can also be left out with the Inputs row's **Hide inputs with nothing connected** switch); live TV channels are added by name or number under **Add channels** and removed when no longer needed.
 
@@ -160,7 +162,7 @@ Rows and tiles can be arranged from the **web dashboard**, the **TV app**, or **
 
 The Home tab's **Home customisation** section holds what applies to whichever Home is the TV's, in one column with each switch on the right:
 
-* While Glasshouse Home is on: **Open Home at power-on**, Glasshouse Home's own options (**Hide LG's Home while the TV starts**, **Picture details**, **Last watched**, **App count**, **CEC addresses**, **Search**, **Fade in and out**), and **Hide home screen system apps**.
+* While Glasshouse Home is on: **Open Home at power-on**, Glasshouse Home's own options (**Hide LG's Home while the TV starts**, **Picture details**, **Last watched**, **App count**, **CEC addresses**, **Search**, **Fade in and out**).
 * While LG's Home is: **Open Home at power-on**, **Home screen layout** and **Hide home screen system apps**.
 
 Each appears where the TV has it. A TV Glasshouse Home is not offered on, such as a B8 with webOS 4.4, still has the Home tab for these; there it holds Open Home at power-on and Hide home screen system apps. The TV app's Home section has the same rows.
@@ -177,7 +179,7 @@ Hides built-in LG apps that can't be uninstalled, such as Gallery, Music, Sports
 
 On a TV where the app manager can be made to reread its apps through LG's region list (webOS 9 has it, webOS 4 does not), hidden apps come back hidden at each start without restarting it. Elsewhere it is restarted at each cold boot, which can blank the screen for a moment before the active input returns, and the section says so.
 
-It applies to whichever Home is in use: apps hidden here are left out of Glasshouse Home too, whose own [Arranging](#arranging) hides others on Glasshouse Home only.
+It is for LG's Home, and is not offered while Glasshouse Home is on, which hides apps itself from [Arranging](#arranging) or the Apps row. Switching Glasshouse Home on switches it off, and the apps it was hiding stay hidden in Glasshouse Home, apart from any in More apps. Switching back to LG's Home, they show there again until it is switched on again.
 
 It is experimental, and off until it is turned on under **Server** → **Advanced** → **Experimental features**; see [Experimental features](../experimental.md) for why. It is not offered on a Homebrew Channel install.
 

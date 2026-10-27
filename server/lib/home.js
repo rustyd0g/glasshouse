@@ -138,6 +138,8 @@ var systemctlPath = '';
 // Starts and stops reading the remote's Home button (lib/remotebuttons).
 /** @type {function(boolean): void} */
 var homeKeysFn = function () {};
+/** @type {(hide: (ids: string[]) => void) => void} */
+var handOverFn = function () {};
 // Told whether the plate's picture details are on, at start and on each change.
 /** @type {function(boolean): void} */
 var pictureDetailsFn = function () {};
@@ -233,6 +235,9 @@ function defaults() {
     order: { app: [], dev: [], ch: [] },
     sort: { app: 'custom', dev: 'custom', ch: 'custom' },
     hidden: { app: PROMO_APPS.slice(), dev: [], ch: [] },
+    // Apps moved off the Apps row into its More apps tile, in no order of
+    // their own: the folder shows them in the row's.
+    folder: [],
     channels: [],
     hintSeen: false,
     rowNotes: true,
@@ -296,6 +301,9 @@ function normalise(raw) {
     .filter(function (id) { return chHidden.indexOf(id) === -1; });
   d.order.ch = [];
   d.hidden.ch = [];
+  // A hidden app shows nowhere, so it is not also in the folder.
+  var appHidden = d.hidden.app;
+  d.folder = stringList(raw.folder).filter(function (id) { return appHidden.indexOf(id) === -1; });
   d.enabled = raw.enabled === true;
   d.restorePending = raw.restorePending === true;
   d.hintSeen = raw.hintSeen === true;
@@ -397,6 +405,15 @@ function perRow(sent, kept) {
   return out;
 }
 
+// Apps added to the Apps row's hidden ones: those tile hiding hid, as it is
+// handed to Glasshouse Home (handOverToHome in lib/apps.js).
+function hideApps(ids) {
+  var c = readConfig(), have = c.hidden.app, kept = c.folder || [];
+  // An app put in More apps was chosen to stay reachable.
+  var add = ids.filter(function (id) { return have.indexOf(id) === -1 && kept.indexOf(id) === -1; });
+  if (add.length) setLayout({ hidden: { app: have.concat(add) } }, function () {});
+}
+
 // The layout the dashboard and the view's arrange mode send.
 function setLayout(body, cb) {
   var c = readConfig();
@@ -412,6 +429,7 @@ function setLayout(body, cb) {
     order: perRow(body.order, c.order),
     sort: perRow(body.sort, c.sort),
     hidden: perRow(body.hidden, c.hidden),
+    folder: body.folder !== undefined ? body.folder : c.folder,
     // A moved Channels row reorders the channels themselves.
     channels: ordered(body.order && isArray(body.order.ch) ? body.order.ch : [],
                       body.channels !== undefined ? stringList(body.channels, MAX_CHANNELS) : c.channels),
@@ -437,6 +455,7 @@ function setLayout(body, cb) {
     next.order = d.order;
     next.sort = d.sort;
     next.hidden = d.hidden;
+    next.folder = d.folder;
   }
   config = next;
   if (!saveConfig()) {
@@ -450,7 +469,7 @@ function setLayout(body, cb) {
 }
 
 function layoutOf(c) {
-  return { rows: c.rows, order: c.order, sort: c.sort, hidden: c.hidden, channels: c.channels, hintSeen: c.hintSeen,
+  return { rows: c.rows, order: c.order, sort: c.sort, hidden: c.hidden, folder: c.folder, channels: c.channels, hintSeen: c.hintSeen,
     rowNotes: c.rowNotes, showLastSource: c.showLastSource, clockSize: c.clockSize, wallpaperDimming: c.wallpaperDimming,
     searchHintSeen: c.searchHintSeen, picture: c.picture, search: c.search, fade: c.fade, hideUnused: c.hideUnused,
     showLastOn: c.showLastOn, showAppCount: c.showAppCount, showCec: c.showCec, colours: c.colours,
@@ -1668,6 +1687,7 @@ function init(opts) {
     : SYSTEMCTLS.filter(function (p) { return fs.existsSync(p); })[0] || '';
   allowExperimentalFn = opts.allowExperimental || function () { return false; };
   homeKeysFn = opts.homeKeys || function () {};
+  handOverFn = opts.handOverTileHiding || function () {};
   pictureDetailsFn = opts.pictureDetails || function () {};
   setHomeKeyFn = opts.setHomeKey || function (id, cb) { cb({ ok: true, none: true }); };
   homeKeyAppFn = opts.homeKeyApp || function () { return ''; };
@@ -1749,7 +1769,10 @@ function start() {
       console.log('home: not offered on this TV (' + supported().reason + '); switched off');
       return disable(function (r) { if (!r.ok) console.error('home: ' + r.error); });
     }
-    if (c.enabled) homeKeysFn(true);
+    if (c.enabled) {
+      homeKeysFn(true);
+      handOverFn(hideApps);
+    }
     if (c.restorePending || (!c.enabled && takeover.mounted())) {
       return disable(function (r) { if (!r.ok) console.error('home: ' + r.error); });
     }
@@ -1788,7 +1811,17 @@ module.exports = {
   open: open,
   setLayout: function (body, cb) { change(function (done) { setLayout(body, done); }, cb); },
   setHideLgHomeAtStart: function (body, cb) { change(function (done) { setHideLgHomeAtStart(body, done); }, cb); },
-  enable: function (cb) { change(function (done) { enable(function (r) { if (r.ok) homeKeysFn(true); done(r); }); }, cb); },
+  enable: function (cb) {
+    change(function (done) {
+      enable(function (r) {
+        if (r.ok) {
+          homeKeysFn(true);
+          handOverFn(hideApps);
+        }
+        done(r);
+      });
+    }, cb);
+  },
   disable: function (cb) { change(function (done) { disable(function (r) { homeKeysFn(false); done(r); }); }, cb); },
   uninstall: function (cb) { change(uninstall, cb); },
   beat: beat,
@@ -1810,9 +1843,11 @@ module.exports = {
     if (!sup.ok) return cb({ ok: false, error: sup.reason });
     if (body && body.removeUploads === true) return wallpapers.removeUploads(cb);
     if (body && typeof body.remove === 'string') return wallpapers.removeUploads(cb, body.remove);
-    cb({ ok: false, error: 'removeUploads or remove expected' });
+    if (body && body.examples === true) return wallpapers.addExamples(cb);
+    cb({ ok: false, error: 'removeUploads, remove or examples expected' });
   },
   normalise: normalise,
+  hideApps: hideApps,
   layout: function () { return layoutOf(readConfig()); },
   programme: programme,
   enabled: function () { return readConfig().enabled; },

@@ -52,7 +52,11 @@ body{font-family:'Manrope',sans-serif;color:#fff;
    on the right. A row's label and value never needed the full width, and the
    space buys somewhere to say what a setting means without a second screen. */
 #main{flex:1 1 auto;-webkit-flex:1 1 auto;display:flex;display:-webkit-flex;overflow:hidden;padding-right:4vw;min-height:0}
-#list{flex:1 1 62%;-webkit-flex:1 1 62%;height:100%;overflow:hidden;position:relative}
+/* No height: the row is stretched to #main's. A percentage height resolves to
+   none on a flex item in Chromium 53 (webOS 4) and WebKit 538.2 (webOS 2),
+   collapsing #list to 0 px and hiding every row; position() covers an engine
+   that still leaves it at 0. */
+#list{flex:1 1 62%;-webkit-flex:1 1 62%;overflow:hidden;position:relative}
 #rows{position:absolute;left:0;right:0;-webkit-transition:-webkit-transform .28s cubic-bezier(.4,0,.2,1);transition:transform .28s cubic-bezier(.4,0,.2,1)}
 
 #hint{flex:0 0 31%;-webkit-flex:0 0 31%;margin-left:2.6vw;align-self:center;-webkit-align-self:center;border-left:1px solid rgba(255,255,255,.14);
@@ -421,10 +425,21 @@ var allowPower = false;
 var clockHour12 = false;
 // Ticks since caps were read again, for the hour cycle to be noticed on an open page.
 var capsTicks = 0;
+// The server version this page came from. webOS keeps the app's page in
+// memory, and on a B8 (webOS 4.4) it came back without webOSRelaunch, so a
+// fix the server installed did not show until the TV restarted.
+var pageVersion = null;
+function reloadPage() {
+  location.replace(location.pathname + '?tab=' + T().key + '&t=' + Date.now());
+}
 function refreshCaps() {
   fetch('/api/caps', { cache: 'no-store' })
     .then(function (r) { return r.json(); })
     .then(function (d) {
+      if (d && d.version) {
+        if (pageVersion === null) pageVersion = d.version;
+        else if (d.version !== pageVersion) return reloadPage();
+      }
       // A new install walks through setup first - but only in the TV app: a
       // phone's browser cannot use those screens. The ?setup=1 or ?emulate-setup=1
       // query parameter allows testing the setup wizard from any browser.
@@ -1758,13 +1773,7 @@ function updateRows(d) {
       plain: true,
       hint: t('tv.update.newer.hint', 'A newer release is available (v{version}).', { version: d.latest })
     });
-    if (d.viaHomebrewChannel) {
-      r.push({
-        label: t('tv.update.installUpdate', 'Install update'),
-        value: t('tv.update.inHbc', 'In the Homebrew Channel'),
-        hint: t('tv.update.installUpdate.hint', 'Update Glasshouse in the Homebrew Channel, or sideload the latest .ipk from GitHub releases.')
-      });
-    } else if (d.writable) {
+    if (d.writable) {
       r.push({
         label: t('tv.update.installUpdate', 'Install update'),
         value: t('server.install', 'Install v{version}', { version: d.latest }),
@@ -2337,6 +2346,7 @@ function renderQr(r) {
    of floating in the centre with half the screen empty. */
 function position() {
   var list = document.getElementById('list');
+  if (!list.clientHeight) list.style.height = document.getElementById('main').clientHeight + 'px';
   var off = 0, total = 0, i;
   for (i = 0; i < rows.length; i++) {
     if (i < sel) off += rowHeight(rows[i]);
@@ -3012,8 +3022,10 @@ function activate() {
 // Back only sends a webOS app to the background, and opening it again from the
 // home screen resumes the page as it was. Reload instead, on the same tab, so
 // a server updated in the meantime shows its current dashboard.
-document.addEventListener('webOSRelaunch', function () {
-  location.replace(location.pathname + '?tab=' + T().key + '&t=' + Date.now());
+document.addEventListener('webOSRelaunch', reloadPage);
+// Back in front by any other way, ask at once rather than at the next sixth tick.
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden) refreshCaps();
 });
 
 function leaveApp() {

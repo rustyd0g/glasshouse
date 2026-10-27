@@ -301,6 +301,70 @@ async function visitHomeRendering(browser, base, problems) {
   } finally { await page.close(); }
 }
 
+async function visitHomeFolder(browser, base, problems) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => problems.push('Home folder: ' + e.message));
+  const apps = Array.from({ length: 24 }, (_, i) => ({ id: 'app' + i, title: 'App ' + i }));
+  const layout = { rows: ['app', 'dev', 'ch'], hidden: { app: [], dev: [], ch: [] }, channels: [],
+    folder: apps.slice(2).map(a => a.id), hintSeen: true, searchHintSeen: true, rowNotes: false, clockSize: 'small' };
+  const saves = [], opened = [];
+  await page.route('**/api/home/**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/home/layout') { const body = route.request().postDataJSON(); saves.push(body); Object.assign(layout, body); }
+    if (pathname === '/api/home/open') opened.push(route.request().postDataJSON().id);
+    const body = pathname.endsWith('/catalogue')
+      ? { ok: true, layout, apps, devices: [{ id: 'hdmi1', port: 1, name: 'HDMI 1' }], channels: [], sources: { channels: 0 },
+          order: { app: apps.map(a => a.id).concat('lg-home'), dev: ['hdmi1'], ch: [] } }
+      : pathname.endsWith('/now') ? { kind: null } : { ok: true, layout, build: 'one' };
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  const check = (ok, detail) => { if (!ok) problems.push('Home folder: ' + detail); };
+  const key = code => page.evaluate(code => {
+    for (const type of ['keydown', 'keyup']) document.dispatchEvent(new KeyboardEvent(type, { keyCode: code, bubbles: true }));
+  }, code);
+  try {
+    await page.clock.install();
+    await page.goto(base + '/assets/home.html');
+    await page.waitForSelector('.tile.focus');
+    check(await page.locator('.row[data-key="app"] .tile').count() === 4, 'the row did not separate its apps from More apps');
+    check(await page.locator('#rows h2 span').count() === 0, 'folder counts ignored the Row details setting');
+    await page.evaluate(() => { window.savedFolderInput = document.querySelector('.dev'); });
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#stage.folder');
+    check(await page.locator('#folderGrid .tile').count() === 22, 'the folder did not contain every folded app');
+    const lines = await page.locator('#folderGrid .tile').evaluateAll(tiles => {
+      const rows = new Map();
+      for (const tile of tiles) rows.set(tile.offsetTop, (rows.get(tile.offsetTop) || 0) + 1);
+      return [...rows.values()];
+    });
+    check(JSON.stringify(lines) === '[9,9,4]', 'compact cards changed the nine-column grid');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');
+    check(await page.locator('#folderGrid .focus').getAttribute('data-f') === '21', 'remote navigation missed the short last line');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.getElementById('stage').classList.contains('folder'));
+    check(opened[0] === 'app23', 'OK opened the wrong folded app');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#stage.folder');
+    await key(461);
+    check(await page.locator('#stage.folder').count() === 0, 'Back did not close More apps');
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowLeft');
+    await page.keyboard.down('Enter');
+    await page.clock.fastForward(900);
+    await page.keyboard.up('Enter');
+    await page.waitForSelector('#stage.arranging');
+    await key(404);
+    check(await page.locator('.row[data-key="app"] .tile.focus.folded').count() === 1, 'the green key did not move an app into More apps');
+    await key(461);
+    await page.waitForFunction(() => !document.getElementById('stage').classList.contains('arranging'));
+    check(saves.some(body => body.folder && body.folder.includes('app0')), 'the folder change was not saved');
+    check(await page.evaluate(() => window.savedFolderInput === document.querySelector('.dev')), 'arranging the folder replaced the Inputs row');
+    check(await page.locator('#when').getAttribute('class') === 'small', 'folder changes lost the compact clock');
+  } finally { await page.close(); }
+}
+
 async function visitHomeWallpaperDrift(browser, base, problems) {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   page.on('pageerror', e => problems.push('Home wallpaper motion: ' + e.message));
@@ -1396,13 +1460,13 @@ async function visitHomeUploads(browser, base, problems) {
  * The Home tab: left out where neither Glasshouse Home nor LG's Home's options
  * are offered; with LG's Home's options alone (a B8) it shows only those, Open
  * Home at power-on among them, usable without Glasshouse Home; and
- * with Glasshouse Home on, LG's Home's layout is left out and hidden system
- * apps stay.
+ * with Glasshouse Home on, LG's Home's layout and hidden system apps are
+ * left out (lgHomeOptions in lib/routes.js offers no tile hiding then).
  */
 async function visitHomeAvailability(browser, base, problems) {
   const lgHome = enabled => ({ writable: true, glasshouseHome: enabled,
     homeScreen: { parts: [{ id: 'banner', title: 'Banner', desc: 'The banner.', shown: true }], inputs: null, experimental: null },
-    tileHidingAvailable: true, tileHidingEnabled: false, systemTiles: [], hiddenCount: 0 });
+    tileHidingAvailable: !enabled, tileHidingEnabled: false, systemTiles: [], hiddenCount: 0 });
   const cases = [
     { name: 'unavailable', st: { available: false, enabled: false }, glasshouse: false },
     { name: 'LG\'s Home only', st: { available: true, enabled: false, lgHomeAvailable: true, lgHome: lgHome(false), homeAutoLaunch: false }, glasshouse: false },
@@ -1429,7 +1493,7 @@ async function visitHomeAvailability(browser, base, problems) {
         continue;
       }
       if (await page.locator('#home-hero').isVisible() !== c.glasshouse) fail('Glasshouse Home\'s switch ' + (c.glasshouse ? 'missing' : 'shown'));
-      if (!await page.locator('#disc-system-tiles').isVisible()) fail('system apps missing');
+      if (await page.locator('#disc-system-tiles').isVisible() === c.glasshouse) fail('system apps ' + (c.glasshouse ? 'shown with Glasshouse Home on' : 'missing'));
       if (st.homeAutoLaunch !== undefined && (!await page.locator('#home-autolaunch').isVisible() || await page.locator('#home-autolaunch').isDisabled()))
         fail('Open Home at power-on missing or unusable');
       if (!c.glasshouse) {
@@ -1851,6 +1915,7 @@ async function visitTvNonOled(browser, base, problems) {
   await visitTvNonOled(browser, base, problems);
   await visitHomeArrangement(browser, base, problems);
   await visitHomeRendering(browser, base, problems);
+  await visitHomeFolder(browser, base, problems);
   await visitHomeWallpaperDrift(browser, base, problems);
   await visitHomePicture(browser, base, problems);
   await visitHomeVisibility(browser, base, problems);
@@ -1871,6 +1936,6 @@ async function visitTvNonOled(browser, base, problems) {
   await browser.close();
   for (const p of problems) console.log(p);
   console.log((web.length + tv.length) + ' tabs opened (' + web.length + ' web, ' + tv.length + ' TV app), ' +
-              'TV navigation and LCD profile, Home rendering, refreshes, wallpaper motion, arranging, picture, visibility, colours, fading and inputs, update, editing, order, uploads, readiness, availability, recents, scrolling, motion, guide and search checked, ' + problems.length + ' problem' + (problems.length === 1 ? '' : 's'));
+              'TV navigation and LCD profile, Home rendering, refreshes, More apps, wallpaper motion, arranging, picture, visibility, colours, fading and inputs, update, editing, order, uploads, readiness, availability, recents, scrolling, motion, guide and search checked, ' + problems.length + ' problem' + (problems.length === 1 ? '' : 's'));
   process.exit(problems.length ? 1 : 0);
 })().catch(e => { console.error(e.message); process.exit(1); });
