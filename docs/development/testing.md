@@ -18,6 +18,17 @@ are gone from the TV app's System tab, and a failed read leaves no stale
 readings. The web tab removes stale controls after a failed read and restores
 them after a successful retry.
 
+`test-lgsettings.js` checks that picture writes refuse hidden settings and
+inactive choices, alongside locked rows and values outside the TV's range, and
+that a TV which describes none of its picture settings is offered none, and
+that colour management follows Colour adjustment where the TV offers User
+Selection and is greyed out in Game mode.
+
+The TV dashboard check adjusts two picture sliders before the first write
+answers. Both changes must be sent, including when the first write is refused
+or its connection fails. With no picture settings offered, neither dashboard
+shows the Picture tab.
+
 [`checks.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/checks.yml) runs these on each pull request and each merge to main.
 
 | Check | What it catches |
@@ -207,7 +218,7 @@ Home recovery checks cover a switch-off cut short, failed layout restoration and
 console on the same port select their own device IDs, a direct source selects
 its ID, and missing or unusable IDs and non-CEC inputs open the port alone.
 
-`test-home-wallpaper-upload.js` exercises the real HTTP boundary: rejected and interrupted uploads preserve the previous image, concurrent uploads are refused, the lock is released after an abort, an uploaded JPEG survives reinitialisation and is served with its image type, and one time of day's picture is removed alone, an unknown one refused. The example set, with the download stubbed, fills only the times of day without a picture, and a picture that fails its checksum or download is not kept and releases the lock. The dashboard check changes dimming while preserving the four wallpaper cards, chooses Morning and uploads to it, preparing a PNG as JPEG, shows the pending upload in a second tab and the picture once done, drops an image on Evening, removes Morning alone and then all of them. Home availability checks also keep the compact-clock control hidden with LG's Home alone.
+`test-home-wallpaper-upload.js` exercises the real HTTP boundary: rejected and interrupted uploads preserve the previous image, concurrent uploads are refused, the lock is released after an abort, an uploaded JPEG survives reinitialisation and is served with its image type, and one time of day's picture is removed alone, an unknown one refused. With the download stubbed, a chosen set is fetched from its tag and not again once on the TV, the owner's own pictures are kept while it shows, a picture that fails its checksum or download is not kept and leaves the choice as it was, and an older install's four example pictures become the landscape set while other uploads become the owner's own. The dashboard check changes dimming while preserving the four wallpaper cards, chooses **Your own**, then Morning and uploads to it, preparing a PNG as JPEG, shows the pending upload in a second tab and the picture once done, drops an image on Evening, removes Morning alone and then all of them. Home availability checks also keep the compact-clock control hidden with LG's Home alone.
 
 `test-home-recent-apps.js` exercises the recent-app HTTP routes: refused and
 unconfirmed stops retain their cards for retry, unavailable running lists

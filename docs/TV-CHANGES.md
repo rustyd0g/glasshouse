@@ -61,6 +61,7 @@ menus. Uninstalling the dashboard leaves them as they are.
 | SSH keys added or removed on the Server tab | In `/home/root/.ssh/authorized_keys`. Deleting the file there gives root the password `alpine` from the next boot. Uninstalling leaves the file as it is |
 | Installing an app | Installed as a developer app; remove it from the Apps tab or the Homebrew Channel. Its services stay elevated to root if that was chosen |
 | Picture mode, energy saving, sound output, Quick Start+, Home Auto Launch (`general.homeAutoLaunch`), sleep timer, Quick Access keys, 12-hour clock (`timeFormat` in `systemservice`) | Ordinary TV settings |
+| LG's picture settings on the Picture tab | Ordinary TV settings, for the input and picture mode on screen, written as LG's own menu writes them, marking the mode as adjusted. LG's **Reset** for the mode puts them back |
 | LG settings restored from a backup | Sound, device, HDMI and ad settings, set as the dashboard sets them one by one. Undone by changing them back, or by restoring a backup made before |
 | Screen Shift, Logo Luminance Adjustment | OLED panel settings in the TV's own menus |
 | Global Stress Reduction and Temporal Peak Control | OLED burn-in protections. Switching one off asks for confirmation, and neither is exposed to Home Assistant. Not switched back on by uninstalling |
@@ -80,7 +81,7 @@ without a usable CEC device ID opens its HDMI port alone.
 
 Switching Glasshouse Home off reports a Home-key restore failure, including a saved mapping that could not be deleted. App removal is refused until the key and Home and start-up settings no longer target it, and is confirmed only after the TV reports the app absent. A missing app found by the guard switches the feature off and restores its saved settings and Home key.
 
-Home wallpapers uploaded through the browser, or the example set downloaded from the `v1` tag of `rorygallagher2024/glasshouse-wallpapers` on request, go into `/var/lib/tvweb/home-wallpaper-uploads`, one for each time of day. The directory is excluded from packages and rollback copies and removed with the server. Failed LG Home restoration remains visible and retryable on both dashboards.
+Home wallpapers uploaded through the browser go into `/var/lib/tvweb/home-wallpaper-uploads`, one for each time of day; a set chosen on the Home tab is downloaded from the `v2` tag of `rorygallagher2024/glasshouse-wallpapers` into `/var/lib/tvweb/home-wallpaper-sets/<set>`, and the choice is kept in `/var/lib/tvweb/home-wallpaper.json`. The directories are excluded from packages and rollback copies and removed with the server. Failed LG Home restoration remains visible and retryable on both dashboards.
 
 Wallpaper motion pauses while Home is hidden and resumes from its saved position and direction in the TV app's browser storage after a page reload.
 
