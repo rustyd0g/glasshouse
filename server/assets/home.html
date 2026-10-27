@@ -77,6 +77,29 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 #rows:before,#rows:after{content:"";-webkit-flex:1 1 0;flex:1 1 0}
 /* Along the bottom, as on LG's Home: no space below the rows. */
 .rows-bottom #rows:after{-webkit-flex:0 0 0;flex:0 0 0}
+
+/* Alternative View (#999): a smaller clock on the right, Last watched to its
+   left, and the rows as rounded, translucent tiles, titled only while arranging. */
+.alternative #now{padding:0 90px}
+.alternative #when{-webkit-order:3;order:3;width:420px;text-align:right}
+.alternative #clock{font-size:100px;line-height:1;letter-spacing:-2px}
+.alternative #date{margin-top:8px;font-size:23px}
+.alternative #source{-webkit-order:1;order:1;border-left:0;padding-left:22px}
+.alternative #plate{-webkit-order:2;order:2;margin:0 56px 0 0}
+.alternative:not(.arranging) .row > h2{display:none}
+.alternative .row{margin-bottom:10px}
+.alternative .tile{border-radius:18px;margin-right:12px;background:rgba(20,15,29,.45)}
+.alternative .tile.focus{background:rgba(34,25,48,.86)}
+.alternative .app{width:160px;padding:12px}
+.alternative .app img,.alternative .app .mono{width:100px;height:100px;border-radius:16px}
+.alternative .app .mono{line-height:100px}
+.alternative .app .nm{font-size:18px;margin-top:8px}
+.alternative .app .fold{width:100px;height:100px;padding:9px}
+.alternative .app .fold i,.alternative .app .fold i img{width:37px;height:37px}
+.alternative .app .fold i{line-height:37px;font-size:18px}
+.alternative .dev{width:340px;height:108px}
+.alternative .dev .nm{font-size:26px}
+.alternative .dev .path,.alternative .dev .st{font-size:17px}
 .row{-webkit-flex:0 0 auto;flex:0 0 auto}
 .row.empty{display:none}
 .arranging .row.empty{display:block}
@@ -415,7 +438,7 @@ html.faded #stage{opacity:0}
   var BEAT_MS = 5000;
 
   var indexedData = null, itemIndex = null;
-  var rowViews = {}, focusShown = null, verticalAnchor = null;
+  var rowViews = {}, renderedView = null, focusShown = null, verticalAnchor = null;
   var refreshGeneration = 0, refreshVersion = null, pendingRefreshes = Object.create(null);
   var data = null;       // the catalogue: apps, devices, channels, order
   var layout = null;     // rows, order, sort, hidden, channels, hintSeen, picture, show*
@@ -621,7 +644,10 @@ html.faded #stage{opacity:0}
 
   function render() {
     stageClass();
-    var container = $('rows'), changed = false, changedRows = [];
+    var viewMode = layout.view || 'standard', geometryChanged = renderedView !== viewMode;
+    renderedView = viewMode;
+    if (geometryChanged) verticalAnchor = null;
+    var container = $('rows'), changed = geometryChanged, changedRows = [];
     if (!shown(state.row)) { state.row = nextShown(0, 1); verticalAnchor = null; }
     layout.rows.forEach(function (kind, ri) {
       var view = rowViews[kind];
@@ -630,6 +656,8 @@ html.faded #stage{opacity:0}
         view.element.className = 'row';
         view.element.setAttribute('data-key', kind);
       }
+      // Alternative View changes card widths without changing their markup.
+      if (geometryChanged) view.dirty = true;
       var list = items(kind);
       var tiles = '';
       list.forEach(function (it, i) { tiles += TILE[kind](it, i); });
@@ -645,8 +673,8 @@ html.faded #stage{opacity:0}
         view.focusTile = null;
         view.dirty = true;
         changed = true;
-        changedRows.push(kind);
       }
+      if (view.dirty) changedRows.push(kind);
       if (view.element.getAttribute('data-row') !== String(ri)) view.element.setAttribute('data-row', ri);
       if (!list.length && !view.element.getAttribute('data-empty')) view.element.setAttribute('data-empty', '1');
       else if (list.length && view.element.getAttribute('data-empty')) view.element.removeAttribute('data-empty');
@@ -1190,7 +1218,7 @@ html.faded #stage{opacity:0}
   // ---------------------------------------------------------------- top strip
 
   function renderNow() {
-    var clockClass = layout && layout.clockSize === 'small' ? 'small' : '';
+    var clockClass = layout && layout.view !== 'alternative' && layout.clockSize === 'small' ? 'small' : '';
     if ($('when').className !== clockClass) $('when').className = clockClass;
     var d = new Date();
     var p = hmParts(d);
@@ -1457,7 +1485,8 @@ html.faded #stage{opacity:0}
     var value = (state.arranging ? 'arranging' : '') + (recents.open ? ' recents' : '') +
       (finder.open ? ' finding' : '') + (finder.typing ? ' typing' : '') + (searchOn() ? '' : ' no-search') +
       (folder.open ? ' folder' : '') + (document.hidden ? ' page-hidden' : '') +
-      (layout && layout.showClock === false ? ' no-clock' : '') + (layout && layout.rowsBottom === true ? ' rows-bottom' : '');
+      (layout && layout.showClock === false ? ' no-clock' : '') + (layout && layout.rowsBottom === true ? ' rows-bottom' : '') +
+      (layout && layout.view === 'alternative' ? ' alternative' : '');
     if ($('stage').className !== value) {
       $('stage').className = value;
       queueChannelTitles(200);

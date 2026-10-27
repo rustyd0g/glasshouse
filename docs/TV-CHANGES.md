@@ -98,6 +98,8 @@ Glasshouse Home's **Last watched**, **App count** and **CEC addresses** switches
 
 **Clock and date** (`showClock`, on by default) and **Rows along the bottom** (`rowsBottom`, off by default) are saved there too. Switching the clock off keeps its space and its saved size choice.
 
+**Alternative View** is saved as `view: "alternative"`, defaulting to `"standard"`. Its clock has a fixed size; the standard view's size choice is retained when switching back. Changing views remeasures the cached rows to keep their focus and scroll bounds valid.
+
 Earlier `showLastSource: false` and `rowNotes: false` choices become `showLastOn: false` and `showAppCount: false` when loaded; the duplicate keys are removed on the next save. Last watched and App count then work independently, with input and channel heading notes following the upstream layout.
 
 While Glasshouse Home and its picture details (off by default) are on and the TV is out of standby, a read-only `videooutput/getStatus` subscription records the last video each app plays for the plate. It starts before the first Home visit and stops when either is switched off or the TV goes into standby. Recorded videos stay in memory until the server restarts. HDMI signal and picture-mode reads change no TV settings.
