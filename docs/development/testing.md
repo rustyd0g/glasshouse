@@ -156,6 +156,8 @@ The Home appearance tests cover dimming limits and rounding, invalid values, sav
 
 `test-home-wallpaper-drift.js` checks saved motion phase and direction, hidden and reduced-motion pauses, cycle wrap, corrected system time and unavailable storage. Browser checks cover the shared frame, unchanged animation through colour and image changes, hidden pauses and reloads.
 
+Channel bounds browser checks leave an expanded end card for another row or enter arranging, with normal and reduced motion, and verify that shrinking leaves no excess horizontal scroll.
+
 ## Documentation
 
 [`docs.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/docs.yml) builds this site on each pull request that changes it, with every

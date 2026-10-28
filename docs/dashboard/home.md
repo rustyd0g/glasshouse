@@ -101,6 +101,8 @@ Glasshouse Home displays a clock and date (following the TV's 12-hour or 24-hour
 
 Apps use a compact frame. Channel and input cards have a faint neutral background, and all three rows share a translucent fill and accent outline on focus in the standard view.
 
+The focused channel card widens to give its titles more room, except while arranging or showing Recent apps. Long channel names and programme titles scroll through their full length at 45 pixels per second after a short delay, with the beginning following from the right. Scrolling pauses in overlays and follows the reduced-motion preference.
+
 ## Search
 
 > [!WARNING]

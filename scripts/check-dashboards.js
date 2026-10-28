@@ -1810,6 +1810,55 @@ async function visitHomeWallpaperDrift(browser, base, problems) {
 }
 
 
+async function visitHomeChannelBounds(browser, base, problems) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => problems.push('Home channel bounds: ' + e.message));
+  const channels = Array.from({ length: 12 }, (_, i) => ({ id: 'ch' + i, number: String(i + 1), name: 'Channel ' + i }));
+  const layout = { rows: ['app', 'ch', 'dev'], hidden: { app: [], dev: [], ch: [] },
+    channels: channels.map(c => c.id), hintSeen: true, searchHintSeen: true };
+  await page.route('**/api/home/**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    const body = pathname.endsWith('/catalogue')
+      ? { ok: true, layout, apps: [], channels, devices: [{ id: 'hdmi1', port: 1, name: 'HDMI 1' }], sources: { channels: channels.length },
+          order: { app: ['lg-home'], ch: channels.map(c => c.id), dev: ['hdmi1'] } }
+      : pathname.endsWith('/now') ? { kind: null }
+      : pathname.endsWith('/guide') ? { ok: true, guide: {} } : { ok: true, build: 'one' };
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  async function checkBounds(detail) {
+    const overscroll = await page.evaluate(() => {
+      const row = document.querySelector('.row[data-key="ch"]');
+      const track = row.querySelector('.track'), wrap = row.querySelector('.wrap'), style = getComputedStyle(wrap);
+      const viewport = wrap.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const x = -new DOMMatrixReadOnly(getComputedStyle(track).transform).m41;
+      return x - Math.max(0, track.scrollWidth - viewport);
+    });
+    if (overscroll > 1) problems.push('Home channel bounds: ' + detail + ' overscrolled the row by ' + overscroll + ' px');
+  }
+  try {
+    for (const reduced of [false, true]) {
+      await page.emulateMedia({ reducedMotion: reduced ? 'reduce' : 'no-preference' });
+      await page.goto(base + '/assets/home.html');
+      await page.waitForSelector('.tile.focus');
+      await page.keyboard.press('ArrowDown');
+      for (let i = 0; i < channels.length - 1; i++) await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(700);
+      await page.keyboard.press('ArrowDown');
+      await page.waitForTimeout(400);
+      await checkBounds('leaving an expanded end card, reduced motion ' + reduced);
+      await page.keyboard.press('ArrowUp');
+      for (let i = 0; i < channels.length; i++) await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(700);
+      await page.keyboard.down('Enter');
+      await page.waitForTimeout(900);
+      await page.keyboard.up('Enter');
+      await page.waitForSelector('#stage.arranging');
+      await checkBounds('arranging an expanded end card, reduced motion ' + reduced);
+    }
+  } finally { await page.close(); }
+}
+
+
 (async () => {
   const server = await startServer();
   const base = 'http://127.0.0.1:' + server.port;
@@ -1826,6 +1875,7 @@ async function visitHomeWallpaperDrift(browser, base, problems) {
   await visitHomeArrangement(browser, base, problems);
   await visitHomePicture(browser, base, problems);
   await visitHomeVisibility(browser, base, problems);
+  await visitHomeChannelBounds(browser, base, problems);
   await visitHomeWallpaperDrift(browser, base, problems);
   await visitHomeColours(browser, base, problems);
   await visitHomeFadeAndInputs(browser, base, problems);
