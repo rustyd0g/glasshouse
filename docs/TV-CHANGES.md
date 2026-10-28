@@ -94,6 +94,8 @@ Glasshouse Home leaves empty rows out and centres the remaining rows below the c
 
 **Wallpaper dimming** is saved as `wallpaperDimming` in `/var/lib/tvweb/home.json`, from 0 to 100 in steps of 5, defaulting to 50. It adjusts the wallpaper and shading without changing the image files.
 
+Wallpaper motion pauses while Home is hidden and resumes from its saved position and direction in the TV app's browser storage after a reload.
+
 Glasshouse Home's text and accent colours are saved in `/var/lib/tvweb/home.json` and applied to its view within a few seconds. **Use the default colours** clears the choice.
 
 Glasshouse Home's **Last watched**, **App count** and **CEC addresses** switches are saved in `/var/lib/tvweb/home.json`, on unless switched off. Both dashboards edit the same choices, which reach an open Home view through its heartbeat. The source stays hidden until the saved layout loads.

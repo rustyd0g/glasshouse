@@ -154,6 +154,8 @@ The Home suite checks clock-size defaults, validation, saving and preservation t
 
 The Home appearance tests cover dimming limits and rounding, invalid values, saved choices surviving unrelated edits, and Reset.
 
+`test-home-wallpaper-drift.js` checks saved motion phase and direction, hidden and reduced-motion pauses, cycle wrap, corrected system time and unavailable storage. Browser checks cover the shared frame, unchanged animation through colour and image changes, hidden pauses and reloads.
+
 ## Documentation
 
 [`docs.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/docs.yml) builds this site on each pull request that changes it, with every

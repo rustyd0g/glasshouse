@@ -112,6 +112,8 @@ LG's search needs the TV online and LG's search server (`gb.nextlgsdp.com` on a 
 
 By default, Glasshouse Home uses a pure `#000` OLED black background (and leaves the TV's [screen saver](screen-savers.md) untouched). It can instead show a picture for each of four times of day: **Morning** (06:00 to 11:00), **Afternoon** (11:00 to 17:00), **Evening** (17:00 to 21:00) and **Night** (21:00 to 06:00).
 
+Wallpapers share one moving frame while cross-fading. Their position and direction are remembered across reloads, and motion pauses while Home is hidden or reduced motion is preferred.
+
 The **Wallpaper** section offers four choices:
 
 * **Black**, the default: no picture.
