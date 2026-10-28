@@ -2077,6 +2077,23 @@ step('earlier duplicate switches migrate to upstream choices and cannot mask lat
   });
 });
 
+step('compact clock defaults to standard and survives unrelated edits and Reset', function (done) {
+  start(null);
+  assert.strictEqual(home.layout().clockSize, 'standard');
+  home.setLayout({ clockSize: 'small' }, function (r) {
+    assert.strictEqual(r.layout.clockSize, 'small');
+    home.setLayout({ clockSize: 'large', showClock: false }, function (invalid) {
+      assert.strictEqual(invalid.layout.clockSize, 'small');
+      home.setLayout({ reset: true, showClock: true }, function (reset) {
+        assert.strictEqual(reset.layout.clockSize, 'small');
+        var saved = home.normalise(JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8')));
+        assert.strictEqual(saved.clockSize, 'small');
+        done();
+      });
+    });
+  });
+});
+
 step('fading, search and leaving out inputs with nothing plugged in stay off until switched on, are saved, and outlast a reset, beside hiding inputs one by one', function (done) {
   start(null);
   assert.strictEqual(home.layout().fade, false);

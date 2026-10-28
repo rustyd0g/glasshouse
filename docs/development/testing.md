@@ -150,6 +150,8 @@ For the TV app dashboard, checks verify the two-column layout geometry (the row 
 
 `test-home.js` covers independent row-count defaults, saves, boolean validation, Reset and older visibility choices. `test-home-counts.js` checks that each heading follows only its own switch, empty-channel guidance remains available, and the TV app preserves the choices in Alternative View.
 
+The Home suite checks clock-size defaults, validation, saving and preservation through clock visibility changes and Reset.
+
 ## Documentation
 
 [`docs.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/docs.yml) builds this site on each pull request that changes it, with every

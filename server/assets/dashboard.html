@@ -1115,6 +1115,15 @@ function glasshouseHomeRows(d) {
                  act: can ? 'homeAlternative' : null, on: altOn,
                  press: altOn ? t('tv.press.switchOff', 'Press OK to switch off') : t('tv.press.switchOn', 'Press OK to switch on'),
                  hint: t('home.alternativeDesc', 'A smaller clock on the right, and the rows as rounded, translucent tiles, titled only while arranging.') });
+        if (showOn && !altOn) {
+          var smallClock = d.layout.clockSize === 'small';
+          var nextClock = smallClock ? t('home.clockSize.standard', 'Standard') : t('home.clockSize.small', 'Small');
+          r.push({ label: t('home.clockSize', 'Clock size'),
+                   value: smallClock ? t('home.clockSize.small', 'Small') : t('home.clockSize.standard', 'Standard'), cls: 'act',
+                   act: can ? 'homeClockSize' : null, key: smallClock ? 'standard' : 'small',
+                   press: t('tv.home.clockSize.press', 'Press OK for {name}', { name: nextClock }),
+                   hint: t('home.clockSizeDesc', 'Choose the size of the clock and date.') });
+        }
       }
     }
     var searchOn = d.layout.search === true, blocked = d.layout.searchBlocked;
@@ -2875,6 +2884,8 @@ function activate() {
       render();
       return sendPost('/api/home/start-layout', { hideLgHomeAtStart: !r.on },
                       r.on ? t('tv.flash.switchedOff', 'Switched off') : t('tv.flash.switchedOn', 'Switched on'));
+    case 'homeClockSize':
+      return homeLayout({ clockSize: r.key });
     case 'homePicture':
       return homeLayout({ picture: !r.on });
     case 'homeShow':

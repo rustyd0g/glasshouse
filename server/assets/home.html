@@ -44,6 +44,8 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 /* The hour cycle, in 12-hour time only: small enough to stay inside #when,
    which is sized for the digits alone. */
 #mer{font-size:.28em;letter-spacing:0;margin-left:.1em;opacity:.75;font-weight:400}
+#when.small #clock{font-size:128px;letter-spacing:-3px}
+#when.small #date{font-size:24px;margin-top:18px}
 #date{margin-top:22px;font-size:28px;color:#a39d93;white-space:nowrap}
 /* Switched off, the clock keeps its space, so the rows and Last watched stay put. */
 .no-clock #when{visibility:hidden}
@@ -1092,6 +1094,8 @@ html.faded #stage{opacity:0}
   // ---------------------------------------------------------------- top strip
 
   function renderNow() {
+    var clockClass = layout && layout.view !== 'alternative' && layout.clockSize === 'small' ? 'small' : '';
+    if ($('when').className !== clockClass) $('when').className = clockClass;
     var d = new Date();
     var p = hmParts(d);
     $('hm').textContent = p[0];

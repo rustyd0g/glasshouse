@@ -1076,6 +1076,16 @@
       </div>
       <div class="prot-status"><button type="button" class="pill idle" id="home-alternative" onclick="homeAlternative()">&mdash;</button></div>
     </div>
+    <div class="prot-row home-gh-row" id="home-clock-size-row" hidden>
+      <div class="prot-main">
+        <div class="prot-title"><label for="home-clock-size" data-t="home.clockSize">Clock size</label></div>
+        <div class="prot-desc" data-t="home.clockSizeDesc">Choose the size of the clock and date.</div>
+      </div>
+      <div class="prot-status"><select id="home-clock-size" class="pill-sel" onchange="homeClockSize(this.value)">
+        <option value="standard" data-t="home.clockSize.standard">Standard</option>
+        <option value="small" data-t="home.clockSize.small">Small</option>
+      </select></div>
+    </div>
     <div class="prot-row home-gh-row home-show-row" hidden>
       <div class="prot-main">
         <div class="prot-title" data-t="home.showLast">Last watched</div>

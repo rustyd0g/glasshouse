@@ -137,6 +137,13 @@ function renderHome() {
   const hideRow = q('home-hide-lg-row');
   // webOS 9 only: newer TVs have no layout file for LG's Home to start on.
   if (hideRow) hideRow.hidden = !st.supported.ok || st.hideLgHomeAtStartAvailable === false;
+  const clockRow = q('home-clock-size-row');
+  if (clockRow) clockRow.hidden = !st.supported.ok || (st.layout && (st.layout.showClock === false || st.layout.view === 'alternative'));
+  const clockSize = q('home-clock-size');
+  if (clockSize) {
+    clockSize.value = st.layout && st.layout.clockSize === 'small' ? 'small' : 'standard';
+    clockSize.disabled = !homeWritable();
+  }
   const picRow = q('home-picture-row');
   if (picRow) picRow.hidden = !st.supported.ok;
   const pic = q('home-picture');
@@ -563,6 +570,10 @@ async function homeHideLg() {
   } catch (e) { showErr(e.message); }
   homeSaving = false;
   loadHome();
+}
+
+function homeClockSize(value) {
+  homeSaveLayout({ clockSize: value });
 }
 
 function homePicture() {
