@@ -418,7 +418,11 @@ async function visitHomeScrolling(browser, base, problems) {
     if (await x(apps0) !== stopped) problems.push('Home scrolling: the glide went on after the pointer left the end');
     await page.mouse.wheel(0, 100);
     const notched = await settle(apps0, stopped);
-    if (Math.round(notched - stopped) !== 176) problems.push('Home scrolling: a wheel notch did not move the row one tile');
+    const tileStep = await page.evaluate(() => {
+      const tiles = document.querySelectorAll('.row[data-key="app"] .tile');
+      return tiles[1].offsetLeft - tiles[0].offsetLeft;
+    });
+    if (Math.round(notched - stopped) !== tileStep) problems.push('Home scrolling: a wheel notch did not move the row one tile');
     // Wheel steps move tiles under a still pointer: a click then opens the
     // tile now under it, and moving down a row leaves this row where it is.
     await page.mouse.wheel(0, 300);
@@ -780,6 +784,10 @@ async function visitHomeColours(browser, base, problems) {
   });
   const rgb = hex => 'rgb(' + hex.slice(1).match(/../g).map(v => parseInt(v, 16)).join(', ') + ')';
   async function check(text, accent) {
+    // Preserved cards finish their outline-colour transition after the text changes.
+    await page.waitForFunction(expected => getComputedStyle(document.getElementById('clock')).color === expected.text &&
+      getComputedStyle(document.querySelector('.tile.focus')).outlineColor === expected.accent,
+    { text: rgb(text), accent: rgb(accent) });
     const actual = await page.evaluate(() => ({
       text: getComputedStyle(document.getElementById('clock')).color,
       focus: getComputedStyle(document.querySelector('.tile.focus')).outlineColor
@@ -802,7 +810,6 @@ async function visitHomeColours(browser, base, problems) {
       version++;
       await page.clock.fastForward(5000);
       const text = colours ? colours.text : '#ece7df';
-      await page.waitForFunction(expected => getComputedStyle(document.getElementById('clock')).color === expected, rgb(text));
       await check(text, colours ? colours.accent : text);
     }
   } finally { await page.close(); }
@@ -1178,6 +1185,9 @@ async function visitHomeUploads(browser, base, problems) {
       body = { ok: true, wallpapers: wallpapers() };
     } else if (pathname === '/api/home') {
       body = { ok: true, supported: { ok: true }, installed: true, enabled: true, writable: true, layout, wallpapers: wallpapers() };
+    } else if (pathname === '/api/home/layout') {
+      Object.assign(layout, route.request().postDataJSON());
+      body = { ok: true, layout };
     } else {
       body = { ok: true, layout, apps: [], devices: [], channels: [], order: { app: [], dev: [], ch: [] }, sources: { channels: 0 } };
     }
@@ -1193,6 +1203,16 @@ async function visitHomeUploads(browser, base, problems) {
     if (!await card(page, 'morning').locator('.wall-screen').isDisabled()) problems.push('Home uploads: a time of day took uploads with Black chosen');
     await page.locator('#home-wall-choice button', { hasText: 'Your own' }).click();
     await ready(page);
+    const dimming = page.waitForRequest(r => new URL(r.url()).pathname === '/api/home/layout');
+    await page.locator('#home-wall-dimming').evaluate(el => {
+      el.value = '35';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    if ((await dimming).postDataJSON().wallpaperDimming !== 35) problems.push('Home uploads: dimming did not save from the new picker');
+    await page.waitForFunction(() => homeLayout && homeLayout.wallpaperDimming === 35 && !homeSaving);
+    if (await page.locator('.wall-card').count() !== 4 || await page.locator('#home-wall-dimming-value').textContent() !== '35%')
+      problems.push('Home uploads: changing dimming lost its value or a wallpaper card');
     // Choosing Morning opens the file chooser for it.
     const chooser = page.waitForEvent('filechooser');
     await card(page, 'morning').locator('.wall-screen').click();
@@ -1274,7 +1294,11 @@ async function visitHomeAvailability(browser, base, problems) {
       if (await page.locator('#disc-system-tiles').isVisible() === c.glasshouse) fail('system apps ' + (c.glasshouse ? 'shown with Glasshouse Home on' : 'missing'));
       if (st.homeAutoLaunch !== undefined && (!await page.locator('#home-autolaunch').isVisible() || await page.locator('#home-autolaunch').isDisabled()))
         fail('Open Home at power-on missing or unusable');
-      if (!c.glasshouse && await page.locator('#home-picture-row').isVisible()) fail('Glasshouse Home\'s options shown without it');
+      if (!c.glasshouse) {
+        for (const id of ['home-picture-row', 'home-clock-size-row']) {
+          if (await page.locator('#' + id).isVisible()) fail('Glasshouse Home\'s option shown without it: ' + id);
+        }
+      }
       if (await page.locator('#disc-homescreen').isVisible() === st.enabled) fail('LG\'s Home layout ' + (st.enabled ? 'shown with Glasshouse Home on' : 'missing'));
     } finally { await page.close(); }
   }
@@ -1910,6 +1934,436 @@ async function visitHomeVerticalNavigation(browser, base, problems) {
 }
 
 
+async function visitHomeRecommended(browser, base, problems) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => problems.push('Home recommendations: ' + e.message));
+  const apps = [{ id: 'netflix', title: 'Netflix' }, { id: 'prime', title: 'Prime Video' }, { id: 'other', title: 'Other app' }];
+  const recommended = apps.slice(0, 2).flatMap(app => Array.from({ length: 8 }, (_, i) =>
+    ({ id: app.id + i, app: app.id, title: app.title + ' title ' + i, category: 'Continue watching' })));
+  const layout = { rows: ['app', 'rec', 'dev', 'ch'], recommended: true, hintSeen: true,
+    hidden: { app: [], rec: [], dev: [], ch: [] }, channels: [] };
+  const opened = [];
+  await page.route('**/api/home/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/open')) opened.push(route.request().postDataJSON());
+    const body = path.endsWith('/catalogue')
+      ? { ok: true, layout, apps, recommended, devices: [], channels: [], sources: { channels: 0, recommended: recommended.length },
+          order: { app: apps.map(a => a.id).concat('lg-home'), rec: recommended.map(r => r.id), dev: [], ch: [] } }
+      : path.endsWith('/now') ? { kind: null } : { ok: true, build: 'one' };
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  const check = (ok, detail) => { if (!ok) problems.push('Home recommendations: ' + detail); };
+  const row = page.locator('[data-key="rec"]');
+  try {
+    await page.clock.install();
+    await page.goto(base + '/assets/home.html');
+    await page.waitForSelector('.app.focus');
+    check(await row.locator('.tile').count() === 8 && (await row.textContent()).includes('From Netflix'),
+      'the initial app did not filter its cards');
+    await page.evaluate(() => { window.savedRecommendationApps = [...document.querySelectorAll('.app')]; });
+    await page.keyboard.press('ArrowRight');
+    check(await row.locator('.nm').first().textContent() === 'Prime Video title 0', 'changing app left the previous cards');
+    await page.keyboard.press('ArrowDown');
+    check(await row.locator('.tile.focus .nm').textContent() === 'Prime Video title 0', 'Down did not focus the replacement card');
+    for (let i = 0; i < 7; i++) await page.keyboard.press('ArrowRight');
+    await page.clock.runFor(700);
+    check(await row.locator('.tile.focus .nm').textContent() === 'Prime Video title 7', 'the replacement cards could not be navigated');
+    await page.evaluate(() => { window.savedRecommendationCard = document.querySelector('.rec.focus'); });
+    const refresh = page.waitForResponse(r => new URL(r.url()).pathname === '/api/home/catalogue');
+    await page.clock.fastForward(300000);
+    await refresh;
+    await page.waitForTimeout(100);
+    check(await page.evaluate(() => window.savedRecommendationCard === document.querySelector('.rec.focus') &&
+      window.savedRecommendationApps.every(app => app.isConnected)), 'an unchanged refresh rebuilt cards or app icons');
+    const opening = page.waitForResponse(r => new URL(r.url()).pathname === '/api/home/open');
+    await page.keyboard.press('Enter');
+    await opening;
+    check(opened[0].kind === 'rec' && opened[0].id === 'prime7', 'OK opened the wrong recommendation');
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    check(await row.locator('.tile').count() === 16, 'an app without cards did not show all recommendations');
+    await page.keyboard.press('ArrowDown');
+    check(await row.locator('.tile.focus').count() === 1, 'focus still referred to a removed recommendation');
+    await page.locator('.app[data-c="0"]').hover();
+    check(await row.locator('.tile').count() === 8 && (await row.textContent()).includes('From Netflix'),
+      'pointer focus did not filter the cards');
+    await page.keyboard.press('ArrowDown');
+    check(await row.locator('.tile.focus .nm').textContent() === 'Netflix title 0',
+      'Down after pointer filtering focused a removed card');
+    check(await page.evaluate(() => window.savedRecommendationApps.every(app => app.isConnected)),
+      'filtering recommendations rebuilt the Apps row');
+  } finally { await page.close(); }
+}
+
+async function visitHomeRendering(browser, base, problems) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => problems.push('Home rendering: ' + e.message));
+  const layout = { rows: ['app', 'dev', 'ch'], order: { app: [], dev: [], ch: [] },
+    hidden: { app: [], dev: [], ch: [] }, channels: ['channel'], hintSeen: true };
+  const apps = Array.from({ length: 12 }, (_, i) => ({ id: 'app' + i, title: 'App ' + i,
+    icon: '/assets/dashboard-app/assets/icon80.png' }));
+  const devices = [1, 2].map(port => ({ id: 'hdmi' + port, port, name: 'HDMI ' + port }));
+  const channels = [{ id: 'channel', number: '1', name: 'A long channel name that should scroll through its complete title' }];
+  let source = { kind: 'input', port: 1, title: 'HDMI 1' }, version = 'one';
+  let title = 'A programme title long enough to scroll continuously through this channel card';
+  const reads = {}, hold = {}, releases = {};
+  await page.route('**/api/home/**', route => {
+    const key = new URL(route.request().url()).pathname.split('/').pop();
+    const time = Date.now();
+    const body = key === 'catalogue'
+      ? { ok: true, layout, layoutVersion: version, apps, devices, channels, sources: { channels: 1 },
+          order: { app: apps.map(a => a.id).concat('lg-home'), dev: devices.map(d => d.id), ch: ['channel'] } }
+      : key === 'now' ? source
+      : key === 'guide' ? { ok: true, guide: { channel: [{ title, start: time - 600000, end: time + 3600000 }] } }
+      : { ok: true, build: 'one', layoutVersion: version };
+    const response = { contentType: 'application/json', body: JSON.stringify(body) };
+    if (route.request().method() === 'GET') reads[key] = (reads[key] || 0) + 1;
+    if (hold[key]) {
+      delete hold[key];
+      releases[key] = override => route.fulfill(override || response);
+      return;
+    }
+    return route.fulfill(response);
+  });
+  const check = (ok, detail) => { if (!ok) problems.push('Home rendering: ' + detail); };
+  async function advanceRefresh(ms) {
+    const now = page.waitForResponse(r => new URL(r.url()).pathname === '/api/home/now');
+    const guide = page.waitForResponse(r => new URL(r.url()).pathname === '/api/home/guide');
+    await page.clock.fastForward(ms);
+    await Promise.all([now, guide]);
+    await page.waitForTimeout(50);
+  }
+  try {
+    await page.clock.install();
+    await page.goto(base + '/assets/home.html');
+    await page.waitForSelector('.tile.focus');
+    await page.waitForSelector('.ch .prog');
+    await page.waitForFunction(() => document.getElementById('srcTitle').textContent === 'HDMI 1');
+    await page.evaluate(async () => { await document.fonts.ready; });
+    await page.evaluate(() => {
+      window.measuredHomeRows = [];
+      const width = Object.getOwnPropertyDescriptor(Element.prototype, 'clientWidth').get;
+      for (const row of document.querySelectorAll('#rows .row')) {
+        const key = row.getAttribute('data-key'), wrap = row.querySelector('.wrap');
+        Object.defineProperty(wrap, 'clientWidth', { get() { window.measuredHomeRows.push(key); return width.call(this); } });
+      }
+    });
+    await page.keyboard.press('ArrowRight');
+    check(await page.evaluate(() => window.measuredHomeRows.length > 0 && window.measuredHomeRows.every(key => key === 'app')),
+      'a horizontal app move measured another row');
+    await page.keyboard.press('ArrowLeft');
+    await page.evaluate(() => { window.measuredHomeRows = []; });
+    await page.keyboard.press('ArrowLeft');
+    check(await page.evaluate(() => window.measuredHomeRows.length === 0), 'moving past a row edge measured its layout again');
+    await page.keyboard.press('ArrowRight');
+    await page.evaluate(() => { window.measuredHomeRows = []; });
+    await page.keyboard.press('ArrowDown');
+    check(await page.evaluate(() => window.measuredHomeRows.includes('dev') && window.measuredHomeRows.every(key => key === 'app' || key === 'dev')),
+      'a vertical move measured an unaffected row');
+    await page.keyboard.press('ArrowDown');
+    await page.waitForSelector('.ch.focus .scrolling');
+    await page.evaluate(() => {
+      window.savedHome = {
+        app: document.querySelector('.app'), icon: document.querySelector('.app img'), dev: document.querySelector('.dev'),
+        ch: document.querySelector('.ch'), text: document.querySelector('.ch.focus .scrolling .scroll-text')
+      };
+    });
+    source = { kind: 'input', port: 2, title: 'HDMI 2' };
+    await advanceRefresh(60000);
+    check(await page.evaluate(() => window.savedHome.app === document.querySelector('.app') &&
+      window.savedHome.icon === document.querySelector('.app img') && window.savedHome.dev !== document.querySelector('.dev') &&
+      window.savedHome.ch === document.querySelector('.ch') && window.savedHome.text.isConnected),
+      'an input status update replaced app icons or the focused channel marquee');
+    await page.evaluate(() => { window.savedHome.dev = document.querySelector('.dev'); });
+    title = 'A different programme title which should replace just the Channels row';
+    await advanceRefresh(60000);
+    check(await page.evaluate(() => window.savedHome.app === document.querySelector('.app') &&
+      window.savedHome.dev === document.querySelector('.dev') && window.savedHome.ch !== document.querySelector('.ch') &&
+      Math.round(document.querySelector('.ch.focus').getBoundingClientRect().width) === 340),
+      'a programme update replaced another row or replayed channel expansion');
+
+    // A catalogue refresh and the minute timer ask for the same source and guide.
+    hold.now = hold.guide = true;
+    const before = Object.assign({}, reads);
+    const catalogue = page.waitForResponse(r => new URL(r.url()).pathname === '/api/home/catalogue');
+    await page.clock.fastForward(300000);
+    await catalogue;
+    await page.waitForTimeout(100);
+    check(reads.now === before.now + 1 && reads.guide === before.guide + 1,
+      'overlapping catalogue and minute refreshes duplicated source or guide reads');
+    await Promise.all([releases.now(), releases.guide()]);
+    await page.waitForTimeout(50);
+
+    // Heartbeats can notice the same new version before its catalogue arrives.
+    version = 'two';
+    hold.catalogue = true;
+    const catalogueBefore = reads.catalogue;
+    await page.clock.fastForward(5000);
+    await page.waitForTimeout(50);
+    await page.clock.fastForward(5000);
+    await page.waitForTimeout(50);
+    check(reads.catalogue === catalogueBefore + 1, 'heartbeats duplicated a pending catalogue read');
+    await releases.catalogue({ status: 503, contentType: 'application/json', body: '{}' });
+    await page.waitForTimeout(50);
+    await page.clock.fastForward(5000);
+    await page.waitForTimeout(100);
+    check(reads.catalogue === catalogueBefore + 2, 'a failed shared catalogue read blocked the retry');
+
+    version = 'three';
+    hold.catalogue = true;
+    await page.clock.fastForward(5000);
+    await page.waitForTimeout(50);
+    const olderCatalogue = releases.catalogue;
+    version = 'four';
+    layout.showAppCount = false;
+    await page.clock.fastForward(5000);
+    await page.waitForFunction(() => document.querySelectorAll('#rows [data-key="app"] h2 span').length === 0);
+    await olderCatalogue();
+    await page.waitForTimeout(50);
+    check(await page.locator('#rows [data-key="app"] h2 span').count() === 0, 'an older pending catalogue undid a newer dashboard change');
+
+    // A relaunch needs a fresh source; an older pending reply must not undo it.
+    source = { kind: 'input', port: 1, title: 'Old source' };
+    hold.now = true;
+    await page.clock.fastForward(60000);
+    await page.waitForTimeout(50);
+    source = { kind: 'input', port: 2, title: 'New source' };
+    await page.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
+    await page.waitForFunction(() => document.getElementById('srcTitle').textContent === 'New source');
+    await releases.now();
+    await page.waitForTimeout(50);
+    check(await page.locator('#srcTitle').textContent() === 'New source', 'a pre-relaunch reply restored the old source');
+
+    // Returning preserves focus on main; choose Apps explicitly before arranging it.
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('ArrowUp');
+
+    await page.evaluate(() => {
+      window.savedRows = [...document.querySelectorAll('#rows .row')];
+      window.savedIcons = [...document.querySelectorAll('.app img')];
+    });
+    await page.keyboard.down('Enter');
+    await page.clock.fastForward(900);
+    await page.keyboard.up('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowDown');
+    check(await page.evaluate(() => document.querySelector('#rows .row').getAttribute('data-key') === 'dev' &&
+      window.savedRows.every(row => row.isConnected) && window.savedIcons.every(icon => icon.isConnected)),
+      'moving a row replaced its elements or app icons');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    check(await page.locator('.sort.focus').count() === 1, 'arranging could not focus the row Order control');
+  } finally { await page.close(); }
+}
+
+
+async function visitHomeFolder(browser, base, problems) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => problems.push('Home folder: ' + e.message));
+  const apps = Array.from({ length: 24 }, (_, i) => ({ id: 'app' + i, title: 'App ' + i }));
+  const layout = { rows: ['app', 'dev', 'ch'], hidden: { app: [], dev: [], ch: [] }, channels: [],
+    folder: apps.slice(2).map(a => a.id), hintSeen: true, searchHintSeen: true, showAppCount: false, clockSize: 'small' };
+  const saves = [], opened = [];
+  await page.route('**/api/home/**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/home/layout') { const body = route.request().postDataJSON(); saves.push(body); Object.assign(layout, body); }
+    if (pathname === '/api/home/open') opened.push(route.request().postDataJSON().id);
+    const body = pathname.endsWith('/catalogue')
+      ? { ok: true, layout, apps, devices: [{ id: 'hdmi1', port: 1, name: 'HDMI 1' }], channels: [], sources: { channels: 0 },
+          order: { app: apps.map(a => a.id).concat('lg-home'), dev: ['hdmi1'], ch: [] } }
+      : pathname.endsWith('/now') ? { kind: null } : { ok: true, layout, build: 'one' };
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  const check = (ok, detail) => { if (!ok) problems.push('Home folder: ' + detail); };
+  const key = code => page.evaluate(code => {
+    for (const type of ['keydown', 'keyup']) document.dispatchEvent(new KeyboardEvent(type, { keyCode: code, bubbles: true }));
+  }, code);
+  try {
+    await page.clock.install();
+    await page.goto(base + '/assets/home.html');
+    await page.waitForSelector('.tile.focus');
+    check(await page.locator('.row[data-key="app"] .tile').count() === 4, 'the row did not separate its apps from More apps');
+    check(await page.locator('#rows [data-key="app"] h2 span').count() === 0, 'folder counts ignored the App count setting');
+    await page.evaluate(() => { window.savedFolderInput = document.querySelector('.dev'); });
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#stage.folder');
+    check(await page.locator('#folderGrid .tile').count() === 22, 'the folder did not contain every folded app');
+    const lines = await page.locator('#folderGrid .tile').evaluateAll(tiles => {
+      const rows = new Map();
+      for (const tile of tiles) rows.set(tile.offsetTop, (rows.get(tile.offsetTop) || 0) + 1);
+      return [...rows.values()];
+    });
+    check(JSON.stringify(lines) === '[9,9,4]', 'compact cards changed the nine-column grid');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');
+    check(await page.locator('#folderGrid .focus').getAttribute('data-f') === '21', 'remote navigation missed the short last line');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.getElementById('stage').classList.contains('folder'));
+    check(opened[0] === 'app23', 'OK opened the wrong folded app');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('#stage.folder');
+    await key(461);
+    check(await page.locator('#stage.folder').count() === 0, 'Back did not close More apps');
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowLeft');
+    await page.keyboard.down('Enter');
+    await page.clock.fastForward(900);
+    await page.keyboard.up('Enter');
+    await page.waitForSelector('#stage.arranging');
+    await key(404);
+    check(await page.locator('.row[data-key="app"] .tile.focus.folded').count() === 1, 'the green key did not move an app into More apps');
+    await key(461);
+    await page.waitForFunction(() => !document.getElementById('stage').classList.contains('arranging'));
+    check(saves.some(body => body.folder && body.folder.includes('app0')), 'the folder change was not saved');
+    check(await page.evaluate(() => window.savedFolderInput === document.querySelector('.dev')), 'arranging the folder replaced the Inputs row');
+    check(await page.locator('#when').getAttribute('class') === 'small', 'folder changes lost the compact clock');
+  } finally { await page.close(); }
+}
+
+
+async function visitHomeToggles(browser, base, problems) {
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const dashboard = await context.newPage(), view = await context.newPage(), tv = await context.newPage();
+  for (const page of [dashboard, view, tv]) page.on('pageerror', e => problems.push('Home toggles: ' + e.message));
+  const layout = { rows: ['app', 'dev', 'ch'], order: { app: [], dev: [], ch: [] },
+    hidden: { app: [], dev: [], ch: [] }, channels: [], hintSeen: true, searchHintSeen: true,
+    showLastOn: false, showAppCount: false, showInputCount: true, showChannelCount: true, showCec: true,
+    fade: false, showClock: true, rowsBottom: false, clockSize: 'small', view: 'standard' };
+  const devices = Array.from({ length: 8 }, (_, i) => ({ id: 'hdmi' + (i + 1), port: i + 1, name: 'Player ' + i, address: '1.0.0.0' }));
+  const channels = [{ id: 'ch1', number: '1', name: 'Channel 1' }];
+  let version = 1, opens = 0;
+  await context.route('**/api/home**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/home/layout') { Object.assign(layout, route.request().postDataJSON()); version++; }
+    if (pathname === '/api/home/open') opens++;
+    const body = pathname === '/api/home'
+      ? { ok: true, supported: { ok: true }, installed: true, enabled: true, active: true, writable: true, layout }
+      : pathname.endsWith('/catalogue')
+        ? { ok: true, layout, layoutVersion: String(version), apps: [{ id: 'netflix', title: 'Netflix' }],
+            devices, channels, sources: { channels: 1 },
+            order: { app: ['netflix', 'lg-home'], dev: devices.map(d => d.id), ch: ['ch1'] } }
+        : pathname.endsWith('/now') ? { kind: 'input', port: 1, title: 'Player' }
+        : { ok: true, layout, layoutVersion: String(version), build: 'one', channels: [] };
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  const check = (ok, detail) => { if (!ok) problems.push('Home toggles: ' + detail); };
+  async function effect(key, on) {
+    await view.clock.fastForward(5000);
+    await view.waitForFunction(({ key, on }) => key === 'showLastOn'
+      ? document.getElementById('source').classList.contains('none') !== on
+      : key === 'showAppCount' ? !!document.querySelector('[data-key="app"] h2 span') === on
+      : key === 'showInputCount' ? !!document.querySelector('[data-key="dev"] h2 span') === on
+      : key === 'showChannelCount' ? !!document.querySelector('[data-key="ch"] h2 span') === on
+      : key === 'showClock' ? (getComputedStyle(document.getElementById('when')).visibility !== 'hidden') === on
+      : key === 'rowsBottom' ? document.getElementById('stage').classList.contains('rows-bottom') === on
+      : key === 'view' ? document.getElementById('stage').classList.contains('alternative') === (on === 'alternative')
+      : localStorage.getItem('glasshouse.home.fade') === (on ? '1' : '0'), { key, on });
+    for (const [countKey, kind] of [['showAppCount', 'app'], ['showInputCount', 'dev'], ['showChannelCount', 'ch']]) {
+      if (key !== countKey) check(!!await view.locator('[data-key="' + kind + '"] h2 span').count() === layout[countKey],
+        key + ' also changed the ' + kind + ' count');
+    }
+  }
+  async function clickWeb(id, key, on) {
+    const sent = dashboard.waitForRequest(r => new URL(r.url()).pathname === '/api/home/layout' && r.method() === 'POST');
+    await dashboard.locator('#' + id).click();
+    check((await sent).postDataJSON()[key] === on, id + ' did not save its new value');
+    await dashboard.waitForFunction(() => !homeSaving);
+    await effect(key, on);
+  }
+  try {
+    await view.clock.install();
+    await dashboard.goto(base + '/?tab=home');
+    await dashboard.waitForFunction(() => typeof homeStatus !== 'undefined' && homeStatus && !homeSaving && homeCat);
+    await view.goto(base + '/assets/home.html');
+    await view.waitForSelector('.tile.focus');
+    check(await dashboard.locator('#home-last-source,#home-row-notes').count() === 0, 'duplicate switches remain');
+    for (const [id, key] of [['home-show-last', 'showLastOn'], ['home-show-count', 'showAppCount'],
+      ['home-show-input-count', 'showInputCount'], ['home-show-channel-count', 'showChannelCount']]) {
+      for (const on of [!layout[key], layout[key]]) await clickWeb(id, key, on);
+    }
+    await clickWeb('home-show-clock', 'showClock', false);
+    check(!await dashboard.locator('#home-clock-size-row').isVisible(), 'clock size remained usable with the clock hidden');
+    await clickWeb('home-show-clock', 'showClock', true);
+    check(await dashboard.locator('#home-clock-size-row').isVisible() && await dashboard.locator('#home-clock-size').inputValue() === 'small',
+      'showing the clock lost its size choice');
+    await clickWeb('home-rows-bottom', 'rowsBottom', true);
+    await clickWeb('home-rows-bottom', 'rowsBottom', false);
+    await clickWeb('home-fade', 'fade', true);
+    const opening = view.waitForRequest(r => new URL(r.url()).pathname === '/api/home/open');
+    await view.keyboard.press('Enter');
+    await view.clock.fastForward(100);
+    check(opens === 0, 'an app opened before the fade-out could finish');
+    await view.clock.fastForward(400);
+    await opening;
+    check(await view.evaluate(() => document.documentElement.classList.contains('faded')), 'opening an app did not fade Home out');
+    await view.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
+    await view.waitForFunction(() => !document.documentElement.classList.contains('faded'));
+    await clickWeb('home-fade', 'fade', false);
+    const immediate = view.waitForRequest(r => new URL(r.url()).pathname === '/api/home/open');
+    await view.keyboard.press('Enter');
+    await immediate;
+    check(!await view.evaluate(() => document.documentElement.classList.contains('faded')), 'Home still faded with the switch off');
+
+    await view.keyboard.press('ArrowDown');
+    for (let i = 0; i < devices.length; i++) await view.keyboard.press('ArrowRight');
+    await view.clock.runFor(700);
+    await view.evaluate(() => { window.originalHomeTiles = [...document.querySelectorAll('#rows .tile')]; });
+    for (const mode of ['alternative', 'standard']) {
+      await clickWeb('home-alternative', 'view', mode);
+      await view.clock.runFor(700);
+      const bounds = await view.evaluate(() => {
+        const tile = document.querySelector('.tile.focus'), track = tile.parentElement, wrap = track.parentElement;
+        const style = getComputedStyle(wrap), viewport = wrap.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        const x = -new DOMMatrixReadOnly(getComputedStyle(track).transform).m41;
+        const end = tile.getBoundingClientRect().right - (wrap.getBoundingClientRect().right - parseFloat(style.paddingRight));
+        return { overscroll: x - Math.max(0, track.scrollWidth - viewport), clipped: end,
+          retained: window.originalHomeTiles.every(t => t.isConnected), clock: getComputedStyle(document.getElementById('clock')).fontSize };
+      });
+      check(bounds.overscroll <= 1 && bounds.clipped <= 1, mode + ' view left the focused input outside its scroll bounds: ' + JSON.stringify(bounds));
+      check(bounds.retained, 'changing view rebuilt cached tiles');
+      check(bounds.clock === (mode === 'alternative' ? '100px' : '128px'), mode + ' view used the wrong clock size');
+      check(await dashboard.locator('#home-clock-size-row').isVisible() === (mode === 'standard'), 'clock size was offered where the view sets it');
+      for (const id of ['home-show-count', 'home-show-input-count', 'home-show-channel-count']) {
+        check(await dashboard.locator('#' + id).isDisabled() === (mode === 'alternative'), id + ' did not follow Alternative View');
+      }
+    }
+
+    await tv.goto(base + '/assets/dashboard.html?tab=home');
+    await tv.waitForFunction(() => typeof rows !== 'undefined' && rows.some(r => r.act === 'homeShow'));
+    for (const key of ['showClock', 'rowsBottom', 'showLastOn', 'showAppCount', 'showInputCount', 'showChannelCount', 'fade', 'view']) {
+      for (const on of key === 'view' ? ['alternative', 'standard'] : [!layout[key], layout[key]]) {
+        await tv.evaluate(key => {
+          sel = rows.findIndex(r => key === 'fade' ? r.act === 'homeFade' : key === 'view' ? r.act === 'homeAlternative' : r.act === 'homeShow' && r.key === key);
+          if (sel < 0) throw new Error('Home toggle missing: ' + key);
+          render();
+        }, key);
+        const sent = tv.waitForRequest(r => new URL(r.url()).pathname === '/api/home/layout' && r.method() === 'POST');
+        await tv.keyboard.press('Enter');
+        check((await sent).postDataJSON()[key] === on, 'TV app did not save ' + key);
+        await tv.waitForFunction(({ key, on }) => rows.some(r => (key === 'fade' ? r.act === 'homeFade' : key === 'view' ? r.act === 'homeAlternative' : r.act === 'homeShow' && r.key === key) && r.on === (key === 'view' ? on === 'alternative' : on)), { key, on });
+        if (key === 'showClock') {
+          check(await tv.evaluate(() => rows.some(r => r.act === 'homeClockSize')) === on,
+            'TV app clock size did not follow clock visibility');
+          check(await tv.evaluate(() => rows[sel].act === 'homeShow' && rows[sel].key === 'showClock'),
+            'TV app moved focus away from the clock switch');
+        }
+        if (key === 'view') {
+          check(await tv.evaluate(() => rows[sel].act === 'homeAlternative'), 'TV app moved focus away from the view switch');
+          check(await tv.evaluate(() => rows.some(r => r.act === 'homeClockSize')) === (on === 'standard'), 'TV app offered clock size in Alternative View');
+          for (const countKey of ['showAppCount', 'showInputCount', 'showChannelCount']) {
+            check(await tv.evaluate(key => rows.some(r => r.key === key && r.act === 'homeShow'), countKey) === (on === 'standard'), 'TV ' + countKey + ' did not follow Alternative View');
+          }
+        }
+        await effect(key, on);
+      }
+    }
+  } finally { await context.close(); }
+}
+
+
 (async () => {
   const server = await startServer();
   const base = 'http://127.0.0.1:' + server.port;
@@ -1924,11 +2378,15 @@ async function visitHomeVerticalNavigation(browser, base, problems) {
   await visitPictureUnavailable(browser, base, problems);
   await visitTvNonOled(browser, base, problems);
   await visitHomeArrangement(browser, base, problems);
+  await visitHomeRecommended(browser, base, problems);
+  await visitHomeRendering(browser, base, problems);
+  await visitHomeChannelBounds(browser, base, problems);
+  await visitHomeVerticalNavigation(browser, base, problems);
+  await visitHomeFolder(browser, base, problems);
+  await visitHomeWallpaperDrift(browser, base, problems);
   await visitHomePicture(browser, base, problems);
   await visitHomeVisibility(browser, base, problems);
-  await visitHomeVerticalNavigation(browser, base, problems);
-  await visitHomeChannelBounds(browser, base, problems);
-  await visitHomeWallpaperDrift(browser, base, problems);
+  await visitHomeToggles(browser, base, problems);
   await visitHomeColours(browser, base, problems);
   await visitHomeFadeAndInputs(browser, base, problems);
   await visitHomeInputsEditor(browser, base, problems);
@@ -1947,6 +2405,6 @@ async function visitHomeVerticalNavigation(browser, base, problems) {
   await browser.close();
   for (const p of problems) console.log(p);
   console.log((web.length + tv.length) + ' tabs opened (' + web.length + ' web, ' + tv.length + ' TV app), ' +
-              'TV navigation and LCD profile, Home arranging, picture, visibility, colours, fading and inputs, update, editing, order, uploads, readiness, availability, recents, scrolling, motion, guide and search checked, ' + problems.length + ' problem' + (problems.length === 1 ? '' : 's'));
+              'TV navigation and LCD profile, Home rendering, refreshes, More apps, wallpaper motion, arranging, picture, visibility, colours, fading and inputs, update, editing, order, uploads, readiness, availability, recents, scrolling, motion, guide and search checked, ' + problems.length + ' problem' + (problems.length === 1 ? '' : 's'));
   process.exit(problems.length ? 1 : 0);
 })().catch(e => { console.error(e.message); process.exit(1); });

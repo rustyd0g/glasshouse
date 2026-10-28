@@ -107,6 +107,8 @@ Up and Down retain the original horizontal position across rows, choosing the le
 
 Overlapping catalogue, source and guide reads share a request; saves and relaunches discard older replies. Optional refreshes pause while Home is hidden, while its health heartbeat continues. Returning to Home refreshes picture details even for the same source and settles interrupted row movements.
 
+Each row refreshes independently, preserving other rows’ tiles and animations; moving rows preserves their tiles too. Focus measures only affected rows, programme progress updates directly, and switching between the standard and Alternative views remeasures the cached rows.
+
 ## Search
 
 > [!WARNING]

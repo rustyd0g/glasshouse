@@ -162,6 +162,10 @@ Vertical navigation browser checks move repeatedly through differently sized row
 
 `test-home-refresh.js` checks shared reads, retry after failure, stale replies after saves or relaunches and completion callbacks. `test-home-return.js` checks settled scroll transforms before return replies arrive. Picture browser checks also reject stale details after returning to the same app.
 
+Home rendering browser checks cover measurements limited to affected rows, unrelated updates preserving app icons and channel scrolling, row moves retaining tiles, shared refreshes and stale replies. They also exercise every appearance and count control through both dashboards, including disabled controls in Alternative View and wallpaper dimming alongside the wallpaper picker.
+
+Recommended-row browser checks cover app filtering, focus and navigation after cards change, opening the selected title, and unchanged refreshes preserving cards and app icons.
+
 ## Documentation
 
 [`docs.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/docs.yml) builds this site on each pull request that changes it, with every
