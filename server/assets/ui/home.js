@@ -576,6 +576,14 @@ function homeClockSize(value) {
   homeSaveLayout({ clockSize: value });
 }
 
+function homeDimmingInput(value) {
+  q('home-wall-dimming-value').textContent = value + '%';
+}
+
+function homeWallpaperDimming(value) {
+  homeSaveLayout({ wallpaperDimming: Number(value) });
+}
+
 function homePicture() {
   homeSaveLayout({ picture: homeLayout.picture !== true });
 }
@@ -701,6 +709,14 @@ function renderHomeWalls() {
   const box = q('home-walls');
   if (!box || !homeStatus) return;
   const walls = homeStatus.wallpapers || {};
+  const dimming = q('home-wall-dimming');
+  if (dimming) {
+    if (document.activeElement !== dimming) {
+      dimming.value = homeLayout && typeof homeLayout.wallpaperDimming === 'number' ? homeLayout.wallpaperDimming : 50;
+    }
+    dimming.disabled = !homeWritable();
+    homeDimmingInput(dimming.value);
+  }
   const has = walls.slots || {};
   const busy = !homeWritable() || !!homeWallUploading || walls.uploading;
   const names = HOME_WALL_NAMES();

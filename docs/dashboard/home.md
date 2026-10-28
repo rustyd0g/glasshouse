@@ -126,6 +126,8 @@ With **Your own** chosen:
 * **Replace** and **Remove** under a time of day change or remove its picture alone; one without a picture has the black background.
 * **Remove all** puts the black background back for every time of day.
 
+**Wallpaper dimming**, in either dashboard's Home section, runs from 0% (brightest) to 100% (black), in steps of 5%. The default, 50%, keeps the time-of-day shading. Changes apply while Home is open without uploading the image again.
+
 The TV app's **Wallpaper** row moves through the four choices with OK.
 
 === "Afternoon wallpaper"

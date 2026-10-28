@@ -31,6 +31,7 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 @-webkit-keyframes drift{from{-webkit-transform:scale(1) translate(0,0)}to{-webkit-transform:scale(1.04) translate(-1.2%,-.8%)}}
 @keyframes drift{from{transform:scale(1) translate(0,0)}to{transform:scale(1.04) translate(-1.2%,-.8%)}}
 #scrim{position:absolute;left:0;top:0;right:0;bottom:0;
+  -webkit-transition:opacity .2s;transition:opacity .2s;
   background:radial-gradient(ellipse 34% 30% at 92% 14%,rgba(0,0,0,.55),rgba(0,0,0,0)),
     linear-gradient(90deg,rgba(0,0,0,.72) 0%,rgba(0,0,0,.35) 38%,rgba(0,0,0,0) 70%),
     linear-gradient(180deg,rgba(0,0,0,.5) 0%,rgba(0,0,0,0) 18%,rgba(0,0,0,.45) 36%,rgba(0,0,0,.82) 62%,rgba(0,0,0,.92) 100%)}
@@ -338,7 +339,7 @@ html.fades.in #stage{-webkit-transition:opacity .3s ease-out;transition:opacity 
 html.faded #stage{opacity:0}
 
 @media (prefers-reduced-motion:reduce){
-  .track,#toast,.tile,#folder,#folderGrid,#hits,.hit,.chip,#finder,#rail,#rail svg,#ask,html.fades #stage{-webkit-transition:none;transition:none}
+  .track,#toast,.tile,#scrim,#folder,#folderGrid,#hits,.hit,.chip,#finder,#rail,#rail svg,#ask,html.fades #stage{-webkit-transition:none;transition:none}
   #wall .layer{-webkit-animation:none;animation:none}
 }
 </style>
@@ -2196,6 +2197,7 @@ html.faded #stage{opacity:0}
     { key: 'night', from: 21, strength: 0.65 }
   ];
   var wallShown = null, wallFront = 0;
+  var wallStrengthShown = 1, wallDimmingShown = null;
   /*
    * ?wall=morning or ?hour=19 shows another slot, to check each one, as does
    * launching the app with { wall } or { hour }: a running app gets them at
@@ -2214,7 +2216,25 @@ html.faded #stage{opacity:0}
     for (var j = 0; j < WALL_SLOTS.length; j++) if (WALL_SLOTS[j].from <= h) slot = WALL_SLOTS[j];
     return slot;
   }
+  function wallpaperOpacity(strength, dimming) {
+    // 50 keeps the existing time-of-day look. Below it, both the image and
+    // scrim brighten; above it, the image fades toward the black background.
+    return dimming <= 50 ? 1 - (1 - strength) * dimming / 50 : strength * (100 - dimming) / 50;
+  }
+
+  function applyWallpaperDimming() {
+    var dimming = layout && typeof layout.wallpaperDimming === 'number' ? layout.wallpaperDimming : 50;
+    if (dimming === wallDimmingShown) return;
+    wallDimmingShown = dimming;
+    $('scrim').style.opacity = Math.min(1, dimming / 50);
+    if (wallShown !== null) {
+      var layers = $('wall').querySelectorAll('.layer');
+      layers[wallFront].style.opacity = wallpaperOpacity(wallStrengthShown, dimming);
+    }
+  }
+
   function updateWall() {
+    applyWallpaperDimming();
     var slot = wallSlot();
     if (!wallAvailable || (wallSlots && !wallSlots[slot.key])) {
       var blank = $('wall').querySelectorAll('.layer');
@@ -2232,9 +2252,11 @@ html.faded #stage{opacity:0}
       if (!wallAvailable || wallRevision !== revision || wallSlot().key !== slot.key) return;
       wallShown = id;
       next.style.backgroundImage = 'url(' + src + ')';
-      next.style.opacity = slot.strength;
       prev.style.opacity = 0;
       wallFront = 1 - wallFront;
+      wallStrengthShown = slot.strength;
+      wallDimmingShown = null;
+      applyWallpaperDimming();
     };
     img.src = src;
   }

@@ -152,6 +152,8 @@ For the TV app dashboard, checks verify the two-column layout geometry (the row 
 
 The Home suite checks clock-size defaults, validation, saving and preservation through clock visibility changes and Reset.
 
+The Home appearance tests cover dimming limits and rounding, invalid values, saved choices surviving unrelated edits, and Reset.
+
 ## Documentation
 
 [`docs.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/docs.yml) builds this site on each pull request that changes it, with every

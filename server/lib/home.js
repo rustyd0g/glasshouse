@@ -297,6 +297,7 @@ function defaults() {
     channels: [],
     hintSeen: false,
     clockSize: 'standard',
+    wallpaperDimming: 50,
     searchHintSeen: false,
     // The plate describing the picture of what was last on: detail many
     // won't want on a home screen, so it waits to be switched on.
@@ -379,6 +380,9 @@ function normalise(raw) {
   d.restorePending = raw.restorePending === true;
   d.hintSeen = raw.hintSeen === true;
   d.clockSize = raw.clockSize === 'small' ? 'small' : 'standard';
+  if (typeof raw.wallpaperDimming === 'number' && isFinite(raw.wallpaperDimming)) {
+    d.wallpaperDimming = Math.max(0, Math.min(100, Math.round(raw.wallpaperDimming / 5) * 5));
+  }
   d.searchHintSeen = raw.searchHintSeen === true;
   d.picture = raw.picture === true;
   SHOW_KEYS.forEach(function (k) { d[k] = raw[k] !== false; });
@@ -513,6 +517,7 @@ function setLayout(body, cb) {
                       body.channels !== undefined ? stringList(body.channels, MAX_CHANNELS) : c.channels),
     hintSeen: body.hintSeen !== undefined ? body.hintSeen : c.hintSeen,
     clockSize: body.clockSize === 'small' || body.clockSize === 'standard' ? body.clockSize : c.clockSize,
+    wallpaperDimming: typeof body.wallpaperDimming === 'number' && isFinite(body.wallpaperDimming) ? body.wallpaperDimming : c.wallpaperDimming,
     searchHintSeen: body.searchHintSeen !== undefined ? body.searchHintSeen : c.searchHintSeen,
     picture: typeof body.picture === 'boolean' ? body.picture : c.picture,
     showClock: typeof body.showClock === 'boolean' ? body.showClock : c.showClock,
@@ -552,7 +557,7 @@ function setLayout(body, cb) {
 function layoutOf(c) {
   return { rows: c.rows, order: c.order, sort: c.sort, hidden: c.hidden, folder: c.folder, channels: c.channels, hintSeen: c.hintSeen,
     excludedRecents: c.excludedRecents,
-    clockSize: c.clockSize,
+    clockSize: c.clockSize, wallpaperDimming: c.wallpaperDimming,
     searchHintSeen: c.searchHintSeen, picture: c.picture, search: c.search, recommended: c.recommended,
     fade: c.fade, hideUnused: c.hideUnused, showClock: c.showClock, rowsBottom: c.rowsBottom, view: c.view,
     showLastOn: c.showLastOn, showAppCount: c.showAppCount, showInputCount: c.showInputCount,
