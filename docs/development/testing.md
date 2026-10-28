@@ -148,6 +148,8 @@ The Home availability check covers a TV with neither Glasshouse Home nor LG's Ho
 
 For the TV app dashboard, checks verify the two-column layout geometry (the row list on the left and the hint pane on the right with non-zero dimensions and horizontal adjacency), remote D-pad navigation (`ArrowDown`, `ArrowUp`, `PageDown`), list translateY scrolling with the scroll arrow indicator, tab switching (`ArrowRight`, `ArrowLeft`), and that the OLED Care tab is dropped when running on a non-OLED (LCD) TV profile.
 
+`test-home.js` covers independent row-count defaults, saves, boolean validation, Reset and older visibility choices. `test-home-counts.js` checks that each heading follows only its own switch, empty-channel guidance remains available, and the TV app preserves the choices in Alternative View.
+
 ## Documentation
 
 [`docs.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/docs.yml) builds this site on each pull request that changes it, with every

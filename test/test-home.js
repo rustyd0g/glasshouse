@@ -2027,6 +2027,56 @@ step('Alternative View is off until chosen, saved, and anything but alternative 
   });
 });
 
+step('input and channel counts default on, save independently, and accept only booleans', function (done) {
+  start(null);
+  function counts(layout) { return [layout.showAppCount, layout.showInputCount, layout.showChannelCount]; }
+  assert.deepEqual(counts(home.layout()), [true, true, true]);
+  home.setLayout({ showInputCount: false }, function (r) {
+    assert.deepEqual(counts(r.layout), [true, false, true]);
+    home.setLayout({ showChannelCount: false }, function (r2) {
+      assert.deepEqual(counts(r2.layout), [true, false, false]);
+      home.setLayout({ showInputCount: true }, function (r3) {
+        assert.deepEqual(counts(r3.layout), [true, true, false]);
+        home.setLayout({ showInputCount: 'no', showChannelCount: 1 }, function (invalid) {
+          assert.deepEqual(counts(invalid.layout), [true, true, false]);
+          var saved = home.normalise(JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8')));
+          assert.deepEqual(counts(saved), [true, true, false]);
+          home.setLayout({ reset: true }, function (reset) {
+            assert.deepEqual(counts(reset.layout), [true, true, false]);
+            home.setLayout({ showChannelCount: true }, function (restored) {
+              assert.deepEqual(counts(restored.layout), [true, true, true]);
+              done();
+            });
+          });
+        });
+      });
+    });
+  });
+});
+
+step('earlier duplicate switches migrate to upstream choices and cannot mask later changes', function (done) {
+  start({ rowNotes: false, showLastSource: false, showAppCount: true, showLastOn: true });
+  assert.strictEqual(home.layout().showLastOn, false);
+  assert.strictEqual(home.layout().showAppCount, false);
+  assert.strictEqual(home.layout().showInputCount, false);
+  assert.strictEqual(home.layout().showChannelCount, false);
+  assert.strictEqual(home.layout().showLastSource, undefined);
+  assert.strictEqual(home.layout().rowNotes, undefined);
+  home.setLayout({ showLastOn: true, showAppCount: true, showInputCount: true, showChannelCount: true }, function (r) {
+    assert.ok(r.ok, r.error);
+    assert.strictEqual(r.layout.showLastOn, true);
+    assert.strictEqual(r.layout.showAppCount, true);
+    var saved = JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8'));
+    assert.strictEqual(saved.showLastSource, undefined);
+    assert.strictEqual(saved.rowNotes, undefined);
+    assert.strictEqual(home.normalise(saved).showLastOn, true);
+    assert.strictEqual(home.normalise(saved).showAppCount, true);
+    assert.strictEqual(home.normalise(saved).showInputCount, true);
+    assert.strictEqual(home.normalise(saved).showChannelCount, true);
+    done();
+  });
+});
+
 step('fading, search and leaving out inputs with nothing plugged in stay off until switched on, are saved, and outlast a reset, beside hiding inputs one by one', function (done) {
   start(null);
   assert.strictEqual(home.layout().fade, false);

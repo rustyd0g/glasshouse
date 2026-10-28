@@ -146,18 +146,20 @@ function renderHome() {
     pic.disabled = !homeWritable();
   }
   document.querySelectorAll('.home-show-row').forEach(row => { row.hidden = !st.supported.ok; });
-  // Alternative View's rows have no titles, so no app count beside them.
+  // Alternative View's rows have no titles, so no counts beside them.
   const altView = !!st.layout && st.layout.view === 'alternative';
   HOME_SHOW.forEach(([key, id]) => {
     const el = q(id);
     if (!el) return;
     const on = !st.layout || st.layout[key] !== false;
-    const unused = key === 'showAppCount' && altView;
+    const unused = altView && ['showAppCount', 'showInputCount', 'showChannelCount'].indexOf(key) !== -1;
     updateToggle(el, { cls: on && !unused ? 'good' : 'idle', label: on ? t('common.on', 'On') : t('common.off', 'Off') });
     el.disabled = !homeWritable() || unused;
   });
-  const countAlt = q('home-show-count-alt');
-  if (countAlt) countAlt.hidden = !altView;
+  ['home-show-count-alt', 'home-show-input-count-alt', 'home-show-channel-count-alt'].forEach(id => {
+    const note = q(id);
+    if (note) note.hidden = !altView;
+  });
   const searchRow = q('home-search-row');
   if (searchRow) searchRow.hidden = !st.supported.ok;
   const searchPill = q('home-search');
@@ -568,7 +570,8 @@ function homePicture() {
 }
 
 // The details Glasshouse Home shows unless switched off, and their toggles.
-const HOME_SHOW = [['showClock', 'home-show-clock'], ['showLastOn', 'home-show-last'], ['showAppCount', 'home-show-count'], ['showCec', 'home-show-cec']];
+const HOME_SHOW = [['showClock', 'home-show-clock'], ['showLastOn', 'home-show-last'], ['showAppCount', 'home-show-count'],
+  ['showInputCount', 'home-show-input-count'], ['showChannelCount', 'home-show-channel-count'], ['showCec', 'home-show-cec']];
 
 function homeShow(key) {
   homeSaveLayout({ [key]: homeLayout[key] === false });

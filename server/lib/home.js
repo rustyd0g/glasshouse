@@ -49,7 +49,7 @@ var SETTINGS = 'com.webos.service.settings/';
 var ROWS = ['app', 'rec', 'dev', 'ch'];
 // How a row is ordered: as arranged ('custom'), or the tile opened last first ('recent').
 var SORTS = ['custom', 'recent'];
-var SHOW_KEYS = ['showClock', 'showLastOn', 'showAppCount', 'showCec'];
+var SHOW_KEYS = ['showClock', 'showLastOn', 'showAppCount', 'showInputCount', 'showChannelCount', 'showCec'];
 // An input opened from its tile is recorded as that device, not as the whole input.
 var TILE_OPEN_MS = 15000;
 /*
@@ -301,12 +301,13 @@ function defaults() {
     // won't want on a home screen, so it waits to be switched on.
     picture: false,
     // What the view shows beyond the rows: the clock and date, the last
-    // source in the top strip and on its input's tile, the "n of total"
-    // beside Apps, and each CEC device's address. On unless switched off, as
-    // before they could be.
+    // source in the top strip and on its input's tile, each row's count,
+    // and each CEC device's address. On unless switched off.
     showClock: true,
     showLastOn: true,
     showAppCount: true,
+    showInputCount: true,
+    showChannelCount: true,
     showCec: true,
     // The rows centred below the top strip, or along the bottom as on LG's Home.
     rowsBottom: false,
@@ -379,6 +380,9 @@ function normalise(raw) {
   d.searchHintSeen = raw.searchHintSeen === true;
   d.picture = raw.picture === true;
   SHOW_KEYS.forEach(function (k) { d[k] = raw[k] !== false; });
+  // Preserve visibility choices saved by earlier Home improvements.
+  if (raw.rowNotes === false) d.showAppCount = d.showInputCount = d.showChannelCount = false;
+  if (raw.showLastSource === false) d.showLastOn = false;
   d.rowsBottom = raw.rowsBottom === true;
   d.view = raw.view === 'alternative' ? 'alternative' : 'standard';
   d.search = raw.search === true;
@@ -513,6 +517,8 @@ function setLayout(body, cb) {
     view: body.view !== undefined ? body.view : c.view,
     showLastOn: typeof body.showLastOn === 'boolean' ? body.showLastOn : c.showLastOn,
     showAppCount: typeof body.showAppCount === 'boolean' ? body.showAppCount : c.showAppCount,
+    showInputCount: typeof body.showInputCount === 'boolean' ? body.showInputCount : c.showInputCount,
+    showChannelCount: typeof body.showChannelCount === 'boolean' ? body.showChannelCount : c.showChannelCount,
     showCec: typeof body.showCec === 'boolean' ? body.showCec : c.showCec,
     search: typeof body.search === 'boolean' ? body.search : c.search,
     recommended: typeof body.recommended === 'boolean' ? body.recommended : c.recommended,
@@ -545,7 +551,8 @@ function layoutOf(c) {
     excludedRecents: c.excludedRecents,
     searchHintSeen: c.searchHintSeen, picture: c.picture, search: c.search, recommended: c.recommended,
     fade: c.fade, hideUnused: c.hideUnused, showClock: c.showClock, rowsBottom: c.rowsBottom, view: c.view,
-    showLastOn: c.showLastOn, showAppCount: c.showAppCount, showCec: c.showCec, colours: c.colours,
+    showLastOn: c.showLastOn, showAppCount: c.showAppCount, showInputCount: c.showInputCount,
+    showChannelCount: c.showChannelCount, showCec: c.showCec, colours: c.colours,
     // Not saved: { host, by } while the ad blocker blocks LG's search (lib/home-search).
     searchBlocked: search.blocked() };
 }
