@@ -99,6 +99,8 @@ Glasshouse Home displays a clock and date (following the TV's 12-hour or 24-hour
 
 **Clock size**, in either dashboard, offers Standard and Small for the standard view. The choice is retained while the clock is off or Alternative View sets its own size; the size control appears only when it applies.
 
+Apps use a compact frame. Channel and input cards have a faint neutral background, and all three rows share a translucent fill and accent outline on focus in the standard view.
+
 ## Search
 
 > [!WARNING]
