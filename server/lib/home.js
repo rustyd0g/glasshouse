@@ -576,7 +576,7 @@ function launchPoints(cb) {
       var out = [];
       r.launchPoints.forEach(function (p) {
         if (!p || typeof p.id !== 'string' || p.lptype === 'bookmark' || p.visible === false) return;
-        if (p.id === HOME_APP || p.id === LG_HOME || isInputApp(p.id)) return;
+        if (p.id === HOME_APP || p.id === LG_HOME || (p.id !== LIVE_TV && isInputApp(p.id))) return;
         out.push({ id: p.id, title: String(p.title || p.id), icon: p.largeIcon || p.icon || '' });
       });
       sidebarApps(LG_SIDEBAR_APPS.slice(), out, done);
@@ -793,7 +793,7 @@ function noteForeground(was, id) {
     if (!fromTile) noteOpened('dev', 'hdmi' + m[1]);
     return;
   }
-  if (!isInputApp(id)) noteOpened('app', id);
+  if (id === LIVE_TV || !isInputApp(id)) noteOpened('app', id);
 }
 
 /*
