@@ -105,6 +105,8 @@ The focused channel card widens to give its titles more room, except while arran
 
 Up and Down retain the original horizontal position across rows, choosing the leftmost overlapping visible card or the nearest where none overlaps. Left, Right or selecting another card with the pointer establishes a new position.
 
+Overlapping catalogue, source and guide reads share a request; saves and relaunches discard older replies. Optional refreshes pause while Home is hidden, while its health heartbeat continues. Returning to Home refreshes picture details even for the same source and settles interrupted row movements.
+
 ## Search
 
 > [!WARNING]

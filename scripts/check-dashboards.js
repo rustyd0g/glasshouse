@@ -148,6 +148,7 @@ async function visitHomePicture(browser, base, problems) {
     signal: { width: 3840, height: 2160, hz: 24, chroma: 'YCbCr 4:4:4', bits: 10, hdr: 'hdr10' } };
   const netflix = { ok: true, range: 'dolbyHdr', mode: { display: 'Dolby Vision Cinema Bright' }, light: 100, oled: true,
     signal: { width: 3840, height: 2160, hz: 23.98, hdr: 'dolby_vision', played: true } };
+  let appPicture = netflix;
   const asleep = { ok: true, range: null, mode: null, light: null, oled: true, signal: null };
   let source = { kind: 'input', port: 4, title: 'HDMI 4' };
   let releaseCatalogue = null, latePicture = null, holdPicture = false, pictureReads = 0;
@@ -167,7 +168,7 @@ async function visitHomePicture(browser, base, problems) {
     if (url.pathname.endsWith('/now')) return reply(route, source);
     if (url.pathname.endsWith('/picture')) {
       pictureReads++;
-      const body = url.searchParams.get('kind') === 'app' ? netflix : url.searchParams.get('port') === '2' ? asleep : hdmi4;
+      const body = url.searchParams.get('kind') === 'app' ? appPicture : url.searchParams.get('port') === '2' ? asleep : hdmi4;
       if (holdPicture) {
         holdPicture = false;
         latePicture = () => reply(route, body);
@@ -227,6 +228,14 @@ async function visitHomePicture(browser, base, problems) {
     await latePicture();
     await page.waitForTimeout(100);
     if (await page.locator('#plMode').textContent() !== 'Dolby Vision Cinema Bright') problems.push('Home picture: a late HDMI reply replaced the app picture');
+    await delayPicture();
+    appPicture = Object.assign({}, netflix, { mode: { display: 'Dolby Vision Cinema Dark' } });
+    const beforeReturn = pictureReads;
+    await returned();
+    if (pictureReads === beforeReturn) problems.push('Home picture: returning to the same source reused a pre-return picture read');
+    await latePicture();
+    await page.waitForTimeout(100);
+    if (await page.locator('#plMode').textContent() !== 'Dolby Vision Cinema Dark') problems.push('Home picture: a pre-return reply restored stale details for the same source');
     await delayPicture();
     layout.picture = false;
     await returned();

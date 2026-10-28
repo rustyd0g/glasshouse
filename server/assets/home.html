@@ -449,6 +449,7 @@ html.faded #stage{opacity:0}
   var BEAT_MS = 5000;
 
   var verticalAnchor = null;
+  var refreshGeneration = 0, refreshVersion = null, pendingRefreshes = Object.create(null);
   var data = null;       // the catalogue: apps, devices, channels, order
   var layout = null;     // rows, order, sort, hidden, channels, hintSeen, picture, show*
   var guideData = {};
@@ -533,6 +534,19 @@ html.faded #stage{opacity:0}
   }
   function getJson(url, cb) { request('GET', url + (url.indexOf('?') === -1 ? '?' : '&') + 't=' + Date.now(), null, cb); }
   function postJson(url, body, cb) { request('POST', url, body || {}, cb || function () {}); }
+
+  function refreshJson(url, apply, done) {
+    var generation = refreshGeneration, revision = layoutRevision;
+    var key = url + '@' + generation + '/' + revision;
+    var waiting = pendingRefreshes[key];
+    if (waiting) { if (done) waiting.push(done); return; }
+    waiting = pendingRefreshes[key] = done ? [done] : [];
+    getJson(url, function (r) {
+      delete pendingRefreshes[key];
+      var accepted = generation === refreshGeneration && revision === layoutRevision && apply(r) !== false;
+      waiting.forEach(function (cb) { cb(accepted); });
+    });
+  }
 
   // ---------------------------------------------------------------- stage
 
@@ -1258,14 +1272,16 @@ html.faded #stage{opacity:0}
    */
   var picture = null;
   var pictureRevision = 0;
-  var pictureSource = null;
+  var pictureSource = null, picturePending = null;
   var HDR_NAMES = { hdr10: 'HDR10', hlg: 'HLG', dolby_vision: t('home.plate.dolby', 'Dolby Vision') };
 
   function refreshPicture() {
-    var revision = ++pictureRevision;
+    if (document.hidden) return;
     var kind = lastOn.kind;
     if (!layout || layout.picture !== true) kind = null;
     if (kind !== 'input' && kind !== 'channel' && kind !== 'app') {
+      pictureRevision++;
+      picturePending = null;
       pictureSource = null;
       picture = null;
       return renderPicture();
@@ -1277,8 +1293,15 @@ html.faded #stage{opacity:0}
       picture = null;
       renderPicture();
     }
+    var generation = refreshGeneration, layoutAtStart = layoutRevision;
+    var pending = source + '@' + generation + '/' + layoutAtStart;
+    if (picturePending === pending) return;
+    var revision = ++pictureRevision;
+    picturePending = pending;
     getJson('/api/home/picture?kind=' + kind + which, function (r) {
       if (revision !== pictureRevision) return;
+      picturePending = null;
+      if (document.hidden || generation !== refreshGeneration || layoutAtStart !== layoutRevision) return;
       picture = r && r.ok ? r : null;
       renderPicture();
     });
@@ -2529,7 +2552,7 @@ html.faded #stage{opacity:0}
   function load(cb, whileArranging, onNow) {
     if ((layoutBusy || state.arranging) && !whileArranging) return;
     var revision = layoutRevision;
-    getJson('/api/home/catalogue', function (r) {
+    refreshJson('/api/home/catalogue', function (r) {
       if (!r || !r.ok) {
         if (!data) {
           $('fault').className = 'show';
@@ -2541,10 +2564,10 @@ html.faded #stage{opacity:0}
           clearTimeout(loadRetry);
           loadRetry = setTimeout(function () { if (!document.hidden) load(); }, 2000);
         }
-        return cb && cb(false);
+        return false;
       }
       // A reply sent before arranging or saving must not replace local edits.
-      if (revision !== layoutRevision || ((layoutBusy || state.arranging) && !whileArranging)) return;
+      if (revision !== layoutRevision || ((layoutBusy || state.arranging) && !whileArranging)) return false;
       var firstLoad = !data;
       data = r;
       layout = r.layout;
@@ -2552,7 +2575,7 @@ html.faded #stage{opacity:0}
       if (!searchOn()) { closeSearch(); state.rail = false; }
       setFadeOn(layout.fade === true);
       applyColours(layout.colours);
-      if (r.layoutVersion) layoutVersion = r.layoutVersion;
+      if (r.layoutVersion) layoutVersion = refreshVersion = r.layoutVersion;
       refreshPicture();
       clearTimeout(loadRetry);
       wallAvailable = !!(r.wallpapers && r.wallpapers.available);
@@ -2572,27 +2595,26 @@ html.faded #stage{opacity:0}
         layout.searchHintSeen = true;
       }
       refreshGuide();
-      if (cb) cb(true);
-    });
+      return true;
+    }, cb);
     refreshNow(onNow);
   }
 
   function refreshNow(cb) {
-    getJson('/api/home/now', function (r) {
-      if (r) {
-        lastOn = r;
-        renderNow();
-        refreshPicture();
-        if (data && !state.arranging) renderWhenStill();
-      }
-      if (cb) cb();
-    });
+    if (document.hidden) { if (cb) cb(false); return; }
+    refreshJson('/api/home/now', function (r) {
+      if (!r || document.hidden) return false;
+      lastOn = r;
+      renderNow();
+      refreshPicture();
+      if (data && !state.arranging) renderWhenStill();
+    }, cb);
   }
 
   function refreshGuide() {
-    if (!layout || !layout.channels.length) return;
-    getJson('/api/home/guide', function (r) {
-      if (!r || !r.guide) return;
+    if (document.hidden || !layout || !layout.channels.length) return;
+    refreshJson('/api/home/guide', function (r) {
+      if (!r || !r.guide || document.hidden) return false;
       guideData = r.guide;
       if (!state.arranging && data) renderWhenStill();
     });
@@ -2638,7 +2660,10 @@ html.faded #stage{opacity:0}
           }
           sleeps = r.sleeps;
         }
-        if (r.layoutVersion && layoutVersion && r.layoutVersion !== layoutVersion && !state.arranging && !layoutBusy) load();
+        if (!document.hidden && r.layoutVersion && layoutVersion && r.layoutVersion !== layoutVersion && !state.arranging && !layoutBusy) {
+          if (refreshVersion !== r.layoutVersion) { refreshVersion = r.layoutVersion; refreshGeneration++; }
+          load();
+        }
         return;
       }
       if (++beatFails === 3) $('fault').className = 'show';
@@ -2646,6 +2671,7 @@ html.faded #stage{opacity:0}
   }
 
   function returned() {
+    refreshGeneration++;
     verticalAnchor = null;
     var dark = faded;
     if (!dark) fadeIn();
@@ -2666,6 +2692,8 @@ html.faded #stage{opacity:0}
       if (!tracks.hasOwnProperty(key)) continue;
       tracks[key].x = tracks[key].target;
       tracks[key].v = 0;
+      // Unchanged rows skip rendering, so settle their transforms here.
+      paint(key);
     }
     if (state.arranging) setArranging(false);
     beat();
@@ -2721,9 +2749,9 @@ html.faded #stage{opacity:0}
   beat();
   load();
   setInterval(beat, BEAT_MS);
-  setInterval(function () { renderNow(); updateWall(); if (!document.hidden) refreshPicture(); }, 15000);
+  setInterval(function () { if (!document.hidden) { renderNow(); updateWall(); refreshPicture(); } }, 15000);
   setInterval(function () { refreshNow(); refreshGuide(); }, 60000);
-  setInterval(function () { if (!state.arranging) load(); }, 5 * 60000);
+  setInterval(function () { if (!document.hidden && !state.arranging) load(); }, 5 * 60000);
 })();
 </script>
 </body>

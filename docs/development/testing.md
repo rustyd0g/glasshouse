@@ -160,6 +160,8 @@ Channel bounds browser checks leave an expanded end card for another row or ente
 
 Vertical navigation browser checks move repeatedly through differently sized rows without drifting left and verify that Left/Right establishes a new horizontal anchor.
 
+`test-home-refresh.js` checks shared reads, retry after failure, stale replies after saves or relaunches and completion callbacks. `test-home-return.js` checks settled scroll transforms before return replies arrive. Picture browser checks also reject stale details after returning to the same app.
+
 ## Documentation
 
 [`docs.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/docs.yml) builds this site on each pull request that changes it, with every
