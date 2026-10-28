@@ -1859,6 +1859,48 @@ async function visitHomeChannelBounds(browser, base, problems) {
 }
 
 
+async function visitHomeVerticalNavigation(browser, base, problems) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => problems.push('Home vertical navigation: ' + e.message));
+  const apps = Array.from({ length: 30 }, (_, i) => ({ id: 'app' + i, title: 'App ' + i }));
+  const devices = Array.from({ length: 6 }, (_, i) => ({ id: 'dev' + i, name: 'Input ' + i, port: i + 1 }));
+  const channels = Array.from({ length: 12 }, (_, i) => ({ id: 'ch' + i, name: 'Channel ' + i, number: String(i + 1) }));
+  const layout = { rows: ['app', 'dev', 'ch'], hidden: { app: [], dev: [], ch: [] },
+    channels: channels.map(c => c.id), hintSeen: true, searchHintSeen: true };
+  await page.route('**/api/home/**', route => {
+    const pathname = new URL(route.request().url()).pathname;
+    const body = pathname.endsWith('/catalogue')
+      ? { ok: true, layout, apps, devices, channels, sources: { channels: channels.length },
+          order: { app: apps.map(a => a.id), dev: devices.map(d => d.id), ch: channels.map(c => c.id) } }
+      : pathname.endsWith('/now') ? { kind: null }
+      : pathname.endsWith('/guide') ? { ok: true, guide: {} } : { ok: true, build: 'one' };
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  async function expect(kind, column) {
+    const actual = await page.locator('#rows .row.active .tile.focus').evaluate(el => ({
+      kind: el.closest('.row').getAttribute('data-key'), column: Number(el.getAttribute('data-c'))
+    }));
+    if (actual.kind !== kind || actual.column !== column) problems.push('Home vertical navigation: expected ' + kind + ' ' + column + ', got ' + JSON.stringify(actual));
+  }
+  try {
+    await page.goto(base + '/assets/home.html');
+    await page.waitForSelector('.tile.focus');
+    for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowRight');
+    for (let i = 0; i < 3; i++) {
+      await page.keyboard.press('ArrowDown'); await expect('dev', 3);
+      await page.keyboard.press('ArrowDown'); await expect('ch', 5);
+      await page.waitForTimeout(220);
+      await page.keyboard.press('ArrowUp'); await expect('dev', 3);
+      await page.keyboard.press('ArrowUp'); await expect('app', 8);
+    }
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowUp');
+    await expect('app', 4);
+  } finally { await page.close(); }
+}
+
+
 (async () => {
   const server = await startServer();
   const base = 'http://127.0.0.1:' + server.port;
@@ -1875,6 +1917,7 @@ async function visitHomeChannelBounds(browser, base, problems) {
   await visitHomeArrangement(browser, base, problems);
   await visitHomePicture(browser, base, problems);
   await visitHomeVisibility(browser, base, problems);
+  await visitHomeVerticalNavigation(browser, base, problems);
   await visitHomeChannelBounds(browser, base, problems);
   await visitHomeWallpaperDrift(browser, base, problems);
   await visitHomeColours(browser, base, problems);

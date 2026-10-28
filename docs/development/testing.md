@@ -158,6 +158,8 @@ The Home appearance tests cover dimming limits and rounding, invalid values, sav
 
 Channel bounds browser checks leave an expanded end card for another row or enter arranging, with normal and reduced motion, and verify that shrinking leaves no excess horizontal scroll.
 
+Vertical navigation browser checks move repeatedly through differently sized rows without drifting left and verify that Left/Right establishes a new horizontal anchor.
+
 ## Documentation
 
 [`docs.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/docs.yml) builds this site on each pull request that changes it, with every

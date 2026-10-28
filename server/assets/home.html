@@ -448,6 +448,7 @@ html.faded #stage{opacity:0}
   var LONG_PRESS_MS = 800;
   var BEAT_MS = 5000;
 
+  var verticalAnchor = null;
   var data = null;       // the catalogue: apps, devices, channels, order
   var layout = null;     // rows, order, sort, hidden, channels, hintSeen, picture, show*
   var guideData = {};
@@ -536,6 +537,7 @@ html.faded #stage{opacity:0}
   // ---------------------------------------------------------------- stage
 
   function fit() {
+    verticalAnchor = null;
     var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
     var st = $('stage');
     stageScale = s;
@@ -1405,7 +1407,38 @@ html.faded #stage{opacity:0}
     });
   }
 
+  function columnForVerticalMove(rowIndex) {
+    var rows = document.querySelectorAll('#rows .row');
+    var sourceRow = rows[state.row], targetRow = rows[rowIndex];
+    var source = sourceRow && sourceRow.querySelector('.tile.focus');
+    var wrap = targetRow && targetRow.querySelector('.wrap');
+    if (!source || !wrap) return 0;
+    if (!verticalAnchor) {
+      var bounds = source.getBoundingClientRect();
+      verticalAnchor = { left: bounds.left, right: bounds.right };
+    }
+    var from = verticalAnchor, clip = wrap.getBoundingClientRect();
+    var tiles = targetRow.querySelectorAll('.tile');
+    var best = 0, foundOverlap = false, bestGap = Infinity, bestLeft = Infinity;
+    for (var i = 0; i < tiles.length; i++) {
+      var tileBounds = tiles[i].getBoundingClientRect();
+      var left = Math.max(tileBounds.left, clip.left), right = Math.min(tileBounds.right, clip.right);
+      if (right <= left) continue;
+      var overlaps = Math.min(from.right, right) > Math.max(from.left, left);
+      var gap = Math.max(left - from.right, from.left - right, 0);
+      if ((overlaps && (!foundOverlap || left < bestLeft)) ||
+          (!overlaps && !foundOverlap && (gap < bestGap || (gap === bestGap && left < bestLeft)))) {
+        best = i;
+        foundOverlap = overlaps;
+        bestGap = gap;
+        bestLeft = left;
+      }
+    }
+    return best;
+  }
+
   function move(dr, dc) {
+    if (dc) verticalAnchor = null;
     var onSort = colOf(rowKey()) === -1;
     // Left of any row's first tile is the search rail, outside arranging;
     // right goes back to the tile it came from.
@@ -1419,13 +1452,18 @@ html.faded #stage{opacity:0}
     }
     if (dr) {
       var to = nextShown(state.row + dr, dr);
-      if (to >= 0 && to < layout.rows.length && shown(to)) state.row = to;
+      if (to >= 0 && to < layout.rows.length && shown(to)) {
+        if (!state.arranging) state.col[layout.rows[to]] = columnForVerticalMove(to);
+        state.row = to;
+      }
     }
     // Up and down from a row's Order go to the next row's.
     if (dr && onSort) state.col[rowKey()] = -1;
     // A row the pointer or the wheel moved is taken up from the tiles in
     // view, not pulled back to the tile focused before.
-    var kind = rowKey(), span = state.arranging ? null : inView(kind), c = colOf(kind);
+    var kind = rowKey(), c = colOf(kind);
+    var atStart = dc < 0 && c === 0 && trackOf(kind).target === 0;
+    var span = state.arranging || atStart ? null : inView(kind);
     var outside = span && c >= 0 && (c < span[0] || c > span[1]);
     if (outside && dr) state.col[kind] = c < span[0] ? span[0] : span[1];
     if (dc) {
@@ -1523,6 +1561,7 @@ html.faded #stage{opacity:0}
   var recents = { open: false, loading: false, revision: 0, apps: [], col: 0, onX: false, onAll: false, busy: false, stamp: 0 };
 
   function openRecents() {
+    verticalAnchor = null;
     if (recents.busy) return;
     recents.busy = true;
     recents.loading = true;
@@ -2014,6 +2053,7 @@ html.faded #stage{opacity:0}
   }
 
   function setArranging(on) {
+    verticalAnchor = null;
     if (layoutBusy) return;
     layoutRevision++;
     // The focus stays on the same item as hidden tiles appear or go.
@@ -2281,6 +2321,7 @@ html.faded #stage{opacity:0}
     if (!rowEl) return;
     var r = +rowEl.getAttribute('data-row'), c = +tile.getAttribute('data-c'), kind = layout.rows[r];
     if (state.row !== r || colOf(kind) !== c || state.bar >= 0 || state.rail) {
+      verticalAnchor = null;
       state.row = r; state.col[kind] = c; state.bar = -1; state.rail = false;
       applyFocus(false, true);
     }
@@ -2605,6 +2646,7 @@ html.faded #stage{opacity:0}
   }
 
   function returned() {
+    verticalAnchor = null;
     var dark = faded;
     if (!dark) fadeIn();
     initialEscape = false;

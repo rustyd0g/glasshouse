@@ -103,6 +103,8 @@ Apps use a compact frame. Channel and input cards have a faint neutral backgroun
 
 The focused channel card widens to give its titles more room, except while arranging or showing Recent apps. Long channel names and programme titles scroll through their full length at 45 pixels per second after a short delay, with the beginning following from the right. Scrolling pauses in overlays and follows the reduced-motion preference.
 
+Up and Down retain the original horizontal position across rows, choosing the leftmost overlapping visible card or the nearest where none overlaps. Left, Right or selecting another card with the pointer establishes a new position.
+
 ## Search
 
 > [!WARNING]
