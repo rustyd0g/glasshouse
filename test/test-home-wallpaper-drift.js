@@ -14,7 +14,8 @@ function fixture(saved, unavailable, legacyClock) {
   var now = 1000, clock = 1000, stored = saved, listener, motion = { style: {} };
   var media = { matches: false, addListener: function (cb) { listener = cb; } };
   var sandbox = {
-    Date: { now: function () { return now; } }, document: { hidden: false }, wallShown: null,
+    Date: { now: function () { return now; } }, wallShown: null,
+    document: { hidden: false, documentElement: { classList: { contains: function () { return false; } } } },
     $: function () { return motion; }, window: {
       matchMedia: function () { return media; }, performance: legacyClock ? null : { now: function () { return clock; } },
       localStorage: {

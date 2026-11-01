@@ -22,6 +22,7 @@ function fixture(faded, tracks) {
   var sandbox = {
     tracks: tracks, state: { row: 1, col: { app: 4, dev: 2 }, bar: -1, arranging: false },
     refreshGeneration: 0, verticalAnchor: null, faded: faded, GLIDE_OUT: 65, FADE_WAIT_MS: 500,
+    tilePreview: { opened: 'hdmi1' }, restorePointerCursor: function () {}, rest: function () {},
     okTimer: null, clearTimeout: function () {}, setTimeout: function () {},
     fadeIn: function () {}, closeRecents: function () {}, closeFolder: function () {}, keepSearch: function () {},
     readLaunchParams: function () {}, updateWall: function () {}, stopPointing: function () {},
