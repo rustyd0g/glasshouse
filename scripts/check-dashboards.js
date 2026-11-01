@@ -1409,16 +1409,12 @@ async function visitHomeUploads(browser, base, problems) {
     if (!await card(page, 'morning').locator('.wall-screen').isDisabled()) problems.push('Home uploads: a time of day took uploads with Black chosen');
     await page.locator('#home-wall-choice button', { hasText: 'Your own' }).click();
     await ready(page);
-    const dimming = page.waitForRequest(r => new URL(r.url()).pathname === '/api/home/layout');
-    await page.locator('#home-wall-dimming').evaluate(el => {
-      el.value = '35';
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    if ((await dimming).postDataJSON().wallpaperDimming !== 35) problems.push('Home uploads: dimming did not save from the new picker');
-    await page.waitForFunction(() => homeLayout && homeLayout.wallpaperDimming === 35 && !homeSaving);
-    if (await page.locator('.wall-card').count() !== 4 || await page.locator('#home-wall-dimming-value').textContent() !== '35%')
-      problems.push('Home uploads: changing dimming lost its value or a wallpaper card');
+    const darkening = page.waitForRequest(r => new URL(r.url()).pathname === '/api/home/layout');
+    await page.locator('#home-dark-slider').press('Home');
+    if ((await darkening).postDataJSON().darkening !== 0) problems.push('Home uploads: Darkening did not save');
+    await page.waitForFunction(() => homeLayout && homeLayout.darkening === 0 && !homeSaving);
+    if (await page.locator('.wall-card').count() !== 4 || await page.locator('#home-dark-slider').inputValue() !== '0')
+      problems.push('Home uploads: changing Darkening lost its value or a wallpaper card');
     // Choosing Morning opens the file chooser for it.
     const chooser = page.waitForEvent('filechooser');
     await card(page, 'morning').locator('.wall-screen').click();
@@ -2110,14 +2106,13 @@ async function visitHomeWallpaperDrift(browser, base, problems) {
       'a reload did not restore the return half of the drift');
     await page.evaluate(() => { window.savedWallpaperMotion = document.getElementById('wall-drift').getAnimations()[0]; });
     layout.colours = { text: '#ffffff', accent: '#55bbff' };
-    layout.wallpaperDimming = 35;
     layout.darkening = 25;
     revision = 'two';
     await page.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
     await page.waitForFunction(() => document.getElementById('look').textContent.includes('#55bbff'));
     await page.waitForFunction(() => [...document.querySelectorAll('#wall .layer')].some(el => el.style.backgroundImage.includes('v=two')));
-    check(await page.locator('#scrim').evaluate(el => Math.abs(Number(el.style.opacity) - 0.175) < 0.001),
-      'loading a wallpaper overwrote the combined dimming and shading');
+    check(await page.locator('#scrim').evaluate(el => Math.abs(Number(el.style.opacity) - 0.25) < 0.001),
+      'loading a wallpaper overwrote Darkening');
     check(await page.evaluate(() => window.savedWallpaperMotion === document.getElementById('wall-drift').getAnimations()[0]),
       'a colour or image update restarted the drift timeline');
     check(await page.evaluate(() => [...document.querySelectorAll('#wall .layer')].every(el => getComputedStyle(el).animationName === 'none')),
@@ -2563,6 +2558,7 @@ async function visitHomeToggles(browser, base, problems) {
       : key === 'showChannelCount' ? !!document.querySelector('[data-key="ch"] h2 span') === on
       : key === 'showClock' ? (getComputedStyle(document.getElementById('when')).visibility !== 'hidden') === on
       : key === 'rowsBottom' ? document.getElementById('stage').classList.contains('rows-bottom') === on
+      : key === 'darkening' ? Number(document.getElementById('scrim').style.opacity) === on / 100
       : key === 'view' ? document.getElementById('stage').classList.contains('alternative') === (on === 'alternative')
       : localStorage.getItem('glasshouse.home.fade') === (on ? '1' : '0'), { key, on });
     for (const [countKey, kind] of [['showAppCount', 'app'], ['showInputCount', 'dev'], ['showChannelCount', 'ch']]) {
@@ -2637,6 +2633,18 @@ async function visitHomeToggles(browser, base, problems) {
 
     await tv.goto(base + '/assets/dashboard.html?tab=home');
     await tv.waitForFunction(() => typeof rows !== 'undefined' && rows.some(r => r.act === 'homeShow'));
+    for (const level of [75, 50, 25, 0, 100]) {
+      await tv.evaluate(() => {
+        sel = rows.findIndex(r => r.act === 'homeDarkening');
+        if (sel < 0) throw new Error('Darkening control missing');
+        render();
+      });
+      const sent = tv.waitForRequest(r => new URL(r.url()).pathname === '/api/home/layout' && r.method() === 'POST');
+      await tv.keyboard.press('Enter');
+      check((await sent).postDataJSON().darkening === level, 'TV app did not save Darkening ' + level);
+      await tv.waitForFunction(level => homeData.layout.darkening === level, level);
+      await effect('darkening', level);
+    }
     for (const key of ['showClock', 'rowsBottom', 'showLastOn', 'showAppCount', 'showInputCount', 'showChannelCount', 'fade', 'view']) {
       for (const on of key === 'view' ? ['alternative', 'standard'] : [!layout[key], layout[key]]) {
         await tv.evaluate(key => {

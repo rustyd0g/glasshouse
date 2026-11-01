@@ -7,7 +7,7 @@ var vm = require('vm');
 console.log('Running test-home-wallpaper-drift.js ...');
 var html = fs.readFileSync(path.join(__dirname, '../server/assets/home.html'), 'utf8');
 var start = html.indexOf('  var WALL_DRIFT_MS =');
-var end = html.indexOf('  function wallpaperOpacity(', start);
+var end = html.indexOf('  function updateWall(', start);
 assert.ok(start > 0 && end > start, 'the wallpaper motion helpers exist');
 
 function fixture(saved, unavailable, legacyClock) {

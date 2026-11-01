@@ -143,7 +143,7 @@ Glasshouse Home leaves empty rows out and centres the remaining rows below the c
 
 **Clock size** is saved as `clockSize` (`standard` or `small`, default `standard`) in `/var/lib/tvweb/home.json`.
 
-**Wallpaper dimming** is saved as `wallpaperDimming` in `/var/lib/tvweb/home.json`, from 0 to 100 in steps of 5, defaulting to 50. It adjusts the wallpaper and shading without changing the image files.
+**Darkening** is saved as `darkening` in `/var/lib/tvweb/home.json`, from 0 to 100, defaulting to 100. Earlier `wallpaperDimming` values are ignored and removed on the next layout save.
 
 Wallpaper motion pauses while Home is hidden and resumes from its saved position and direction in the TV app's browser storage after a reload.
 

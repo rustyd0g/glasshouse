@@ -188,7 +188,7 @@ For the TV app dashboard, checks verify the two-column layout geometry (the row 
 
 The Home suite checks clock-size defaults, validation, saving and preservation through clock visibility changes and Reset.
 
-The Home appearance tests cover dimming limits and rounding, invalid values, saved choices surviving unrelated edits, and Reset.
+The Home appearance tests cover invalid values, saved choices surviving unrelated edits and Reset, and retired wallpaper dimming values being ignored and dropped on save.
 
 `test-home-wallpaper-drift.js` checks saved motion phase and direction, hidden and reduced-motion pauses, cycle wrap, corrected system time and unavailable storage. Browser checks cover the shared frame, unchanged animation through colour and image changes, hidden pauses and reloads.
 
@@ -200,7 +200,7 @@ Vertical navigation browser checks move repeatedly through differently sized row
 
 `test-home-cursor.js` checks the native cursor reset through both webOS bridges, unavailable methods and hidden pages. Browser checks cover relaunch, visibility, focus and cursor events, restoring on the first pointer movement, and continued tile hovering without repeated resets. A real TV is needed to check the compositor's cursor rendering.
 
-Home rendering browser checks cover measurements limited to affected rows, unrelated updates preserving app icons and channel scrolling, row moves retaining tiles, shared refreshes and stale replies. They also exercise every appearance and count control through both dashboards, including disabled controls in Alternative View and wallpaper dimming alongside the wallpaper picker.
+Home rendering browser checks cover measurements limited to affected rows, unrelated updates preserving app icons and channel scrolling, row moves retaining tiles, shared refreshes and stale replies. They also exercise every appearance and count control through both dashboards, including disabled controls in Alternative View and Darkening alongside the wallpaper picker.
 
 Recommended-row browser checks cover app filtering, focus and navigation after cards change, opening the selected title, and unchanged refreshes preserving cards and app icons.
 

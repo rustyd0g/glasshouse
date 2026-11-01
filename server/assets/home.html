@@ -2844,7 +2844,6 @@ html.faded #stage{opacity:0}
     { key: 'night', from: 21, strength: 0.65 }
   ];
   var wallShown = null, wallFront = 0, wallLoading = null, wallRequest = 0;
-  var wallStrengthShown = 1, wallDimmingShown = null;
   /*
    * ?wall=morning or ?hour=19 shows another slot, to check each one, as does
    * launching the app with { wall } or { hour }: a running app gets them at
@@ -2907,27 +2906,9 @@ html.faded #stage{opacity:0}
     if (wallDriftMedia && wallDriftMedia.addListener) wallDriftMedia.addListener(syncWallpaperDrift);
   }
 
-  function wallpaperOpacity(strength, dimming) {
-    // 50 keeps the existing time-of-day look. Below it, both the image and
-    // scrim brighten; above it, the image fades toward the black background.
-    return dimming <= 50 ? 1 - (1 - strength) * dimming / 50 : strength * (100 - dimming) / 50;
-  }
-
-  function applyWallpaperDimming() {
-    var dimming = layout && typeof layout.wallpaperDimming === 'number' ? layout.wallpaperDimming : 50;
-    applyDarkening(layout && layout.darkening);
-    if (dimming === wallDimmingShown) return;
-    wallDimmingShown = dimming;
-    if (wallShown !== null) {
-      var layers = $('wall').querySelectorAll('.layer');
-      layers[wallFront].style.opacity = wallpaperOpacity(wallStrengthShown, dimming);
-    }
-  }
-
   function updateWall() {
     syncWallpaperDrift();
     if (document.hidden) return;
-    applyWallpaperDimming();
     var slot = wallSlot();
     if (!wallAvailable || (wallSlots && !wallSlots[slot.key])) {
       if (wallShown === null && wallLoading === null) return;
@@ -2958,11 +2939,9 @@ html.faded #stage{opacity:0}
       wallShown = id;
       syncWallpaperDrift();
       next.style.backgroundImage = 'url(' + src + ')';
+      next.style.opacity = slot.strength;
       prev.style.opacity = 0;
       wallFront = 1 - wallFront;
-      wallStrengthShown = slot.strength;
-      wallDimmingShown = null;
-      applyWallpaperDimming();
     };
     img.onerror = function () { if (request === wallRequest) wallLoading = null; };
     img.src = src;
@@ -2992,8 +2971,7 @@ html.faded #stage{opacity:0}
   // The wallpaper's darkening, as a share of the scrim's own: 0 leaves the picture as it is.
   function applyDarkening(pct) {
     var n = typeof pct === 'number' ? pct : 100;
-    var dimming = layout && typeof layout.wallpaperDimming === 'number' ? layout.wallpaperDimming : 50;
-    $('scrim').style.opacity = String(n / 100 * Math.min(1, dimming / 50));
+    $('scrim').style.opacity = String(n / 100);
   }
 
   function applyColours(c) {

@@ -2355,22 +2355,19 @@ step('compact clock defaults to standard and survives unrelated edits and Reset'
 
 step('Home appearance choices survive unrelated saves and row resets, and reject invalid updates', function (done) {
   start(null);
-  function appearance(layout) { return [layout.showAppCount, layout.showLastOn, layout.clockSize, layout.wallpaperDimming]; }
-  assert.deepEqual(appearance(home.layout()), [true, true, 'standard', 50], 'older layouts retain the original appearance');
-  home.setLayout({ showAppCount: false, showLastOn: false, clockSize: 'small', wallpaperDimming: 37 }, function (r) {
+  function appearance(layout) { return [layout.showAppCount, layout.showLastOn, layout.clockSize]; }
+  assert.deepEqual(appearance(home.layout()), [true, true, 'standard'], 'older layouts retain the original appearance');
+  home.setLayout({ showAppCount: false, showLastOn: false, clockSize: 'small' }, function (r) {
     assert.ok(r.ok, r.error);
-    assert.deepEqual(appearance(r.layout), [false, false, 'small', 35]);
-    home.setLayout({ hintSeen: true, showAppCount: 'no', showLastOn: 1, clockSize: 'huge', wallpaperDimming: Infinity }, function (invalid) {
-      assert.deepEqual(appearance(invalid.layout), [false, false, 'small', 35], 'invalid updates leave the saved choices alone');
+    assert.deepEqual(appearance(r.layout), [false, false, 'small']);
+    home.setLayout({ hintSeen: true, showAppCount: 'no', showLastOn: 1, clockSize: 'huge' }, function (invalid) {
+      assert.deepEqual(appearance(invalid.layout), [false, false, 'small'], 'invalid updates leave the saved choices alone');
       home.setLayout({ reset: true }, function (reset) {
-        assert.deepEqual(appearance(reset.layout), [false, false, 'small', 35], 'Reset changes rows and tiles');
+        assert.deepEqual(appearance(reset.layout), [false, false, 'small'], 'Reset changes rows and tiles');
         var saved = home.normalise(JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8')));
-        assert.deepEqual(appearance(saved), [false, false, 'small', 35], 'all four choices survive reloading the saved file');
-        home.setLayout({ showAppCount: true, showLastOn: true, clockSize: 'standard', wallpaperDimming: 1000 }, function (restored) {
-          assert.deepEqual(appearance(restored.layout), [true, true, 'standard', 100]);
-          assert.strictEqual(home.normalise({ wallpaperDimming: -20 }).wallpaperDimming, 0);
-          assert.strictEqual(home.normalise({ wallpaperDimming: 37.5 }).wallpaperDimming, 40);
-          assert.strictEqual(home.normalise({ wallpaperDimming: Infinity }).wallpaperDimming, 50);
+        assert.deepEqual(appearance(saved), [false, false, 'small'], 'all three choices survive reloading the saved file');
+        home.setLayout({ showAppCount: true, showLastOn: true, clockSize: 'standard' }, function (restored) {
+          assert.deepEqual(appearance(restored.layout), [true, true, 'standard']);
           done();
         });
       });
@@ -2429,11 +2426,14 @@ step('a Glasshouse Home switched on fresh is Pure white, listed first, and one w
 });
 
 step('the wallpaper\'s darkening is full until set, kept from 0 to 100, and kept when not sent', function (done) {
-  start(null);
+  start({ wallpaperDimming: 0 });
   home.status(function (st) {
-    assert.strictEqual(st.layout.darkening, 100, 'today\'s look by default');
-    home.setLayout({ darkening: 0 }, function (r) {
+    assert.strictEqual(st.layout.darkening, 100, 'the default ignores the retired dimming setting');
+    assert.strictEqual(st.layout.wallpaperDimming, undefined);
+    home.setLayout({ darkening: 0, wallpaperDimming: 100 }, function (r) {
       assert.strictEqual(r.layout.darkening, 0, 'off');
+      var saved = JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8'));
+      assert.strictEqual(saved.wallpaperDimming, undefined, 'saving drops the retired field');
       home.setLayout({ fade: true }, function (r2) {
         assert.strictEqual(r2.layout.darkening, 0, 'kept when not sent');
         home.setLayout({ darkening: 140 }, function (r3) {

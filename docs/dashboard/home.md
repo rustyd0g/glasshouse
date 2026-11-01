@@ -151,11 +151,9 @@ With **Your own** chosen:
 * **Replace** and **Remove** under a time of day change or remove its picture alone; one without a picture has the black background.
 * **Remove all** puts the black background back for every time of day.
 
-**Wallpaper dimming**, in either dashboard's Home section, runs from 0% (brightest) to 100% (black), in steps of 5%. The default, 50%, keeps the time-of-day shading. Changes apply while Home is open without uploading the image again.
-
 The TV app's **Wallpaper** row moves through the four choices with OK.
 
-**Darkening** adjusts the shading behind the clock and rows separately from **Wallpaper dimming**. It is 100% by default; the web dashboard's slider goes down in steps of 5% to **Off**, which removes that shading, and the TV app's **Darkening** row steps through 100%, 75%, 50%, 25% and Off with OK. Wallpaper dimming still controls the picture's brightness.
+**Darkening** adjusts the shading behind the clock and rows. It is 100% by default; the web dashboard's slider goes down in steps of 5% to **Off**, which removes that shading, and the TV app's **Darkening** row steps through 100%, 75%, 50%, 25% and Off with OK. Changes apply while Home is open without uploading the image again.
 
 === "Darkening 100% (default)"
 
