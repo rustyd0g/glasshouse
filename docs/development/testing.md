@@ -209,7 +209,7 @@ Vertical navigation browser checks move repeatedly through differently sized row
 
 `test-home-cursor.js` checks the native cursor reset through both webOS bridges, unavailable methods and hidden pages. Browser checks cover relaunch, visibility, focus and cursor events, restoring on the first pointer movement, and continued tile hovering without repeated resets. A real TV is needed to check the compositor's cursor rendering.
 
-Home rendering browser checks cover measurements limited to affected rows, unrelated updates preserving app icons and channel scrolling, row moves retaining tiles, shared refreshes and stale replies. They also exercise every appearance and count control through both dashboards, including disabled controls in Alternative View and Darkening alongside the wallpaper picker.
+Home rendering browser checks cover measurements limited to affected rows, unrelated updates preserving app icons and channel scrolling, row moves retaining tiles, shared refreshes and stale replies. They also exercise every appearance and count control through both dashboards, including disabled controls in Alternative View and Darkening alongside the wallpaper picker. The row-edge check waits for the previous move to settle before sampling the next keypress.
 
 Recommended-row browser checks cover app filtering, focus and navigation after cards change, opening the selected title, and unchanged refreshes preserving cards and app icons.
 

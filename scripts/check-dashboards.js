@@ -2389,9 +2389,12 @@ async function visitHomeRendering(browser, base, problems) {
     check(await page.evaluate(() => window.measuredHomeRows.length > 0 && window.measuredHomeRows.every(key => key === 'app')),
       'a horizontal app move measured another row');
     await page.keyboard.press('ArrowLeft');
+    // The previous move's animation frame measures the row as it settles.
+    await page.clock.runFor(50);
     await page.evaluate(() => { window.measuredHomeRows = []; });
     await page.keyboard.press('ArrowLeft');
-    check(await page.evaluate(() => window.measuredHomeRows.length === 0), 'moving past a row edge measured its layout again');
+    const edgeMeasures = await page.evaluate(() => window.measuredHomeRows);
+    check(edgeMeasures.length === 0, 'moving past a row edge measured its layout again: ' + edgeMeasures.join(','));
     await page.keyboard.press('ArrowRight');
     await page.evaluate(() => { window.measuredHomeRows = []; });
     await page.keyboard.press('ArrowDown');
