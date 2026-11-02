@@ -14,7 +14,7 @@ function fixture(saved, unavailable, legacyClock) {
   var now = 1000, clock = 1000, stored = saved, listener, motion = { style: {} };
   var media = { matches: false, addListener: function (cb) { listener = cb; } };
   var sandbox = {
-    Date: { now: function () { return now; } }, wallShown: null,
+    Date: { now: function () { return now; } }, wallShown: null, layout: {},
     document: { hidden: false, documentElement: { classList: { contains: function () { return false; } } } },
     $: function () { return motion; }, window: {
       matchMedia: function () { return media; }, performance: legacyClock ? null : { now: function () { return clock; } },
@@ -33,6 +33,7 @@ function fixture(saved, unavailable, legacyClock) {
     clockJump: function (ms) { now += ms; },
     image: function (id) { sandbox.wallShown = id; sandbox.view.sync(); },
     hidden: function (hidden) { sandbox.document.hidden = hidden; sandbox.view.sync(); },
+    enabled: function (on) { sandbox.layout.wallDrift = on; sandbox.view.sync(); },
     reduced: function (reduce) { media.matches = reduce; listener(); }
   };
 }
@@ -88,6 +89,24 @@ function fixture(saved, unavailable, legacyClock) {
   f.hidden(true);
   assert.strictEqual(f.stored(), '92000', 'a system clock correction does not change the saved crop');
   console.log('  \u2713 system clock corrections do not move the saved phase');
+})();
+
+(function motionSetting() {
+  var f = fixture('90000');
+  f.image('morning');
+  f.advance(2000);
+  f.enabled(false);
+  assert.strictEqual(f.style.animationPlayState, 'paused');
+  assert.strictEqual(f.stored(), '92000');
+  f.advance(10000);
+  assert.strictEqual(f.view.phase(), 92000, 'switching drift off keeps its crop and direction');
+  f.enabled(true);
+  f.advance(1000);
+  assert.strictEqual(f.view.phase(), 93000, 'switching drift on continues from the paused phase');
+  f.reduced(true);
+  f.enabled(false);
+  f.enabled(true);
+  assert.strictEqual(f.style.animationPlayState, 'paused', 'the switch does not override reduced motion');
 })();
 
 (function unavailableStorage() {
