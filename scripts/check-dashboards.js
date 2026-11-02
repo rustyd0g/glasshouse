@@ -2148,8 +2148,12 @@ async function visitHomeWallpaperDrift(browser, base, problems) {
     revision = 'motion-on';
     await page.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
     await running();
-    check(await page.evaluate(() => window.savedWallpaperMotion === document.getElementById('wall-drift').getAnimations()[0] &&
-      window.savedWallpaperMotion.currentTime >= 225000), 'the drift switch restarted its crop or direction');
+    const resumedMotion = await page.evaluate(time => ({
+      same: window.savedWallpaperMotion === document.getElementById('wall-drift').getAnimations()[0],
+      before: time, after: window.savedWallpaperMotion.currentTime
+    }), motionOff);
+    check(resumedMotion.same && resumedMotion.after >= resumedMotion.before,
+      'the drift switch restarted its crop or direction: ' + JSON.stringify(resumedMotion));
     await hidden(true);
     await page.waitForTimeout(50);
     const paused = await page.evaluate(() => window.savedWallpaperMotion.currentTime);

@@ -208,6 +208,7 @@ function luna(uri, p, cb) {
       { id: 'netflix', title: 'Netflix', icon: '/x/netflix.png' },
       { id: 'youtube.leanback.v4', title: 'YouTube', icon: '/x/yt.png' },
       { id: 'cdp-30', title: 'Plex', icon: '/x/plex.png' },
+      { id: 'com.webos.app.livetv', title: 'Live TV', icon: '/x/livetv.png' },
       // Hidden on the Apps tab: visible false in its appinfo.
       { id: 'com.webos.app.music', title: 'Music', icon: '/x/music.png', visible: false },
       { id: 'com.webos.app.hdmi1', title: 'HDMI 1', lptype: 'bookmark' }
@@ -547,6 +548,7 @@ step('the TV\'s tuner is the first tile in the Inputs row, on the channel it was
   tv.channels = ['c1', 'c2'];
   tv.lastChannel = 'c2';
   home.catalogue(function (c) {
+    assert.strictEqual(c.apps.some(function (app) { return app.id === 'com.webos.app.livetv'; }), false, 'the tuner is not duplicated in Apps');
     assert.deepEqual(c.order.dev, ['tv', 'hdmi1', 'hdmi2:stereo-70s', 'hdmi2:playstation-5'], 'first in a row arranged before it was there');
     assert.deepEqual(c.devices[0], { id: 'tv', name: 'TV', input: 'tv', tuner: true, port: 0, via: null, address: null,
                                      channel: { id: 'c2', number: 'c2', name: 'c2' } });
