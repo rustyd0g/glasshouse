@@ -191,6 +191,15 @@ only handles hiding. Home restores the shape on return, focus and resumed
 pointer input, leaving visibility to webOS. The loading page also uses the
 default cursor rather than requesting a blank one.
 
+On 1 November 2026, the C3 (webOS 10.2.2) had no pointer or hover response on
+Home while arrows and OK still worked, and the pointer worked in other apps.
+Surface-manager reported Home as the focused fullscreen window and the only
+foreground card; the remote's motion engine reported enabled. Killing only
+Home through `com.palm.webappmanager/killApp` with
+`{"appId":"com.webos.app.home"}`, then launching Home again, restored both the
+pointer and hover in a fresh web process. No page or setting was changed. Its
+cause and recurrence conditions remain unconfirmed.
+
 ## C9 HAWK2 audio EDID (webOS 4.10.2)
 
 OLED65C9PUA, firmware 05.50.00, reported in #1078 on 28 October 2026.
