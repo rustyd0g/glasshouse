@@ -1267,6 +1267,15 @@ instead is not known yet.
 
 With Quick Start, the B8 suspends in standby, and `/proc/uptime` and `/proc/stat`'s `btime` leave the suspended time out: rebooted at 07:47 UTC and put in standby twice, it gave its boot as 18:18 the same day. Time since boot, and a boot time worked out from it, are wrong on such a TV after its first standby.
 
+## Timers stop in suspend (webOS 10.3.2, 75QNED80ARA)
+
+Node's timers stop while the TV is suspended, and the wall clock runs on. With
+Quick Start+, Glasshouse Home's page kept sending its heartbeat in Active
+Standby, so a heartbeat check was pending at the suspend. After five minutes
+off it fired as the TV resumed, 250 ms after the server saw the screen on in
+one wake and before it did in another, and took the view, which had not yet
+had a chance to beat, for hung (#1277).
+
 ## Keeping a TV awake while off (webOS 4.4.3, B8)
 
 The question was whether the B8 could stay reachable while switched off, as
@@ -1896,6 +1905,15 @@ it found).
   5-minute sweeps stopped and a full one came an hour later, then none for
   15 minutes. What asks for it, or whether `iconnectivity` keeps a timer of its
   own, was not found. Holding `iconnectivity` down stops it as well.
+- **It is also universal control's IR blaster.** LG's settings and
+  connection apps ask `com.webos.service.ics/blaster/` (`getURLforUEIDevices`,
+  `deleteIPConnectionHistory`), and the input app reads a set-top box's set-up
+  from it. On the C2, `blaster/getURLforUEIDevices {}` answered at once with
+  QuickSet running (error 322, with no box set up) and not at all with it held
+  down. Two owners with it held down had a set-top box stop answering the
+  Magic Remote a few seconds after the TV started, and LG's Universal Remote
+  settings spin and fail, until it was back (an A1 on webOS 6.3.1, a C2;
+  #1266).
 
 ## Boot and app state (webOS 9.2.2, C2)
 
