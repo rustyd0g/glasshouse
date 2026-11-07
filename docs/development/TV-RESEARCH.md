@@ -501,6 +501,17 @@ same media ID through full screen and Back, with playback time advancing
 from 43.127 to 50.151 seconds. Internet TV uses that placement; the guide
 returns the picture beside the clock without moving its parent.
 
+RTÉ One, RTÉ2 and RTÉ News, as listed by the public Free-TV playlist (on
+5 November 2026), never played on a B8 (webOS 4.4.3) or a C2 (webOS 9.2.2):
+the preview showed no picture. Their master playlists carry no key, but each
+variant's playlist has `#EXT-X-KEY:METHOD=SAMPLE-AES` with
+`KEYFORMAT="com.apple.streamingkeydelivery"` (FairPlay, `skd://`), and their
+segments' stream types are `0xdb` and `0xcf`, SAMPLE-AES H.264 and AAC.
+The same master with its subtitles removed, with English audio only, or one
+video variant alone failed the same way, and both TVs' OpenSSL verified
+`live.rte.ie`'s certificate (GlobalSign ECC Root CA - R5, in both TVs' store).
+Their other Irish channels in the list carried no key.
+
 ## Broadcast HDR and preview metadata (G3, webOS 9.2.2)
 
 Read on 29 October 2026 from the office OLED55G36LA, during an existing
@@ -935,6 +946,27 @@ Measured with `scripts/tv.sh <tv> frames` (testing.md), in Alternative View:
 - A contributor's G3 (webOS 9.2.2) missed 25 of about 480 frames in 8 s of
   continuous scrolling (#955), which the C2 did not reproduce.
 
+## Home pressed with Home in front (C2, webOS 9.2.2)
+
+- **The TV does nothing.** With Glasshouse Home in LG's Home's place and on
+  screen, a Home key press (code 773 on `/dev/input/event1`) logged
+  `IM NL_RCU_CONTROL_USE {"key_code":773}` from surface-manager and launched
+  nothing, so the page never heard of it and its folder stayed open (#1254).
+- **A launch from outside reaches the page as `webOSRelaunch`.**
+  `com.webos.applicationManager/launch` with `com.webos.app.home` while it was
+  in front did.
+- **webOS 4 differs:** the remote key filter launches `com.tvweb.home` on every
+  press, so the page hears each one (B8, 4.4.3).
+
+## Reopening webOS 4's Home app (B8, webOS 4.4.3)
+
+- **Launching `com.tvweb.home` while it runs only brings it to the front.**
+  A page in it that had navigated to another site (a custom launcher's start
+  page going to `https://example.com/`) stayed on that site through a launch
+  from the server and a press of Home.
+- **`com.palm.webappmanager/killApp` closes it,** and the next launch loads its
+  `index.html` afresh. HDMI 2 opened normally straight after.
+
 ## LG Home's recent apps (G3, webOS 9.2.2)
 
 Read on 19 October 2026 from LG's Home's QML under the Glasshouse Home
@@ -1057,6 +1089,8 @@ G3 in the UK.
   `channelNumber`, `channelName`, `Radio`, `skipped` and `Invisible`: 182
   terrestrial channels in London. `com.webos.service.iepg/getChannelList`
   answered with none.
+- On a 65SM8500PLA (webOS 4.10.1) with satellite channels tuned, the same
+  call took 3.6 s and answered with 4.6 MB through `luna-send -f`.
 - `com.webos.service.apiadapter/tv/openChannel { channelId }` tunes and
   brings Live TV to the front, from any app. Launching `com.webos.app.livetv`
   with `channelId` or `channelNumber` does not change the channel while Live
@@ -2845,3 +2879,12 @@ with that wait. execFile reports such a child with `err.signal` set and
 `err.killed` false, which tells it apart from one killed by its own timeout.
 The debugger rule in `devtools.js` waits a turn before each call and tries an
 aborted one once more.
+
+Issue [#1248](https://github.com/rorygallagher2024/glasshouse/issues/1248)
+shows the same assertion on an OLED65CX9LA, from the curl or wget the
+Internet TV worker starts: the worker itself goes on and reports the failed
+download. A job's later downloads start from the previous one's exit
+callback, the case that aborted every time, and its first is the process's
+first child, as the first `iptables` call at server start was. The worker
+waits a turn before each one and tries one aborted before any of its body
+arrived once more.
