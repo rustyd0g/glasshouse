@@ -232,7 +232,7 @@ For the TV app dashboard, checks verify the two-column layout geometry (the row 
 
 `test-home.js` covers independent row-count defaults, saves, boolean validation, Reset and older visibility choices. `test-home-counts.js` checks that each heading follows only its own switch, empty-channel guidance remains available, and the TV app preserves the choices in Alternative View.
 
-The Home suite checks clock-size defaults, validation, saving and preservation through clock visibility changes and Reset.
+The Home suite checks that retired compact-clock choices are ignored and discarded on the next layout save.
 
 The Home appearance tests cover invalid values, saved choices surviving unrelated edits and Reset, and retired wallpaper dimming values being ignored and dropped on save.
 

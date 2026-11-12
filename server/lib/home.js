@@ -356,7 +356,6 @@ function defaults() {
     excludedRecents: [],
     channels: [],
     hintSeen: false,
-    clockSize: 'standard',
     searchHintSeen: false,
     // The plate describing the picture of what was last on: detail many
     // won't want on a home screen, so it waits to be switched on.
@@ -465,7 +464,6 @@ function normalise(raw) {
   d.enabled = raw.enabled === true;
   d.restorePending = raw.restorePending === true;
   d.hintSeen = raw.hintSeen === true;
-  d.clockSize = raw.clockSize === 'small' ? 'small' : 'standard';
   d.searchHintSeen = raw.searchHintSeen === true;
   d.picture = raw.picture === true;
   d.livePreview = raw.livePreview === true;
@@ -617,7 +615,6 @@ function setLayout(body, cb) {
     channels: ordered(body.order && isArray(body.order.ch) ? body.order.ch : [],
                       body.channels !== undefined ? stringList(body.channels, MAX_CHANNELS) : c.channels),
     hintSeen: body.hintSeen !== undefined ? body.hintSeen : c.hintSeen,
-    clockSize: body.clockSize === 'small' || body.clockSize === 'standard' ? body.clockSize : c.clockSize,
     searchHintSeen: body.searchHintSeen !== undefined ? body.searchHintSeen : c.searchHintSeen,
     picture: typeof body.picture === 'boolean' ? body.picture : c.picture,
     livePreview: typeof body.livePreview === 'boolean' ? body.livePreview : c.livePreview,
@@ -672,7 +669,6 @@ function setLayout(body, cb) {
 function layoutOf(c) {
   return { rows: c.rows, order: c.order, sort: c.sort, hidden: c.hidden, folder: c.folder, channels: c.channels, hintSeen: c.hintSeen,
     excludedRecents: c.excludedRecents,
-    clockSize: c.clockSize,
     searchHintSeen: c.searchHintSeen, picture: c.picture, livePreview: c.livePreview, search: c.search, recommended: c.recommended,
     fade: c.fade, wallDrift: c.wallDrift, wallCrossfade: c.wallCrossfade, smoothScroll: c.smoothScroll, slidePanels: c.slidePanels,
     darkening: c.darkening, hideUnused: c.hideUnused, showClock: c.showClock, rowsBottom: c.rowsBottom, view: c.view,

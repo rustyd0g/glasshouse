@@ -1733,11 +1733,8 @@ async function visitHomeAvailability(browser, base, problems) {
       if (await page.locator('#disc-system-tiles').isVisible() === c.glasshouse) fail('system apps ' + (c.glasshouse ? 'shown with Glasshouse Home on' : 'missing'));
       if (st.homeAutoLaunch !== undefined && (!await page.locator('#home-autolaunch').isVisible() || await page.locator('#home-autolaunch').isDisabled()))
         fail('Open Home at power-on missing or unusable');
-      if (!c.glasshouse) {
-        for (const id of ['home-picture-row', 'home-clock-size-row']) {
-          if (await page.locator('#' + id).isVisible()) fail('Glasshouse Home\'s option shown without it: ' + id);
-        }
-      }
+      if (!c.glasshouse && await page.locator('#home-picture-row').isVisible())
+        fail('Glasshouse Home\'s picture option shown without it');
       if (await page.locator('#disc-homescreen').isVisible() === st.enabled) fail('LG\'s Home layout ' + (st.enabled ? 'shown with Glasshouse Home on' : 'missing'));
       if (!st.enabled) {
         await page.locator('#disc-homescreen summary').click();
@@ -2757,7 +2754,7 @@ async function visitHomeFolder(browser, base, problems) {
   page.on('pageerror', e => problems.push('Home folder: ' + e.message));
   const apps = Array.from({ length: 24 }, (_, i) => ({ id: 'app' + i, title: 'App ' + i }));
   const layout = { rows: ['app', 'dev', 'ch'], hidden: { app: [], dev: [], ch: [] }, channels: [],
-    folder: apps.slice(2).map(a => a.id), hintSeen: true, searchHintSeen: true, showAppCount: false, clockSize: 'small' };
+    folder: apps.slice(2).map(a => a.id), hintSeen: true, searchHintSeen: true, showAppCount: false };
   const saves = [], opened = [];
   await page.route('**/api/home/**', route => {
     const pathname = new URL(route.request().url()).pathname;
@@ -2812,7 +2809,6 @@ async function visitHomeFolder(browser, base, problems) {
     await page.waitForFunction(() => !document.getElementById('stage').classList.contains('arranging'));
     check(saves.some(body => body.folder && body.folder.includes('app0')), 'the folder change was not saved');
     check(await page.evaluate(() => window.savedFolderInput === document.querySelector('.dev')), 'arranging the folder replaced the Inputs row');
-    check(await page.locator('#when').getAttribute('class') === 'small', 'folder changes lost the compact clock');
   } finally { await page.close(); }
 }
 
@@ -2824,7 +2820,7 @@ async function visitHomeToggles(browser, base, problems) {
   const layout = { rows: ['app', 'dev', 'ch'], order: { app: [], dev: [], ch: [] },
     hidden: { app: [], dev: [], ch: [] }, channels: [], hintSeen: true, searchHintSeen: true,
     showLastOn: false, showAppCount: false, showInputCount: true, showChannelCount: true, showCec: true,
-    fade: false, showClock: true, rowsBottom: false, clockSize: 'small', view: 'standard' };
+    fade: false, showClock: true, rowsBottom: false, view: 'standard' };
   const devices = Array.from({ length: 8 }, (_, i) => ({ id: 'hdmi' + (i + 1), port: i + 1, name: 'Player ' + i, address: '1.0.0.0' }));
   const channels = [{ id: 'ch1', number: '1', name: 'Channel 1' }];
   let version = 1, opens = 0;
@@ -2879,10 +2875,7 @@ async function visitHomeToggles(browser, base, problems) {
       for (const on of [!layout[key], layout[key]]) await clickWeb(id, key, on);
     }
     await clickWeb('home-show-clock', 'showClock', false);
-    check(!await dashboard.locator('#home-clock-size-row').isVisible(), 'clock size remained usable with the clock hidden');
     await clickWeb('home-show-clock', 'showClock', true);
-    check(await dashboard.locator('#home-clock-size-row').isVisible() && await dashboard.locator('#home-clock-size').inputValue() === 'small',
-      'showing the clock lost its size choice');
     await clickWeb('home-rows-bottom', 'rowsBottom', true);
     await clickWeb('home-rows-bottom', 'rowsBottom', false);
     await clickWeb('home-fade', 'fade', true);
@@ -2918,8 +2911,7 @@ async function visitHomeToggles(browser, base, problems) {
       });
       check(bounds.overscroll <= 1 && bounds.clipped <= 1, mode + ' view left the focused input outside its scroll bounds: ' + JSON.stringify(bounds));
       check(bounds.retained, 'changing view rebuilt cached tiles');
-      check(bounds.clock === (mode === 'alternative' ? '100px' : '128px'), mode + ' view used the wrong clock size');
-      check(await dashboard.locator('#home-clock-size-row').isVisible() === (mode === 'standard'), 'clock size was offered where the view sets it');
+      check(bounds.clock === (mode === 'alternative' ? '100px' : '176px'), mode + ' view used the wrong clock size');
       for (const id of ['home-show-count', 'home-show-input-count', 'home-show-channel-count']) {
         check(await dashboard.locator('#' + id).isDisabled() === (mode === 'alternative'), id + ' did not follow Alternative View');
       }
@@ -2951,14 +2943,11 @@ async function visitHomeToggles(browser, base, problems) {
         check((await sent).postDataJSON()[key] === on, 'TV app did not save ' + key);
         await tv.waitForFunction(({ key, on }) => rows.some(r => (key === 'fade' ? r.act === 'homeFade' : key === 'view' ? r.act === 'homeAlternative' : r.act === 'homeShow' && r.key === key) && r.on === (key === 'view' ? on === 'alternative' : on)), { key, on });
         if (key === 'showClock') {
-          check(await tv.evaluate(() => rows.some(r => r.act === 'homeClockSize')) === on,
-            'TV app clock size did not follow clock visibility');
           check(await tv.evaluate(() => rows[sel].act === 'homeShow' && rows[sel].key === 'showClock'),
             'TV app moved focus away from the clock switch');
         }
         if (key === 'view') {
           check(await tv.evaluate(() => rows[sel].act === 'homeAlternative'), 'TV app moved focus away from the view switch');
-          check(await tv.evaluate(() => rows.some(r => r.act === 'homeClockSize')) === (on === 'standard'), 'TV app offered clock size in Alternative View');
           for (const countKey of ['showAppCount', 'showInputCount', 'showChannelCount']) {
             check(await tv.evaluate(key => rows.some(r => r.key === key && r.act === 'homeShow'), countKey) === (on === 'standard'), 'TV ' + countKey + ' did not follow Alternative View');
           }

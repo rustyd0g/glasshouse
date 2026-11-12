@@ -2460,38 +2460,34 @@ step('live preview stays off until switched on, and is saved', function (done) {
   });
 });
 
-step('compact clock defaults to standard and survives unrelated edits and Reset', function (done) {
-  start(null);
-  assert.strictEqual(home.layout().clockSize, 'standard');
-  home.setLayout({ clockSize: 'small' }, function (r) {
-    assert.strictEqual(r.layout.clockSize, 'small');
-    home.setLayout({ clockSize: 'large', showClock: false }, function (invalid) {
-      assert.strictEqual(invalid.layout.clockSize, 'small');
-      home.setLayout({ reset: true, showClock: true }, function (reset) {
-        assert.strictEqual(reset.layout.clockSize, 'small');
-        var saved = home.normalise(JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8')));
-        assert.strictEqual(saved.clockSize, 'small');
-        done();
-      });
-    });
+step('saved compact-clock choices are ignored and dropped on the next layout save', function (done) {
+  start({ clockSize: 'small' });
+  assert.strictEqual(home.layout().clockSize, undefined);
+  home.setLayout({ clockSize: 'small', showClock: false }, function (r) {
+    assert.ok(r.ok, r.error);
+    assert.strictEqual(r.layout.showClock, false);
+    assert.strictEqual(r.layout.clockSize, undefined);
+    var saved = JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8'));
+    assert.strictEqual(saved.clockSize, undefined);
+    done();
   });
 });
 
 step('Home appearance choices survive unrelated saves and row resets, and reject invalid updates', function (done) {
   start(null);
-  function appearance(layout) { return [layout.showAppCount, layout.showLastOn, layout.clockSize]; }
-  assert.deepEqual(appearance(home.layout()), [true, true, 'standard'], 'older layouts retain the original appearance');
-  home.setLayout({ showAppCount: false, showLastOn: false, clockSize: 'small' }, function (r) {
+  function appearance(layout) { return [layout.showAppCount, layout.showLastOn]; }
+  assert.deepEqual(appearance(home.layout()), [true, true], 'older layouts retain the original appearance');
+  home.setLayout({ showAppCount: false, showLastOn: false }, function (r) {
     assert.ok(r.ok, r.error);
-    assert.deepEqual(appearance(r.layout), [false, false, 'small']);
-    home.setLayout({ hintSeen: true, showAppCount: 'no', showLastOn: 1, clockSize: 'huge' }, function (invalid) {
-      assert.deepEqual(appearance(invalid.layout), [false, false, 'small'], 'invalid updates leave the saved choices alone');
+    assert.deepEqual(appearance(r.layout), [false, false]);
+    home.setLayout({ hintSeen: true, showAppCount: 'no', showLastOn: 1 }, function (invalid) {
+      assert.deepEqual(appearance(invalid.layout), [false, false], 'invalid updates leave the saved choices alone');
       home.setLayout({ reset: true }, function (reset) {
-        assert.deepEqual(appearance(reset.layout), [false, false, 'small'], 'Reset changes rows and tiles');
+        assert.deepEqual(appearance(reset.layout), [false, false], 'Reset changes rows and tiles');
         var saved = home.normalise(JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8')));
-        assert.deepEqual(appearance(saved), [false, false, 'small'], 'all three choices survive reloading the saved file');
-        home.setLayout({ showAppCount: true, showLastOn: true, clockSize: 'standard' }, function (restored) {
-          assert.deepEqual(appearance(restored.layout), [true, true, 'standard']);
+        assert.deepEqual(appearance(saved), [false, false], 'both choices survive reloading the saved file');
+        home.setLayout({ showAppCount: true, showLastOn: true }, function (restored) {
+          assert.deepEqual(appearance(restored.layout), [true, true]);
           done();
         });
       });

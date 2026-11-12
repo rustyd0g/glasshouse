@@ -147,7 +147,7 @@ Glasshouse Home leaves empty rows out and centres the remaining rows below the c
 
 **Input count** and **Channel count** are saved in `/var/lib/tvweb/home.json` as `showInputCount` and `showChannelCount`, both on by default. Earlier `rowNotes: false` choices switch off all row counts, and `showLastSource: false` becomes `showLastOn: false`; the old keys are removed on the next save so each switch can be changed independently.
 
-**Clock size** is saved as `clockSize` (`standard` or `small`, default `standard`) in `/var/lib/tvweb/home.json`.
+Saved `clockSize` values are ignored and discarded on the next layout save.
 
 **Darkening** is saved as `darkening` in `/var/lib/tvweb/home.json`, from 0 to 100, defaulting to 100. Earlier `wallpaperDimming` values are ignored and removed on the next layout save.
 

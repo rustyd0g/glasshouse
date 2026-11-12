@@ -116,8 +116,6 @@ Glasshouse Home displays a clock and date (following the TV's 12-hour or 24-hour
 
 </div>
 
-**Clock size**, in either dashboard, offers Standard and Small for the standard view. The choice is retained while the clock is off or Alternative View sets its own size; the size control appears only when it applies.
-
 Apps use a compact frame. Channel and input cards have a faint neutral background, and all three rows share a translucent fill and accent outline on focus in the standard view.
 
 The focused channel card widens to give its titles more room, except while arranging or showing Recent apps. Long channel names and programme titles scroll through their full length at 45 pixels per second after a short delay, with the beginning following from the right. Scrolling pauses in overlays and follows the reduced-motion preference.
@@ -449,7 +447,7 @@ The Home tab's **Home customisation** section holds what applies to whichever Ho
 * While Glasshouse Home is on:
     * **Starting up:** Open Home at power-on, Hide LG's Home while the TV starts.
     * **Layout:** Alternative View, Rows along the bottom.
-    * **Shown on Home:** Clock and date, Clock size, Last watched, App count, Input count, Channel count, CEC addresses, Channel logos, Picture details.
+    * **Shown on Home:** Clock and date, Last watched, App count, Input count, Channel count, CEC addresses, Channel logos, Picture details.
     * **Live preview:** Live preview, with Keep the preview on and Preview in the tile once it is on.
     * **Search.**
     * **Animations:** Fade in and out, Wallpaper drift, Wallpaper cross-fade, Smooth scrolling, Sliding panels.
