@@ -33,13 +33,15 @@ view.data.sources.channels = 0;
 assert.strictEqual(view.rowNote('ch', []), 'This TV has no channels tuned');
 
 var tvHtml = fs.readFileSync(path.join(__dirname, '../server/assets/dashboard.html'), 'utf8');
-start = tvHtml.indexOf('function glasshouseHomeRows(');
-end = tvHtml.indexOf('\n}\n', start) + 3;
-var tv = { t: text, head: function (label) { return { label: label, head: true }; } };
-vm.runInNewContext(tvHtml.slice(start, end), tv);
-var status = { supported: { ok: true }, enabled: true, writable: true, hideLgHomeAtStartAvailable: false, layout: {} };
+var tv = { t: text };
+['homeSwitchRow', 'homeCountRow'].forEach(function (name) {
+  var from = tvHtml.indexOf('function ' + name + '(');
+  var to = tvHtml.indexOf('\n}\n', from) + 3;
+  vm.runInNewContext(tvHtml.slice(from, to), tv);
+});
+var status = { supported: { ok: true }, enabled: true, writable: true, layout: {} };
 function countRow(key) {
-  return tv.glasshouseHomeRows(status).filter(function (row) { return row.key === key; })[0];
+  return tv.homeCountRow(status, key, 'Count', 'Row count');
 }
 keys.forEach(function (key) {
   assert.strictEqual(countRow(key).act, 'homeShow');

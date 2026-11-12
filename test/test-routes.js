@@ -1,4 +1,5 @@
 // Strict ES5 - node v0.12.2 on webOS 4 (LG OLED B8) has no ES6 support.
+var waitFor = require('./wait-for').waitFor;
 var assert = require('assert');
 var events = require('events');
 var StringDecoder = require('string_decoder').StringDecoder;
@@ -90,6 +91,28 @@ function createMockRes(cb) {
   assert.deepEqual(u3.query, {});
 
   console.log('  ✓ parseUrl handles query strings and missing paths cleanly');
+})();
+
+// Both ambient-light dashboards need the same PicCap write permissions.
+(function testAmbientWritePermissions() {
+  var cfg = { allowControl: false, web: { enabled: false }, port: 8080 };
+  routes.init({ config: cfg,
+    telemetry: { collectStats: function (cb) { cb({ ok: true }); } },
+    piccapStatus: function (cb) { cb({ running: true }); },
+    huesyncStatus: function (cb) { cb({ streaming: true }); }
+  });
+  [false, true].forEach(function (writable) {
+    cfg.allowControl = writable;
+    routes.handleRequest(createMockReq({ url: '/api/stats' }), createMockRes(function (res) {
+      var state = JSON.parse(res.body);
+      assert.strictEqual(state.piccapCapture.running, true);
+      assert.strictEqual(state.huesyncStreaming.streaming, true);
+      assert.strictEqual(state.piccapCapture.writable, writable);
+      assert.strictEqual(state.huesyncStreaming.writable, writable);
+    }));
+  });
+  routes.init({ piccapStatus: function (cb) { cb(null); }, huesyncStatus: function (cb) { cb(null); } });
+  console.log('  \u2713 ambient integration state and write permissions');
 })();
 
 // The setup state gives the local addresses and the name, each with the port.
@@ -1032,6 +1055,7 @@ function createMockRes(cb) {
         }
       }, 15);
     })(0);
+    return req;
   }
   /*
    * After an upload: once the route's installer job or clean-up has emptied the
@@ -1308,15 +1332,16 @@ function createMockRes(cb) {
   }
 
   function oneAtATime() {
-    upload({ length: 10, chunks: [new Buffer(3)], then: 'none' }, function () {});
-    setTimeout(function () {
+    var firstReq = upload({ length: 10, chunks: [new Buffer(3)], then: 'none' }, function () {});
+    waitFor(function () { return staged().length > 0; }, function () {
       upload({ length: 10, chunks: [FILE] }, function (r) {
         assert.strictEqual(r.statusCode, 409, 'a second upload is refused while one is streaming');
+        firstReq.emit('close');
         initInstaller();
         try { childProcess.execSync('rm -rf "' + root + '"'); } catch (e) {}
         console.log('  ✓ sideload routes: opt-in gating, Host check first, URL checks, upload streaming and cleanup');
       });
-    }, 60);
+    }, 'the first upload to start streaming');
   }
 })();
 
@@ -1584,3 +1609,4 @@ function createMockRes(cb) {
 })();
 
 console.log('ALL test-routes.js assertions passed!');
+process.exit(0);
