@@ -7,14 +7,72 @@ something is wrong, and Home Assistant and the TV's own browser fail quietly.
 
 ## On every pull request
 
+`test-apphosts.js` checks old jail copies, launch resets, new jails and
+recreated `etc` directories, missed watches, atomic writes, symlink refusal,
+write failures, file modes and restoring marked copies when blocking ends.
+It covers restrictive umasks, short writes, descriptor and temporary-file
+cleanup after a partial write fails, and restoration retries both when blocking
+ends and at startup with it off. Rechecking stops once restoration succeeds.
+Metadata failures (`EIO` and `EACCES`) at the jail, `etc` and hosts file keep
+restoration pending without delaying other jails; missing paths (`ENOENT`
+and `ENOTDIR`) do not keep retries running.
+Unreadable jail-root metadata leaves the active fallback running.
+Initial source read failures (`EIO`, `ENOENT`), empty files and incomplete
+tables recover through the fallback with blocking on or off, without changing
+jail copies before recovery. Successful restoration stops the recovery timer.
+It checks real filesystem notifications as well as injected watch events
+(on macOS with a 1 s recheck behind them, as FSEvents can drop an event that
+comes just after a watch starts),
+including `etc` and jail resets that reuse their inodes, and verifies that callbacks
+arriving after shutdown cannot restart watching.
+`test-privacy-apphosts.js` exercises the real synchronizer with simulated
+mounts: clock sync both before and after mounting, tier and custom-list
+changes, learned countries, update-only blocking, disabling and a failed
+mount. It never runs a mount command. Debounce and fallback timings come
+through `init`; the filesystem checks wait for the changed file.
+
+`test-picture-export.js` checks the read-only picture export through the LG
+settings module and the HTTP handler: values kept as read, keys the TV left
+out omitted, the per-app settings read for the app on screen and left out
+without one, context, authentication, controls disabled, rejected methods and
+read failures. It asserts that only one current-picture read is made per
+export, without writes or cache invalidation. `test-picture-export-ui.js`
+checks the web download and its file name, duplicate clicks, object URL
+cleanup and error handling; it runs on Node 8
+and later, where the web dashboard's JavaScript parses.
+
 `test-privacy.js` checks that `mtalk.google.com` is sinkholed on IPv4 and IPv6
 only in the Everything tier, and stays out of the Ads & telemetry and off tables.
 Regional platform checks cover the reported German and European hosts,
 ThinQ's hyphenated prefixes, a country outside the fallback list and an
 unknown or invalid country. They check IPv4/IPv6 blocking only in Everything,
-without duplicate names, and leave connectivity checks and local proxy
-discovery unblocked. The `nextlgsdp.com`, `ibs` and `ibsstat` hosts wait for
-clock sync, then enter the table on both address families.
+without duplicate names, and leave connectivity checks unblocked.
+The reported UEI, OCP, content CDN aliases and Google's
+FCM provisioning endpoint are covered on both address families only in
+Everything; shared Google service hosts, including `www.googleapis.com` and
+`clients1.google.com` through `clients4.google.com`, stay out. The
+`nextlgsdp.com`, `ibs`, `ibsstat` and known WiseLG platform and CDN names,
+including `dev-ruc-ngfts.tv.wiselg.com`, wait for clock sync, then enter the
+table on both address families. AirPlay's MFi key check is skipped, through `/tmp/mfi_key_requested`, only while the table blocks the TV's country's time server: with Everything once the clock is set, not with Ads & telemetry or before the clock, a file left by the daemon gives way to the directory, and switching off removes Glasshouse's folder but leaves one still holding another tool's. Other blockers' sinkholes are carried over
+from a file Glasshouse did not write and from under the table's own `# Kept
+from /etc/hosts` header, including with only TV updates blocked, and stay when
+a tier is switched off while the tier's own names go.
+
+Content Store interface and recommendation hosts are blocked on both address
+families only in Everything, before and after clock sync. Tests cover bare
+hosts, the saved country, uppercase country codes, missing or invalid country
+fallbacks, and the absence of unselected countries and LG region prefixes.
+The privacy/app-hosts integration check verifies that tier and country changes
+also replace these entries in running app copies.
+
+Additional domain coverage checks advertising, ACR and APM hosts on both tiers,
+and Home, ThinQ and LG Channels dependencies only in Everything, on IPv4 and
+IPv6. SmartAd country entries follow the saved country. SDP macro-regions,
+WiseLG's RUC name and documented `country7` variants remain reachable until
+clock sync; tests cover US, Australian and German settings, uppercase codes,
+missing or invalid countries and the omission of undocumented variants.
+The integration check verifies that the new service and clock entries reach
+existing jail copies, leave them on a tier change and follow a country change.
 
 `test-appdns.js` checks that an app's DNS servers are written into its jail's
 `resolv.conf`, written again when a watch sees the jailer's copy, taken out
@@ -107,7 +165,7 @@ shows the Picture tab.
 | [`check-entities.py`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/checks.yml#L57-L58) | A Home Assistant entity reading a field the TV's telemetry does not have, checked against a B8's real telemetry. A field read with a fallback (`else`, or `or` another field) may be absent. |
 | [`check-upgrade.js`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/checks.yml#L61-L62) | A release the updater already installed on a TV would refuse. The updaters of the latest release and the oldest still in use install the change in place, from a local copy, as a TV does when it updates; 0.82.0 and 0.82.1 could not be installed that way (#586). |
 | [`Package build`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/checks.yml#L65-L77) | The Homebrew Channel `.ipk` still builds, and passes the Homebrew Channel's own compatibility check for webOS 2.2 and later, the oldest confirmed (a 49LF632V). |
-| [`Unit tests`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/checks.yml#L81-L99) | Each part of the server, and one suite that starts the whole server against a fake TV and MQTT broker, with a TV that answers, one that answers late, wrongly or not at all, MQTT disabled, and a Glasshouse Home file missing, and checking the dashboard keeps answering and telemetry keeps flowing. |
+| [`Unit tests`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/checks.yml#L81-L112) | Each part of the server, and one suite that starts the whole server against a fake TV and MQTT broker, with a TV that answers, one that answers late, wrongly or not at all, MQTT disabled, and a Glasshouse Home file missing, and checking the dashboard keeps answering and telemetry keeps flowing. |
 
 No unit test runs a TV's own commands on the computer it runs on. A module
 that restarts LG's services, such as `apps.js` and `samrescan.js`, takes the
@@ -118,7 +176,7 @@ Linux computer for a password and could end a Mac's own processes (#918).
 ## On each supported TV's node
 
 The unit tests run on node 0.10 (webOS 2, a 49LF632V), 0.12 (webOS 4, the B8), 8.12 (webOS 6), 16
-(webOS 9, the C2), 20 and 24, each in parallel in the [`tv-node` job](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/checks.yml#L81-L99). A computer's node
+(webOS 9, the C2), 20 and 24, each in parallel in the [`tv-node` job](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/checks.yml#L81-L112). A computer's node
 accepts calls an older one lacks.
 
 So the tests run on node 0.10 as well, and use none of what it lacks: no
@@ -140,7 +198,8 @@ restart and install guards, then releases both before reporting success or failu
 `test-remote-worker.js` runs the remote-button worker's Python tests
 (`test/test_remote_buttons.py`) under Python 3: a disconnected device and one at
 EOF are dropped rather than read in a busy loop, a device with nothing to read
-yet is kept, and a device that comes back is reopened and its buttons arrive.
+yet is kept, a device that comes back is reopened and its buttons arrive, and
+pointer movement is reported at most once a second.
 The worker itself stays Python 2.7 compatible for the TV.
 
 Remote-key log checks include the first press immediately after assigning a
@@ -151,15 +210,25 @@ before its first read.
 
 `test-saver-manifests.js` reads screen saver folders, checks that brightness keeps the Bright and Dim levels at 100% and 65% with a layer between and below, the order and ids, a folder with something wrong listed with the reason, staging, translated names, and what one added on the TV does past the screen. An installed homebrew app's screen saver is listed from its app, by either file name, with the same checks, an app without one is left out, only its QML is staged, and one whose app has gone counts as LG's.
 
+`test-homeassistant.js` checks `/api/homeassistant`, the one answer a screen saver gets for all the values it declares: that it takes the token every other read takes, that it reads each declared entity once and answers with only those, under the saver's own short names and with no calendar, that the staged QML is handed the single address with the token and no placeholder is left, that a saver which declares nothing is served nothing without asking Home Assistant again, and that an API switched off is reported as unconfigured rather than retried.
+
 `test-screensaver-showing.js` checks that a switch made while a screen saver is on screen closes it with Back before sam rereads the app and asks for the new one only after, that one which will not close leaves the switch undone, and that tvpower stuck at Screen Saver Ready is reported as stuck. `test-screensaver-shadowed.js` checks that the start-up clean-up leaves a staged screen saver alone while it is mounted over LG's app, even when the app saver it names reads as gone, and still clears one that is not mounted. `test-screensaver-choices.js` checks that a screen saver's options are listed under their groups, and that the one picked is filled into its QML and an unknown one is its default.
 
 `test-remote-buttons.js` checks the codes of the buttons reported to Home Assistant, that the Python worker that reads the devices has the same codes as `remotebuttons.js`, and that the Remote Button entity declares every reported button as an event type. `test-remotekeys.js` also checks that Power off requests standby once on release, works with the panel blank, and does not switch off after a press that wakes the TV; `test-remotekeys-webos11.js` checks that native filters neither offer nor accept it. `test-remotekeys.js` checks that the Home Assistant choice is offered only with MQTT on and for those buttons, and that the filter keeps a key set to it from the TV.
 
-`test-screensaver-dropped.js` covers a refused request's fallback, remote dismissal and restart recovery, failed closes, delayed replies, and playback or source changes that must prevent a launch. `test-remote-buttons.js` checks that Home, coloured buttons and ordinary keys reach the dismissal handler through both parsed events and the worker stream, including split lines.
+`test-screensaver-dropped.js` covers a refused request's fallback, remote dismissal and restart recovery, failed closes, delayed replies, and playback or source changes that must prevent a launch, and that the pointer moving or clicking ends a Glasshouse screen saver the TV started, once for a stream of movement, while LG's own is left to end itself. `test-remote-buttons.js` checks that Home, coloured buttons and ordinary keys reach the dismissal handler through both parsed events and the worker stream, including split lines, and that pointer reports reach their handler.
 
-`test-idlesaver.js` checks that an idle screen saver refused by panel care is asked for again without its hold, and that the hold is put back when it closes or is still refused, but not over an app that has come to the front since. An app that still refuses it is not lifted again until another app is in front or the TV leaves On. Failed restores are retried, a lost policy reply remains tracked, and a server restart recovers an outstanding lift. Delayed idle callbacks respect later power changes, and a dashboard lift expires if no screen saver starts. Its own request's refusal, playback and a TV without `setEplAppInfo` are left alone. The assertions run on Node 0.10 and 0.12 as well as newer versions.
+`test-services-account.js` checks that LG Account is offered only where webOS 10's service block list is, that switching it off adds it to that list beside LG's own entries and switching it on or uninstalling takes it off, and that it is added again at start if gone.
 
-`test-luna-absent.js` checks that a failed call to an LG service missing from the TV's service files makes later calls to it fail at once, for 10 minutes, while listed services and homebrew ones keep being called, and that a renamed service the TV lists only by its legacy name moves to that name after no answer under the newer one, rather than being skipped.
+`test-saver-entity-slots.js` checks that a Home Assistant screen saver's entity slot declared blank, as Ambient's are, is saved, labelled and cleared, and that a slot the screen saver does not declare is refused.
+
+`test-homebar.js` checks that choosing Glasshouse Bar gives LG's Home its place back, installs its app and points the Home key at it, then keeps it preloaded, that a refused Home key removes the app again, that it is not offered where the input bar is not, and that switching it off gives the Home key back and removes the app.
+
+`test-nosignal.js` checks that the No Signal screen is patched only where both lines it changes are there exactly once, that switching it on mounts the copy and restarts the input app only once no input is in front or the one in front has nothing coming in, that a server start leaves a mounted copy alone, and that switching it off unmounts it.
+
+`test-idlesaver.js` checks that an idle screen saver refused by panel care is asked for again without its hold, and that the hold is put back when it closes or is still refused, but not over an app that has come to the front since. An app that still refuses it is not lifted again until another app is in front or the TV leaves On. Failed restores are retried, a lost policy reply remains tracked, and a server restart recovers an outstanding lift. Delayed idle callbacks respect later power changes, and a dashboard lift expires if no screen saver starts. Its own request's refusal, playback (non-preview app video on the main screen included while the media state reads idle, while Home, broadcast and inset tile previews still lift it) and a TV without `setEplAppInfo` are left alone. The assertions run on Node 0.10 and 0.12 as well as newer versions.
+
+`test-luna-absent.js` checks that a failed call to an LG service missing from the TV's service files makes later calls to it fail at once, for 10 minutes, while listed services and homebrew ones keep being called, and that a renamed service the TV lists only by its legacy name moves to that name after no answer under the newer one, rather than being skipped. `test-luna-missing-method.js` checks that a method the service answers "Unknown method" for is answered with that refusal, without a call, for 10 minutes, each caller getting its own copy, that the service's other methods and other refusals are still asked, and that it is asked again after the 10 minutes.
 
 `test-luna-slow.js` checks that the tuner's channel list, 4.6 MB and 3.6 s on a satellite TV, is given a longer wait and a larger reply limit and is asked for without `-f`, while other calls keep their 2 s wait and `-f`.
 
@@ -175,7 +244,7 @@ The state-push suite checks `keyboard_visible` from the window list: pushed on c
 
 `test-i18n-pick.js` checks which language the pages pick: the browser's, except one translated only in part on a page it does not cover in full, and one chosen or asked for in the address on every page. A language with its region, such as `pt-br`, is picked whole, and only for that region.
 
-`test-home-launcher.js` puts a custom launcher in Glasshouse Home's place through the HTTP routes: a single HTML file, a zip of a folder and an ipk's web app each unpacked and served with the kit first in the start page's head, the start page and title taken from `appinfo.json` or the page, links and macOS's extra files left out of a zip, and a web address shown in the frame with its address escaped. A zip reaching outside its folder, a native app, a file of another kind and an upload the TV has no room for are refused, keeping the launcher before them. Only a launcher kept can be chosen, Home's page and the heartbeat follow the choice, Minimal, which comes with Glasshouse, is listed first, served with the kit when chosen and never removed, removing the chosen one gives Glasshouse Home its place again, and the first release's single launcher is kept as the owner's own, still chosen.
+`test-home-launcher.js` puts a custom launcher in Glasshouse Home's place through the HTTP routes: a single HTML file, a zip of a folder and an ipk's web app each unpacked and served with the kit first in the start page's head, the start page and title taken from `appinfo.json` or the page, links and macOS's extra files left out of a zip, and a web address shown in the frame with its address escaped. A zip reaching outside its folder, a native app, a file of another kind and an upload the TV has no room for are refused, keeping the launcher before them. Only a launcher kept can be chosen, Home's page and the heartbeat follow the choice, Minimal, which comes with Glasshouse, is listed first, served with the kit when chosen and never removed, removing the chosen one gives Glasshouse Home its place again, and the first release's single launcher is kept as the owner's own, still chosen. It also keeps values through `/api/home/store` for the chosen launcher: read back, removed with `null`, a missing key and a store over 256 KB refused, kept past a new upload of the launcher, and deleted with it.
 
 `test-home-picture.js` reads a G3's receiver files with Glasshouse Home on screen: the signal and HDR of the input behind it, the picture mode asked for with both input and dynamic range, an empty input, and HDR from the receiver's packets (PQ, HLG, none, Dolby Vision). Only the mode for the range coming in is asked for, none without a signal, and a channel's SDR mode. It also checks that tracking runs only while Glasshouse Home, picture details and the TV are all on, that it retains an app's first video before any app plate is read, and that standby or switching either off stops it and leaves the recorded video available.
 
@@ -210,7 +279,8 @@ lists the fake TV's apps before the page's own script runs.
 A second browser check covers the TV tile and the preview's options: the TV
 tile previews its last channel as a broadcast preview, an app tile previews
 nothing, **Preview in the tile** puts the preview in the tile in focus and keeps
-it there when the rows are rebuilt, and **Keep the preview on** shows the input
+it there when the rows are rebuilt, when picture details arrive and when the
+input has no picture, where it is hidden on the tile, and **Keep the preview on** shows the input
 last watched with the focus on Apps. A heartbeat saying the screen saver is over
 the view stops the preview, and the next one without it brings it back. `test-home.js` checks the TV tile is first
 in the Inputs row on a TV with channels, absent without them, opens Live TV,
@@ -279,7 +349,7 @@ A weather check finds the badge hidden until the heartbeat brings a push, then d
 
 Home visibility checks delay the layout reply behind the source reply: last watched stays hidden until its saved switch is known and updates as soon as a changed layout arrives. They also cover app counts, CEC addresses, older layouts with no switches, the clock keeping its place, and with the clock switched off and the rows along the bottom, the clock hidden and the rows lower, and in Alternative View the clock right of Last watched and no row titles. `test-home.js` covers saving each switch, switching them back on and ignoring non-boolean updates.
 
-The Home availability check covers a TV with neither Glasshouse Home nor LG's Home's options, which has no Home tab; one with LG's Home's options alone, which shows them, Open Home at power-on usable among them, without Glasshouse Home's switch or options; Glasshouse Home switched on, which leaves LG's Home's layout and hidden system apps out; and with live preview enabled, standalone webOS 6 keeping Preview sound, Keep the preview on and Preview in the tile visible while webOS 4 hides them. `test-home-lg-options.js` checks the server's side: the Home tab offered for hiding system apps on webOS 3.8, and for Open Home at power-on alone, the options only sent when asked for, no tab with none of them, and hiding system apps neither offered nor switched on under Glasshouse Home. `test-tile-hiding-handover.js` checks its handover to Glasshouse Home: the apps it hid hidden there, those in More apps kept, and sam never restarted for it.
+The Home availability check covers a TV with neither Glasshouse Home nor LG's Home's options, which has no Home tab; one with LG's Home's options alone, which shows them, Open Home at power-on usable among them, without Glasshouse Home's switch or options; Glasshouse Home switched on, which leaves LG's Home's layout and hidden system apps out; and with live preview enabled, standalone webOS 6 keeping Preview sound, Keep the preview on and Preview in the tile visible while webOS 4 hides them. `visitHomeUpDown` moves along a row of apps over wider input tiles and checks Down reaches the input under the app, and Up the app over the input, not the tiles last focused there. `visitHomePointerOff` switches the pointer off: the cursor is hidden through either webOS bridge, moving it leaves focus alone, and a click opens the focused tile. Relaunch, focus and cursor events preserve the off choice. `visitHomePreviewWebos4` has the view report webOS 4.4.3 and a channel answer no signal, as a C8 does: the TV tile's channel plays as `service/webos-broadcast`, and stays up once playing rather than being blanked as off air. `visitInputBarBehindHome` opens the input bar with HDMI 2 last watched: under a Home screen, OK on it switches to it; on screen, OK switches to nothing. `visitHomePreviewSize` measures the preview at Small, Medium and Large in both views: 356×200, 512×288 and 640×360, each with the small one's top right corner, and the rows starting below the picture. `visitHomePreviewSizeDetails` turns on the picture details with a Medium or Large preview in both views: the input's name sits under the preview on the left, the details on the right without overlapping it, Last watched is hidden beside it, and the rows start below both. `test-home-lg-options.js` checks the server's side: the Home tab offered for hiding system apps on webOS 3.8, and for Open Home at power-on alone, the options only sent when asked for, no tab with none of them, and hiding system apps neither offered nor switched on under Glasshouse Home. `test-tile-hiding-handover.js` checks its handover to Glasshouse Home: the apps it hid hidden there, those in More apps kept, and sam never restarted for it.
 
 For the TV app dashboard, checks verify the two-column layout geometry (the row list on the left and the hint pane on the right with non-zero dimensions and horizontal adjacency), remote D-pad navigation (`ArrowDown`, `ArrowUp`, `PageDown`), list translateY scrolling with the scroll arrow indicator, tab switching (`ArrowRight`, `ArrowLeft`), and that the OLED Care tab is dropped when running on a non-OLED (LCD) TV profile.
 
@@ -297,7 +367,7 @@ Vertical navigation browser checks move repeatedly through differently sized row
 
 `test-home-refresh.js` checks shared reads, retry after failure, stale replies after saves or relaunches and completion callbacks. `test-home-return.js` checks settled scroll transforms before return replies arrive. Picture browser checks also reject stale details after returning to the same app.
 
-`test-home-cursor.js` checks the native cursor reset through both webOS bridges, unavailable methods and hidden pages. Browser checks cover relaunch, visibility, focus and cursor events, restoring on the first pointer movement, and continued tile hovering without repeated resets. A real TV is needed to check the compositor's cursor rendering.
+`test-home-cursor.js` checks the native cursor reset through both webOS bridges, unavailable methods, hidden pages and the pointer-off choice. Browser checks cover relaunch, visibility, focus and cursor events, restoring on the first pointer movement, and continued tile hovering without repeated resets. A real TV is needed to check the compositor's cursor rendering.
 
 Home rendering browser checks cover measurements limited to affected rows, unrelated updates preserving app icons and channel scrolling, row moves retaining tiles, hiding and restoring the focused row without replacing neighbours, shared refreshes and stale replies. They also exercise every appearance and count control through both dashboards, including disabled controls in Alternative View and Darkening alongside the wallpaper picker. The row-edge check waits for the previous move to settle before sampling the next keypress.
 
@@ -333,7 +403,7 @@ comparison is supported by Bash but is not portable to POSIX `sh`.
 scripts/check-all.sh
 ```
 
-`node test/run-all.js` runs only the unit tests, twice as many suites at a time as the computer has processors (`TEST_CONCURRENCY` sets another number), the ones whose header says `@slow` first, so the longest, the server start-up at about 40 s, sets the total. Every suite at once (136) starved GitHub's 4-processor runners until the runner was lost and the job hung; the job now also fails after 5 minutes. GitHub still loses a runner now and then: the job goes silent, is stopped at the limit or told the runner lost communication, and leaves no log. [`rerun-lost-runners.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/rerun-lost-runners.yml#L16-L61) then re-runs the failed jobs once, including on a pull request from a fork, but only when every failed job ended that way: a test that fails or hangs leaves a log and is never re-run. Words after it run only the suites whose file name contains one, as `node test/run-all.js home luna`, and `--times` lists the slowest. A failing suite's output is printed again after the results, so the end of a long CI log shows it. A suite whose header says `@shards N` is started N times, each copy running every Nth step through `test/shard.js`; each step then sets up what it needs, as no copy sees the steps another runs. Suites whose mocks answer without real network, file or process I/O, `test-home.js` among them, run their timers on `test/fake-clock.js`: the clock jumps to the next timer whenever nothing else is left to run, so a step that waits out a 10 s grace period takes no time and can never fire short of it. Suites with real I/O wait for what they check through `test/wait-for.js`.
+`node test/run-all.js` runs only the unit tests, twice as many suites at a time as the computer has processors (`TEST_CONCURRENCY` sets another number), the ones whose header says `@slow` first, so the longest, the server start-up at about 40 s, sets the total. Every suite at once (136) starved GitHub's 4-processor runners until the runner was lost and the job hung; the job now also fails after 5 minutes. GitHub still loses a runner now and then: the job goes silent, is stopped at the limit or told the runner lost communication, and leaves no log. Such a runner had stopped answering altogether, and did not take the cancel at the limit either, where a test that only hangs is cancelled with its log; halving the suites at once made no difference (11 lost of 156 jobs, against 10 of 162). So in CI the unit tests run in a 6 GB memory cap of their own, a `systemd-run` scope: a suite that runs away with memory is killed there, and the job fails with run-all naming it and the kernel's memory-kill lines printed after. A runner was still lost once inside the cap, so if they go on, memory is not the cause. A suite ended by any signal counts as failed. [`rerun-lost-runners.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/rerun-lost-runners.yml#L16-L61) then re-runs the failed jobs once, including on a pull request from a fork, but only when every failed job ended that way: a test that fails or hangs leaves a log and is never re-run. Words after it run only the suites whose file name contains one, as `node test/run-all.js home luna`, and `--times` lists the slowest. A failing suite's output is printed again after the results, so the end of a long CI log shows it. A suite whose header says `@shards N` is started N times, each copy running every Nth step through `test/shard.js`; each step then sets up what it needs, as no copy sees the steps another runs. Suites whose mocks answer without real network, file or process I/O, `test-home.js` among them, run their timers on `test/fake-clock.js`: the clock jumps to the next timer whenever nothing else is left to run, so a step that waits out a 10 s grace period takes no time and can never fire short of it. Suites with real I/O wait for what they check through `test/wait-for.js`.
 
 The dashboard check needs Playwright and its browser:
 
@@ -625,7 +695,14 @@ missing JSON properties become `none` rather than undefined.
 The Hue Sync event tests also verify that internal readiness and busy status
 create no Home Assistant diagnostic entities or diagnostic MQTT publications.
 
-Ambient Light dashboard checks cover the web page below Home, the TV menu
+The saver entity slots check gives Home Assistant: Ambient's first slot an entity and expects its Label row at once, with the field still focused, then confirms a label with Tab while typing in the next field and expects that field to keep its focus and text.
+
+The Inputs and Remote dashboard check covers the inputs and their switches, the
+Input key's choice of LG's list or the input bar, the No Signal switch, remote
+keys on the Remote tab and not the Apps tab, and no Remote tab on a TV with no
+keys to set.
+
+Ambient Light dashboard checks cover the web page below OLED Care, the TV menu
 between Audio and Screen Saver, every Hue Sync setting directly accessible, and
 independent PicCap/Hue Sync switches. The
 web Control shortcuts stay below Playback and share state and write permissions

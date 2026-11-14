@@ -287,6 +287,43 @@ async function visitHomePicture(browser, base, problems) {
 }
 
 // The weather badge: Home Assistant's last push or Open-Meteo's, brought by the heartbeat.
+// The input bar over a Home screen: the input last watched is under it, not
+// on screen, so OK on it switches to it rather than closing the bar.
+async function visitInputBarBehindHome(browser, base, problems) {
+  for (const behindHome of [true, false]) {
+    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    const name = 'Input bar ' + (behindHome ? 'over Home' : 'over HDMI 2') + ': ';
+    page.on('pageerror', e => problems.push(name + e.message));
+    await page.addInitScript(() => {
+      window.launches = [];
+      window.PalmServiceBridge = function () {};
+      window.PalmServiceBridge.prototype.call = function (uri, body) { window.launches.push(JSON.parse(body).id); };
+      window.close = function () { window.closed = true; };
+    });
+    await page.route('http://localhost:8080/**', route => {
+      const url = new URL(route.request().url());
+      if (url.pathname === '/assets/devicons.js') return route.continue({ url: base + '/assets/devicons.js' });
+      if (url.pathname === '/api/home/now') return route.fulfill({ json: { kind: 'input', port: 2, devices: ['hdmi2'], behindHome } });
+      if (url.pathname === '/api/home/catalogue') return route.fulfill({ json: { ok: true, layout: {}, order: { dev: ['hdmi1', 'hdmi2'] },
+        devices: [{ id: 'hdmi1', name: 'HDMI 1', input: 'hdmi1', port: 1 }, { id: 'hdmi2', name: 'Mac', input: 'hdmi2', port: 2 }] } });
+      return route.fulfill({ json: {} });
+    });
+    try {
+      await page.goto(base + '/assets/inputbar-app/index.html');
+      await page.waitForSelector('.tile.focus');
+      const focused = await page.textContent('.tile.focus .nm');
+      if (focused !== 'Mac') problems.push(name + 'the bar opened on ' + focused + ', not the input last watched');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(300);
+      const launches = await page.evaluate(() => window.launches);
+      if (behindHome && launches.indexOf('com.webos.app.hdmi2') === -1) problems.push(name + 'OK on HDMI 2 did not switch to it');
+      if (!behindHome && launches.length) problems.push(name + 'OK on the input on screen launched ' + launches.join(', '));
+    } finally {
+      await page.close();
+    }
+  }
+}
+
 async function visitHomeWeather(browser, base, problems) {
   const page = await browser.newPage();
   page.on('pageerror', e => problems.push('Home weather: ' + e.message));
@@ -413,13 +450,175 @@ async function visitHomeWeatherSetting(browser, base, problems) {
 }
 
 // The TV's tile, Keep the preview on and Preview in the tile.
+// webOS 4 (a C8, 4.4.3, #1208): its browser has no broadcast-preview type, and
+// its channels report no signal, so a playing channel must not be blanked.
+async function visitHomePreviewWebos4(browser, base, problems) {
+  const page = await browser.newPage();
+  page.on('pageerror', e => problems.push('Home preview on webOS 4: ' + e.message));
+  const layout = { rows: ['dev'], order: { dev: [] }, hidden: { dev: [] }, channels: [], hintSeen: true, searchHintSeen: true,
+    livePreview: true, previewAlways: false, previewInTile: false, picture: false };
+  await page.addInitScript(() => {
+    HTMLMediaElement.prototype.load = function () {};
+    HTMLMediaElement.prototype.pause = function () {};
+    HTMLMediaElement.prototype.play = function () { return Promise.resolve(); };
+  });
+  await page.route('**/api/home/**', route => {
+    const url = new URL(route.request().url());
+    const reply = body => route.fulfill({ json: body });
+    if (url.pathname.endsWith('/catalogue')) return reply({ ok: true, layout, layoutVersion: 1,
+      supported: { ok: true, webos: '4.4.3', standalone: true },
+      apps: [], channels: [], sources: { channels: 1 },
+      devices: [{ id: 'tv', name: 'TV', input: 'tv', tuner: true, port: 0, channel: { id: 'two', number: '2', name: 'Two' } }],
+      order: { dev: ['tv'] } });
+    if (url.pathname.endsWith('/now')) return reply({ kind: 'input', port: 1 });
+    if (url.pathname.endsWith('/guide')) return reply({ ok: true, guide: {} });
+    // As the C8 answers: no videooutput service, so never a signal.
+    if (url.pathname.endsWith('/picture')) return reply({ ok: true, input: 'dtv', signal: null, range: 'sdr', mode: null, light: null, oled: true });
+    return reply({ ok: true, build: 'preview', layoutVersion: 1 });
+  });
+  try {
+    await page.clock.install();
+    await page.goto(base + '/assets/home.html');
+    await page.waitForSelector('.tile');
+    await page.clock.fastForward(400);
+    await page.waitForTimeout(100);
+    const type = await page.evaluate(() => {
+      const s = document.querySelector('#pvVideo source');
+      return s ? s.getAttribute('type') + ' ' + s.getAttribute('src') : null;
+    });
+    if (type !== 'service/webos-broadcast tv://two') problems.push('Home preview on webOS 4: the channel did not play as service/webos-broadcast, ' + type);
+    if (type) await page.locator('#pvVideo').dispatchEvent('playing');
+    // Past every try for a signal (0.5 s, then 15 at 0.4 s).
+    for (let i = 0; i < 8; i++) { await page.clock.fastForward(1000); await page.waitForTimeout(30); }
+    const cls = await page.evaluate(() => document.getElementById('preview').className);
+    if (!/\bon\b/.test(cls) || /blank/.test(cls)) problems.push('Home preview on webOS 4: a playing channel with no signal was blanked (' + cls + ')');
+  } finally {
+    await page.close();
+  }
+}
+
+// Preview size (#1210): Medium and Large keep the small preview's top and right
+// edges in both views, and the rows start below the picture.
+async function visitHomePreviewSize(browser, base, problems) {
+  const boxes = {};
+  for (const view of ['standard', 'alternative']) {
+    for (const size of ['small', 'medium', 'large']) {
+      const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+      page.on('pageerror', e => problems.push('Home preview size: ' + e.message));
+      const layout = { rows: ['dev'], order: { dev: [] }, hidden: { dev: [] }, channels: [], hintSeen: true, searchHintSeen: true,
+        livePreview: true, previewAlways: false, previewInTile: false, previewSize: size, view, picture: false };
+      await page.addInitScript(() => {
+        HTMLMediaElement.prototype.load = function () {};
+        HTMLMediaElement.prototype.pause = function () {};
+        HTMLMediaElement.prototype.play = function () { return Promise.resolve(); };
+      });
+      await page.route('**/api/home/**', route => {
+        const url = new URL(route.request().url());
+        const reply = body => route.fulfill({ json: body });
+        if (url.pathname.endsWith('/catalogue')) return reply({ ok: true, layout, layoutVersion: 1,
+          supported: { ok: true, webos: '9.2.0' }, apps: [], channels: [], sources: { channels: 1 },
+          devices: [{ id: 'tv', name: 'TV', input: 'tv', tuner: true, port: 0, channel: { id: 'two', number: '2', name: 'Two' } }],
+          order: { dev: ['tv'] } });
+        if (url.pathname.endsWith('/now')) return reply({ kind: 'input', port: 1 });
+        if (url.pathname.endsWith('/guide')) return reply({ ok: true, guide: {} });
+        if (url.pathname.endsWith('/picture')) return reply({ ok: true, input: 'dtv', signal: 'ok', range: 'sdr', mode: null, light: null, oled: true });
+        return reply({ ok: true, build: 'preview', layoutVersion: 1 });
+      });
+      try {
+        await page.clock.install();
+        await page.goto(base + '/assets/home.html');
+        await page.waitForSelector('.tile');
+        await page.clock.fastForward(400);
+        await page.waitForTimeout(100);
+        boxes[view + ' ' + size] = await page.evaluate(() => {
+          const pv = document.getElementById('preview').getBoundingClientRect();
+          return { on: /\bon\b/.test(document.getElementById('preview').className), top: pv.top, right: pv.right, bottom: pv.bottom,
+                   width: pv.width, height: pv.height, rows: document.getElementById('rows').getBoundingClientRect().top };
+        });
+      } finally {
+        await page.close();
+      }
+    }
+    const small = boxes[view + ' small'];
+    [['small', 356, 200], ['medium', 512, 288], ['large', 640, 360]].forEach(([size, w, h]) => {
+      const b = boxes[view + ' ' + size];
+      const name = 'Home preview size, ' + view + ' ' + size + ': ';
+      if (!b.on) return problems.push(name + 'the preview did not show');
+      if (b.width !== w || b.height !== h) problems.push(name + 'the preview is ' + b.width + 'x' + b.height + ', not ' + w + 'x' + h);
+      if (Math.abs(b.top - small.top) > 1 || Math.abs(b.right - small.right) > 1) problems.push(name + 'the preview moved from the small one\'s top right corner');
+      if (b.rows < b.bottom + 30) problems.push(name + 'the rows start at ' + b.rows + ', under the preview, which ends at ' + b.bottom);
+    });
+  }
+}
+
+// A Medium or Large preview has what it shows named under it on the left, in
+// place of Last watched, and the picture details on the right, rather than
+// beside it, where the strip had no room for them all.
+async function visitHomePreviewSizeDetails(browser, base, problems) {
+  for (const view of ['standard', 'alternative']) {
+    for (const size of ['medium', 'large']) {
+      const name = 'Home preview details, ' + view + ' ' + size + ': ';
+      const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+      page.on('pageerror', e => problems.push(name + e.message));
+      const layout = { rows: ['dev'], order: { dev: [] }, hidden: { dev: [] }, channels: [], hintSeen: true, searchHintSeen: true,
+        livePreview: true, previewAlways: false, previewInTile: false, previewSize: size, view, picture: true };
+      await page.addInitScript(() => {
+        HTMLMediaElement.prototype.load = function () {};
+        HTMLMediaElement.prototype.pause = function () {};
+        HTMLMediaElement.prototype.play = function () { return Promise.resolve(); };
+      });
+      await page.route('**/api/home/**', route => {
+        const url = new URL(route.request().url());
+        const reply = body => route.fulfill({ json: body });
+        if (url.pathname.endsWith('/catalogue')) return reply({ ok: true, layout, layoutVersion: 1,
+          supported: { ok: true, webos: '9.2.0' }, apps: [], channels: [], sources: { channels: 0 },
+          devices: [{ id: 'player', name: 'A long player name for the strip', input: 'hdmi1', port: 1 }],
+          order: { dev: ['player'] } });
+        if (url.pathname.endsWith('/now')) return reply({ kind: 'input', port: 1, title: 'A long player name for the strip', devices: ['player'] });
+        if (url.pathname.endsWith('/guide')) return reply({ ok: true, guide: {} });
+        if (url.pathname.endsWith('/signal')) return reply({ ok: true, signal: true });
+        if (url.pathname.endsWith('/picture')) return reply({ ok: true, signal: { width: 3840, height: 2160, hz: 60, hdr: 'hdr10' },
+          mode: { display: 'Filmmaker Mode' }, light: 80, oled: true });
+        return reply({ ok: true, build: 'details', layoutVersion: 1 });
+      });
+      try {
+        await page.clock.install();
+        await page.goto(base + '/assets/home.html');
+        await page.waitForSelector('.tile');
+        await page.clock.fastForward(400);
+        await page.waitForTimeout(100);
+        if (await page.locator('#pvVideo source').count()) await page.locator('#pvVideo').dispatchEvent('playing');
+        for (let i = 0; i < 6; i++) { await page.clock.fastForward(1000); await page.waitForTimeout(30); }
+        const box = await page.evaluate(() => {
+          const r = id => document.getElementById(id).getBoundingClientRect();
+          const pv = document.getElementById('preview');
+          return { cls: pv.className, pv: r('preview'), info: r('pvInfo'), name: r('pvName'), rows: r('rows').top,
+            title: document.getElementById('pvNameTitle').textContent,
+            sourceShown: getComputedStyle(document.getElementById('source')).visibility !== 'hidden',
+            infoShown: getComputedStyle(document.getElementById('pvInfo')).display !== 'none' };
+        });
+        if (!/\binfo\b/.test(box.cls) || !box.infoShown) { problems.push(name + 'the picture details did not show (' + box.cls + ')'); continue; }
+        if (box.info.top < box.pv.bottom) problems.push(name + 'the details are not under the preview');
+        if (box.info.left < box.pv.left - 1 || box.info.right > box.pv.right + 1) problems.push(name + 'the details reach past the preview');
+        if (box.title !== 'A long player name for the strip') problems.push(name + 'the preview is not named under it, ' + JSON.stringify(box.title));
+        if (Math.abs(box.name.left - box.pv.left) > 1 || box.name.top < box.pv.bottom) problems.push(name + 'the name is not under the preview on the left');
+        if (box.name.right > box.info.left) problems.push(name + 'the name runs into the details');
+        if (box.sourceShown) problems.push(name + 'Last watched is still shown beside the preview');
+        if (box.rows < Math.max(box.info.bottom, box.name.bottom) + 20) problems.push(name + 'the rows start at ' + box.rows + ', under the name and details');
+      } finally {
+        await page.close();
+      }
+    }
+  }
+}
+
 async function visitHomePreviewOptions(browser, base, problems) {
   const page = await browser.newPage();
   page.on('pageerror', e => problems.push('Home preview options: ' + e.message));
   const layout = { rows: ['app', 'dev', 'ch'], order: { app: [], dev: [], ch: [] },
     hidden: { app: [], dev: [], ch: [] }, channels: ['one'], hintSeen: true, searchHintSeen: true,
     livePreview: true, previewAlways: false, previewInTile: false, picture: false };
-  let version = 1, now = { kind: 'input', port: 1 }, covered = false;
+  let version = 1, now = { kind: 'input', port: 1 }, covered = false, signalOn = true;
   await page.addInitScript(() => {
     HTMLMediaElement.prototype.load = function () {};
     HTMLMediaElement.prototype.pause = function () {};
@@ -436,7 +635,7 @@ async function visitHomePreviewOptions(browser, base, problems) {
       order: { app: ['app', 'lg-home'], dev: ['tv', 'player'], ch: ['one'] } });
     if (url.pathname.endsWith('/now')) return reply(now);
     if (url.pathname.endsWith('/guide')) return reply({ ok: true, guide: {} });
-    if (url.pathname.endsWith('/signal')) return reply({ ok: true, signal: true });
+    if (url.pathname.endsWith('/signal')) return reply({ ok: true, signal: signalOn });
     if (url.pathname.endsWith('/picture')) return reply({ ok: true, signal: { width: 1920, height: 1080, hz: 25, hdr: 'sdr' } });
     return reply({ ok: true, build: 'preview', layoutVersion: version, covered, saver: covered });
   });
@@ -508,6 +707,25 @@ async function visitHomePreviewOptions(browser, base, problems) {
     await page.keyboard.press('ArrowRight');
     await rest();
     if (await source() !== 'service/webos-external ext://hdmi:1' || await shownIn() !== 'Player') problems.push('Home preview options: the input tile did not take the preview');
+    // Picture details arriving, and no picture, set the preview's state: it
+    // stays over its tile (#1436), and with no picture is hidden there.
+    await changeLayout({ picture: true });
+    await rest();
+    if (await shownIn() !== 'Player') problems.push('Home preview options: picture details moved the preview off its tile, ' + await shownIn());
+    await page.keyboard.press('ArrowLeft');
+    await rest();
+    signalOn = false;
+    await page.keyboard.press('ArrowRight');
+    await rest();
+    for (let i = 0; i < 20; i++) { await page.clock.fastForward(500); await page.waitForTimeout(20); }
+    const blank = await page.evaluate(() => {
+      const pv = document.getElementById('preview');
+      return { blank: pv.classList.contains('blank'), intile: pv.classList.contains('intile'), shown: getComputedStyle(pv).display !== 'none' };
+    });
+    if (!blank.blank) problems.push('Home preview options: an input with no signal did not go blank');
+    else if (!blank.intile || blank.shown) problems.push('Home preview options: with no picture the preview left its tile, ' + JSON.stringify(blank));
+    signalOn = true;
+    await changeLayout({ picture: false });
     await page.keyboard.press('ArrowUp');
     await rest();
     if (await source()) problems.push('Home preview options: the preview stayed with Keep the preview on off');
@@ -1412,6 +1630,102 @@ async function visitHomeRecentsHidden(browser, base, problems) {
   } finally { await page.close(); }
 }
 
+// #1212: with the pointer switched off, the cursor is hidden, moving it
+// focuses nothing, and a click opens the tile in focus, once.
+async function visitHomePointerOff(browser, base, problems) {
+  const page = await browser.newPage();
+  page.on('pageerror', e => problems.push('Home pointer off: ' + e.message));
+  const layout = { rows: ['app'], order: { app: [] }, hidden: { app: [] }, channels: [], hintSeen: true, searchHintSeen: true,
+    showPointer: false };
+  const apps = [0, 1, 2, 3].map(i => ({ id: 'app' + i, title: 'App ' + i }));
+  const opened = [];
+  await page.addInitScript(() => {
+    window.__cursor = [];
+    window.PalmSystem = { setCursor: function (c) { window.__cursor.push(c); }, launchParams: '{}' };
+  });
+  await page.route('**/api/home/**', route => {
+    const url = new URL(route.request().url());
+    const reply = body => route.fulfill({ json: body });
+    if (url.pathname.endsWith('/catalogue')) return reply({ ok: true, layout, layoutVersion: 1, apps, channels: [], devices: [],
+      order: { app: apps.map(a => a.id) } });
+    if (url.pathname.endsWith('/open')) { opened.push(route.request().postDataJSON().id); return reply({ ok: true }); }
+    if (url.pathname.endsWith('/now')) return reply({});
+    return reply({ ok: true, build: 'pointer', layoutVersion: 1 });
+  });
+  const focused = () => page.evaluate(() => { const t = document.querySelector('#rows .tile.focus'); return t ? +t.getAttribute('data-c') : -1; });
+  try {
+    await page.goto(base + '/assets/home.html');
+    await page.waitForSelector('#rows .tile.focus');
+    const cursor = await page.evaluate(() => window.__cursor.slice());
+    if (cursor[cursor.length - 1] !== 'blank') problems.push('Home pointer off: the cursor was not hidden (' + cursor.join(', ') + ')');
+    for (const event of ['webOSRelaunch', 'focus', 'cursorStateChange']) {
+      await page.evaluate(event => {
+        window.__cursor = [];
+        if (event === 'focus') window.dispatchEvent(new Event(event));
+        else if (event === 'cursorStateChange') document.dispatchEvent(new CustomEvent(event, { detail: { visibility: true } }));
+        else document.dispatchEvent(new Event(event));
+      }, event);
+      const shapes = await page.evaluate(() => window.__cursor);
+      if (!shapes.length || shapes.some(shape => shape !== 'blank')) problems.push('Home pointer off: ' + event + ' restored the pointer');
+    }
+    const last = await page.locator('#rows .tile[data-c="3"]').boundingBox();
+    await page.mouse.move(last.x + last.width / 2, last.y + last.height / 2);
+    await page.waitForTimeout(300);
+    if (await focused() !== 0) problems.push('Home pointer off: moving the pointer moved the focus to tile ' + await focused());
+    await page.mouse.click(last.x + last.width / 2, last.y + last.height / 2);
+    await page.waitForTimeout(500);
+    if (opened.join() !== 'app0') problems.push('Home pointer off: a click opened ' + (opened.join() || 'nothing') + ', not the tile in focus (app0)');
+  } finally {
+    await page.close();
+  }
+}
+
+// #1213: Up and Down go to the tile above or below on screen, not to the
+// tile last focused in that row: app tiles over wider input tiles.
+async function visitHomeUpDown(browser, base, problems) {
+  const page = await browser.newPage();
+  page.on('pageerror', e => problems.push('Home up and down: ' + e.message));
+  const layout = { rows: ['app', 'dev'], order: { app: [], dev: [] }, hidden: { app: [], dev: [] }, channels: [],
+    hintSeen: true, searchHintSeen: true };
+  const apps = [];
+  for (let i = 0; i < 8; i++) apps.push({ id: 'app' + i, title: 'App ' + i });
+  await page.route('**/api/home/**', route => {
+    const url = new URL(route.request().url());
+    const reply = body => route.fulfill({ json: body });
+    if (url.pathname.endsWith('/catalogue')) return reply({ ok: true, layout, layoutVersion: 1, apps, channels: [],
+      devices: [1, 2, 3, 4].map(p => ({ id: 'hdmi' + p, name: 'HDMI ' + p, input: 'hdmi' + p, port: p })),
+      order: { app: apps.map(a => a.id), dev: ['hdmi1', 'hdmi2', 'hdmi3', 'hdmi4'] } });
+    if (url.pathname.endsWith('/now')) return reply({});
+    return reply({ ok: true, build: 'updown', layoutVersion: 1 });
+  });
+  const focused = () => page.evaluate(() => {
+    const t = document.querySelector('#rows .tile.focus');
+    if (!t) return null;
+    const r = t.getBoundingClientRect();
+    return { row: t.closest('.row').getAttribute('data-key'), c: +t.getAttribute('data-c'), left: r.left, right: r.right };
+  });
+  const overlaps = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0;
+  const press = async key => { await page.keyboard.press(key); await page.waitForTimeout(700); };
+  try {
+    await page.goto(base + '/assets/home.html');
+    await page.waitForSelector('#rows .tile.focus');
+    // Remembered in the input row: its first tile.
+    await press('ArrowDown');
+    await press('ArrowUp');
+    for (let i = 0; i < 5; i++) await press('ArrowRight');
+    const above = await focused();
+    await press('ArrowDown');
+    const below = await focused();
+    if (!above || !below || below.row !== 'dev') problems.push('Home up and down: Down did not reach the input row');
+    else if (!overlaps(above, below)) problems.push('Home up and down: Down went to input ' + below.c + ', not the one under app ' + above.c);
+    await press('ArrowUp');
+    const back = await focused();
+    if (!back || back.row !== 'app' || !overlaps(back, below)) problems.push('Home up and down: Up did not go to the app above the input');
+  } finally {
+    await page.close();
+  }
+}
+
 async function visitHomeOrder(browser, base, problems) {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
   page.on('pageerror', e => problems.push('Home order: ' + e.message));
@@ -1876,12 +2190,16 @@ async function visitHomeLauncher(browser, base, problems) {
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
   });
   const keptRow = title => page.locator('#home-launchers .prot-row', { hasText: title });
-  const stateNames = re => page.waitForFunction(r => new RegExp(r).test(document.getElementById('home-state').textContent), re.source);
+  const stateNames = re => page.waitForFunction(r => new RegExp(r).test(document.getElementById('home-state-desc').textContent), re.source);
   const marked = async id => /\bon\b/.test(await page.locator('#' + id).getAttribute('class'));
   try {
     await page.goto(base + '/?tab=home');
-    await page.waitForFunction(() => typeof homeStatus !== 'undefined' && homeStatus && document.getElementById('home-mode-minimal').textContent === 'Glasshouse Minimal');
-    const names = await page.locator('#home-mode-btns button').allTextContents();
+    await page.waitForFunction(() => {
+      const name = document.querySelector('#home-mode-minimal .hm-name');
+      return typeof homeStatus !== 'undefined' && homeStatus && name && name.textContent === 'Glasshouse Minimal';
+    });
+    // Those shown: Glasshouse Bar is offered only where the input bar is.
+    const names = await page.locator('#home-mode-btns button:not([hidden]) .hm-name').allTextContents();
     if (names.join() !== 'LG Home,Glasshouse Home,Glasshouse Minimal,Custom') problems.push('Home launcher: the choices read ' + names.join());
     if (await page.locator('#home-launcher').isVisible()) problems.push('Home launcher: Custom\'s settings showed with Glasshouse Home chosen');
     // Custom with none set up opens its settings, and chooses nothing.
@@ -3664,6 +3982,157 @@ async function visitIptvChannels(browser, base, problems) {
 }
 
 /*
+ * The Inputs and Remote tabs: the inputs with their switches, the Input key's
+ * choice of LG's list or the input bar and the No Signal switch on Inputs; the remote's keys on
+ * Remote, which is left out where a TV has none to set.
+ */
+async function visitInputsAndRemote(browser, base, problems) {
+  const page = await browser.newPage();
+  const fail = message => problems.push('Inputs and Remote: ' + message);
+  page.on('pageerror', error => fail(error.message));
+  const noSignal = { ok: true, available: true, on: false, applied: false, restartPending: false };
+  const layout = { hidden: { dev: [] }, hideUnused: false };
+  const keys = [{ key: 'input', title: 'Input', action: 'lg' }, { key: 'netflix', title: 'Netflix', action: 'open', id: 'com.tvweb.inputbar', opens: 'Input bar' }];
+  let hasKeys = true;
+  const writes = [];
+  try {
+    await page.route('**/api/inputs', route => route.fulfill({ json: { ok: true, writable: true, noSignal, inputBar: { standing: 'tried', allowed: true, experimental: false } } }));
+    await page.route('**/api/home/catalogue', route => route.fulfill({ json: { ok: true, layout, order: { dev: ['HDMI_1', 'HDMI_2'] },
+      devices: [{ id: 'HDMI_1', name: 'Console', port: 1 }, { id: 'HDMI_2', name: 'HDMI 2', port: 2, unused: true }] } }));
+    await page.route('**/api/home/layout', async route => {
+      const patch = route.request().postDataJSON();
+      writes.push(patch);
+      if (patch.hidden) layout.hidden = patch.hidden;
+      await route.fulfill({ json: { ok: true } });
+    });
+    await page.route('**/api/apps', async route => {
+      // The page may close with this still on its way.
+      try {
+        const apps = await (await route.fetch()).json();
+        apps.writable = true;
+        apps.quickAccess = null;
+        apps.remoteKeys = hasKeys ? { ok: true, supported: true, keys, choices: [] } : null;
+        await route.fulfill({ json: apps });
+      } catch (e) { /* closed */ }
+    });
+    await page.route('**/api/remotekeys', async route => {
+      const set = route.request().postDataJSON();
+      writes.push(set);
+      keys[0] = set.action === 'lg' ? { key: 'input', title: 'Input', action: 'lg' }
+        : { key: 'input', title: 'Input', action: 'open', id: set.id, opens: 'Input bar' };
+      await route.fulfill({ json: { ok: true } });
+    });
+    await page.route('**/api/control', async route => {
+      const command = route.request().postDataJSON();
+      writes.push(command);
+      if (command.action === 'plainNoSignal') noSignal.on = command.value;
+      await route.fulfill({ json: Object.assign({ ok: true }, noSignal) });
+    });
+    await page.goto(base + '/?tab=inputs');
+    await page.locator('#inputs-list .prot-row').first().waitFor();
+    if (await page.locator('#inputs-list .prot-row').count() !== 3) fail('the inputs and their switch are not listed');
+    await page.locator('#inputs-list [data-dev="HDMI_2"]').click();
+    await page.locator('#inputs-list [data-dev="HDMI_2"].idle').waitFor();
+    if (JSON.stringify(writes[0]) !== JSON.stringify({ hidden: { dev: ['HDMI_2'] } })) fail('hiding an input did not save it');
+    // The Input key: LG's list or the bar, chosen here; another key that opens it is named.
+    await page.locator('#inputs-bar-lg.good').waitFor();
+    if (!/Netflix/.test(await page.locator('#inputs-bar-note').textContent())) fail('another key that opens the input bar is not named');
+    await page.locator('#inputs-bar-ours').click();
+    await page.locator('#inputs-bar-ours.good').waitFor();
+    if (JSON.stringify(writes[writes.length - 1]) !== JSON.stringify({ key: 'input', action: 'open', id: 'com.tvweb.inputbar' })) fail('choosing the input bar did not set the Input key');
+    await page.locator('#inputs-bar-lg').click();
+    await page.locator('#inputs-bar-lg.good').waitFor();
+    if (writes[writes.length - 1].action !== 'lg') fail('choosing LG\'s list did not put the Input key back');
+    await page.locator('#inputs-nosignal-btn').click();
+    await page.locator('#inputs-nosignal-btn.good').waitFor();
+    if (writes[writes.length - 1].action !== 'plainNoSignal' || writes[writes.length - 1].value !== true) fail('the No Signal switch did not send it');
+    await page.locator('#inputs-grp-bar button', { hasText: 'Remote keys' }).click();
+    if (await page.evaluate(() => activeTab) !== 'remote') fail('the input bar\'s button did not open Remote');
+    if (!await page.locator('#remotepane #disc-remotekeys').isVisible()) fail('Remote keys are not on the Remote tab');
+    if (await page.locator('#appspane #disc-remotekeys, #sspane [id*="nosignal"]').count()) fail('remote keys or No Signal remain on their old tabs');
+    // A TV with no keys to set: no Remote tab, and no input bar on Inputs.
+    hasKeys = false;
+    await page.goto(base + '/?tab=inputs');
+    await page.locator('#inputs-list .prot-row').first().waitFor();
+    await page.locator('#tab-btn-remote').waitFor({ state: 'hidden' });
+    if (await page.locator('#inputs-grp-bar').isVisible()) fail('the input bar is offered with no keys to open it');
+  } catch (e) {
+    fail(e.message);
+  } finally {
+    await page.close();
+  }
+}
+
+/*
+ * Home Assistant: Ambient's entity slots on the Screensaver tab: a slot given
+ * its first entity shows its Label row at once, though the field picked from
+ * still has focus (#1446), and a field tabbed to before a save keeps its focus
+ * and what was typed in it.
+ */
+async function visitSaverEntitySlots(browser, base, problems) {
+  const page = await browser.newPage();
+  const fail = message => problems.push('Saver entity slots: ' + message);
+  page.on('pageerror', error => fail(error.message));
+  const slots = { sensor_1: { entity: '', label: '' }, sensor_2: { entity: 'sensor.office', label: '' } };
+  let delay = 0;
+  try {
+    await page.route('**/api/screensaver', async route => {
+      try {
+        const d = await (await route.fetch()).json();
+        d.writable = true;
+        d.haConfigured = true;
+        d.held = false;
+        d.current = 'ambient';
+        d.modes.forEach(m => { m.active = m.id === 'ambient'; });
+        const ambient = d.modes.filter(m => m.id === 'ambient')[0];
+        ambient.available = true;
+        ambient.entities = Object.keys(slots).map(id => ({ id, label: id === 'sensor_1' ? 'Sensor 1' : 'Sensor 2',
+          entity: slots[id].entity, customLabel: slots[id].label, def: '' }));
+        await route.fulfill({ json: d });
+      } catch (e) { /* closed */ }
+    });
+    await page.route('**/api/ha/entities', route => route.fulfill({ json: { ok: true, configured: true,
+      entities: [{ id: 'sensor.living_room', name: 'Living room' }, { id: 'sensor.office', name: 'Office' }] } }));
+    await page.route('**/api/control', async route => {
+      const command = route.request().postDataJSON();
+      if (command.action === 'screensaverEntities') {
+        for (const [id, v] of Object.entries(command.value.entities)) {
+          if (v.entity !== undefined) slots[id].entity = v.entity;
+          if (v.label !== undefined) slots[id].label = v.label;
+        }
+      }
+      if (delay) await new Promise(r => setTimeout(r, delay));
+      await route.fulfill({ json: { ok: true } });
+    });
+    await page.goto(base + '/?tab=screensaver');
+    const first = page.locator('#ss-ent-sensor_1');
+    await first.waitFor();
+    // Typed and confirmed with Enter: the field keeps focus through the save.
+    await first.fill('sensor.living_room');
+    await first.press('Enter');
+    await first.dispatchEvent('change');
+    try { await page.locator('#ss-lbl-sensor_1').waitFor({ timeout: 3000 }); }
+    catch (e) { fail('the Label row did not appear for a slot given its first entity'); }
+    // A label confirmed with Tab, with typing begun in the next field before the save answers.
+    delay = 300;
+    const label = page.locator('#ss-lbl-sensor_1');
+    await label.fill('Lounge');
+    await label.press('Tab');
+    await page.keyboard.type('xyz');
+    await page.waitForTimeout(900);
+    const focused = await page.evaluate(() => document.activeElement && document.activeElement.id);
+    if (!focused || !focused.startsWith('ss-')) fail('focus left the fields after a save: ' + focused);
+    const typed = await page.evaluate(id => document.getElementById(id) && document.getElementById(id).value, focused);
+    if (slots.sensor_1.label !== 'Lounge') fail('the label was not saved');
+    if (focused && focused.indexOf('ss-ent-') === 0 && !/xyz$/.test(typed || '')) fail('what was typed in the next field was lost: ' + typed);
+  } catch (e) {
+    fail(e.message);
+  } finally {
+    await page.close();
+  }
+}
+
+/*
  * Groups side by side, each against its own server and fake TV, as the Home
  * checks change the layout and uploads they read back. Within a group the
  * checks run in their order here, and the slowest group sets the run's
@@ -3741,8 +4210,9 @@ async function visitHuesyncSettings(browser, base, problems) {
     });
     await page.goto(base + '/?tab=advanced');
     if (await page.locator('#advpane #row-piccap, #advpane #row-huesync').count()) fail('ambient controls remain in System');
-    const followsHome = await page.locator('#tabs [data-tab="ambient"]').evaluate(el => el.previousElementSibling.dataset.tab === 'home');
-    if (!followsHome) fail('Ambient Light does not follow Home');
+    // With the TV's own settings in the sidebar, after OLED Care.
+    const followsOled = await page.locator('#tabs [data-tab="ambient"]').evaluate(el => el.previousElementSibling.dataset.tab === 'oledcare');
+    if (!followsOled) fail('Ambient Light does not follow OLED Care');
     await page.locator('#tabs [data-tab="ambient"]').click();
     await page.waitForSelector('#huesync-settings:not([hidden])');
     for (const key of ['background_lightning_video', 'background_lightning_games', 'auto_start', 'auto_start_notification']) {
@@ -3990,10 +4460,10 @@ async function visitTvHuesync(browser, base, problems) {
 
 function groups(web, tv) {
   return [
-    { job: 'tabs', tabs: web.map(t => ({ path: '/?tab=' + t, label: 'web ' + t })), visits: [visitHomeAnimations, visitHuesyncSettings] },
+    { job: 'tabs', tabs: web.map(t => ({ path: '/?tab=' + t, label: 'web ' + t })), visits: [visitHomeAnimations, visitHuesyncSettings, visitInputsAndRemote, visitSaverEntitySlots] },
     { job: 'tabs', tabs: tv.map(t => ({ path: '/assets/dashboard.html?tab=' + t, label: 'TV ' + t })),
       visits: [visitTvDashboard, visitTvAudio, visitTvPictureWrites, visitPictureUnavailable, visitTvNonOled, visitTvHuesync] },
-    { job: 'home', tabs: [], visits: [visitHomePicture, visitHomePreview, visitHomePreviewOptions, visitHomeOrder, visitHomeAvailability, visitHomeSearch, visitHomeWeather, visitHomeWeatherSetting] },
+    { job: 'home', tabs: [], visits: [visitHomePicture, visitHomePreview, visitHomePreviewOptions, visitHomePreviewWebos4, visitHomePreviewSize, visitHomePreviewSizeDetails, visitInputBarBehindHome, visitHomeUpDown, visitHomePointerOff, visitHomeOrder, visitHomeAvailability, visitHomeSearch, visitHomeWeather, visitHomeWeatherSetting] },
     { job: 'home', tabs: [], visits: [visitHomeArrangement, visitHomeVisibility, visitHomeColours, visitHomeInputsEditor, visitHomeEditor,
       visitHomeRecentsHidden, visitHomeUploads, visitHomeShuffle, visitHomeLauncher, visitHomeReadiness, visitAudioOverride, visitHomeRecents, visitHomeGuide,
       visitHomeFadeAndInputs] },

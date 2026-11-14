@@ -5,13 +5,17 @@ var path = require('path');
 var vm = require('vm');
 
 var html = fs.readFileSync(path.join(__dirname, '../server/assets/home.html'), 'utf8');
-var start = html.indexOf('  function restorePointerCursor(');
-var end = html.indexOf('\n  }', start);
-assert.ok(start > 0 && end > start);
-var source = html.slice(start, end + 4);
+var source = ['pointerOff', 'applyPointer', 'restorePointerCursor'].map(function (name) {
+  var start = html.indexOf('  function ' + name + '(');
+  if (name === 'pointerOff') return html.slice(start, html.indexOf('\n', start));
+  var end = html.indexOf('\n  }', start);
+  assert.ok(start > 0 && end > start);
+  return html.slice(start, end + 4);
+}).join('\n');
 
-function fixture(system, legacy, hidden) {
-  var sandbox = { window: { webOSSystem: system, PalmSystem: legacy }, document: { hidden: !!hidden } };
+function fixture(system, legacy, hidden, off) {
+  var sandbox = { window: { webOSSystem: system, PalmSystem: legacy }, document: { hidden: !!hidden },
+    layout: { showPointer: !off }, cursorHidden: !!off, stopPointing: function () {} };
   vm.runInNewContext(source, sandbox);
   return sandbox.restorePointerCursor;
 }
@@ -26,6 +30,8 @@ function fixture(system, legacy, hidden) {
   assert.deepEqual(calls, ['default'], name + ' restores the native cursor shape');
   fixture(system, null, true)();
   assert.strictEqual(calls.length, 1, 'a background page cannot change the active app cursor');
+  fixture(name === 'webOSSystem' ? system : null, name === 'PalmSystem' ? system : null, false, true)();
+  assert.deepEqual(calls, ['default', 'blank'], 'restoring respects the pointer-off choice through ' + name);
 });
 
 var restored = 0;

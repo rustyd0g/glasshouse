@@ -110,6 +110,27 @@ html.resting #wall{visibility:hidden}
   background:linear-gradient(90deg,rgba(10,9,8,.82),rgba(10,9,8,.35) 70%,rgba(10,9,8,.15))}
 #preview.intile video{object-fit:cover}
 #preview.intile #pvInfo,#preview.intile.blank{display:none}
+/* Medium and Large (#1210): the preview keeps the small one's top and right
+   edges and grows down and left, and the rows start the same 34px below the
+   picture as below the strip. With the clock, the weather, Last watched and
+   the picture details beside it, the strip (1696px across) has not the room:
+   on a C2 the source had 28px and the details were cut off. So under it go
+   what it shows, on the left, in place of Last watched, and the details on
+   the right, and the rows start lower to make room. */
+.pv-medium #now #preview:not(.full){width:512px;height:288px;-webkit-align-self:flex-start;align-self:flex-start;margin-top:62px}
+.pv-large #now #preview:not(.full){width:640px;height:360px;-webkit-align-self:flex-start;align-self:flex-start;margin-top:62px}
+.pv-medium #preview:not(.full) #pvNote{line-height:288px}
+.pv-large #preview:not(.full) #pvNote{line-height:360px}
+.pv-medium #pvInfo,.pv-large #pvInfo{right:0;bottom:auto;top:100%;width:58%;margin:12px 0 0;padding:0}
+#pvName{display:none;position:absolute;left:0;top:100%;width:40%;margin-top:12px}
+.pv-medium #preview.on:not(.full) #pvName,.pv-large #preview.on:not(.full) #pvName{display:block}
+#pvNameTitle{font-family:'Outfit',sans-serif;font-size:27px;line-height:1.1;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pvNameVia{margin-top:5px;font-size:19px;color:#a39d93;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pv-medium #now.previewing #source,.pv-large #now.previewing #source{visibility:hidden}
+.pv-medium #now #preview.info:not(.full),.pv-large #now #preview.info:not(.full){margin-left:56px}
+.alternative.pv-medium #now #preview.info:not(.full),.alternative.pv-large #now #preview.info:not(.full){margin-left:auto}
+.pv-medium #rows{top:454px}
+.pv-large #rows{top:526px}
 #rows .tile.live{background:transparent}
 .tile.live>div{position:relative;z-index:1}
 .row .tile.live{opacity:1}
@@ -643,6 +664,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       <div id="plStrip"></div>
     </div>
     <div id="preview"><video id="pvVideo" muted></video>
+      <div id="pvName"><div id="pvNameTitle"></div><div id="pvNameVia"></div></div>
       <div id="pvInfo"><div id="pvTop"><div id="pvMode"></div><div id="pvLight"></div></div><div id="pvSig"></div></div>
       <div id="pvNote" data-t="home.preview.noPicture">No picture</div></div>
     <div id="weather" class="none">
@@ -1079,7 +1101,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
 
   function render() {
     stageClass();
-    var viewMode = layout.view || 'standard', geometryChanged = renderedView !== viewMode;
+    var viewMode = (layout.view || 'standard') + previewSizeClass(), geometryChanged = renderedView !== viewMode;
     renderedView = viewMode;
     if (geometryChanged) verticalAnchor = null;
     var container = $('rows'), changed = geometryChanged, changedRows = [];
@@ -1091,7 +1113,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
         view.element.className = 'row';
         view.element.setAttribute('data-key', kind);
       }
-      // Alternative View changes card widths without changing their markup.
+      // The view or preview size can change geometry without changing row markup.
       if (geometryChanged) view.dirty = true;
       var list = items(kind), html = rowMarkup(kind, list);
       if (html !== view.markup) {
@@ -1728,6 +1750,38 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     if (glide) kick();
   }
 
+  /*
+   * The pointer switched off on the Home tab (#1212): the Magic Remote's
+   * cursor is hidden while the view is in front, moving the remote focuses
+   * nothing, and a click is the OK it would be with the arrows, so the tile
+   * in focus opens rather than the one under the cursor. A click within
+   * OK_CLICK_MS of an OK key is that same press. The wheel still scrolls.
+   * PalmSystem.setCursor hid it on a C8 (webOS 4.4.3).
+   */
+  var OK_CLICK_MS = 400;
+  var lastOkKeyAt = 0;
+  var cursorHidden = false;
+  function pointerOff() { return !!layout && layout.showPointer === false; }
+  function applyPointer(again) {
+    if (document.hidden) return;
+    var off = pointerOff();
+    if (off === cursorHidden && !again) return;
+    cursorHidden = off;
+    try {
+      var system = window.webOSSystem;
+      if (!system || typeof system.setCursor !== 'function') system = window.PalmSystem;
+      if (system && typeof system.setCursor === 'function') system.setCursor(off ? 'blank' : 'default', 0, 0);
+    } catch (e) {}
+    if (off) stopPointing();
+  }
+  function clickAsOk() {
+    if (Date.now() - lastOkKeyAt < OK_CLICK_MS) return;
+    var press = { keyCode: KEY.ok, preventDefault: function () {}, stopPropagation: function () {} };
+    onKeyDown(press);
+    onKeyUp(press);
+  }
+  function noteOkKey(e) { if (e.keyCode === KEY.ok) lastOkKeyAt = Date.now(); }
+
   // The keys, or the pointer going away, end the pointer's scrolling; a
   // gliding row slows to a stop.
   function stopPointing() {
@@ -1809,6 +1863,9 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       via = t('home.now.app', 'App on this TV');
     }
     $('source').className = title ? '' : 'none';
+    // A Medium or Large preview names what it shows under itself (#1210).
+    setText('pvNameTitle', pv ? title : '');
+    setText('pvNameVia', pv ? via : '');
     setText('srcKind', kind || ' ');
     setText('srcTitle', title || ' ');
     setText('srcVia', via || ' ');
@@ -2162,17 +2219,24 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     applyFocus();
   }
 
+  // Medium or Large beside the clock; in the tile, the tile sets its size.
+  function previewSizeClass() {
+    if (!layout || layout.livePreview !== true || layout.previewInTile === true) return '';
+    return layout.previewSize === 'medium' ? ' pv-medium' : layout.previewSize === 'large' ? ' pv-large' : '';
+  }
+
   function stageClass() {
     var value = (state.arranging ? 'arranging' : '') + (recents.open ? ' recents' : '') +
       (finder.open ? ' finding' : '') + (finder.typing ? ' typing' : '') + (searchOn() ? '' : ' no-search') +
       (folder.open ? ' folder' : '') + (document.hidden ? ' page-hidden' : '') +
       (!layout || layout.showClock === false ? ' no-clock' : '') + (layout && layout.rowsBottom === true ? ' rows-bottom' : '') +
       (layout && layout.view === 'alternative' ? ' alternative' : '') + (player.open ? ' playing' : '') + (adder.open ? ' adding' : '') +
-      (adder.open && adder.typing ? ' adtyping' : '') + (guide.open ? ' guiding' : '');
+      (adder.open && adder.typing ? ' adtyping' : '') + (guide.open ? ' guiding' : '') + previewSizeClass();
     if ($('stage').className !== value) {
       $('stage').className = value;
       queueChannelTitles(200);
     }
+    applyPointer(false);
     followPreview();
   }
 
@@ -2408,6 +2472,10 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
         if (tries > 1) {
           return setTimeout(function () { if (gen === tilePreview.gen) loadPreviewInfo(target, gen, tries - 1); }, PREVIEW_CHANNEL_POLL_MS);
         }
+        if (oldBroadcast() && tilePreview.playing) {
+          tilePreview.info = r;
+          return renderPreviewInfo();
+        }
         return blankPreview();
       }
       tilePreview.info = r;
@@ -2415,23 +2483,35 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     });
   }
 
+  /*
+   * The preview's state, then its place: "on", "info" and "blank" replace the
+   * classes, "intile" among them, which placePreview puts back over the tile.
+   * Set alone, the in-tile size and position stayed while the preview was
+   * laid out beside the clock again, below and right of the tile, with "No
+   * picture" overflowing it (#1436).
+   */
+  function setPreviewState(cls) {
+    $('preview').className = cls;
+    placePreview();
+  }
+
   function renderPreviewInfo() {
     if (tilePreview.target && tilePreview.target.tv) return renderTvPreviewInfo();
     if (tilePreview.blank || !$('preview').className) return;
     var p = tilePreview.info;
-    if (!layout || layout.picture !== true || !p) { $('preview').className = 'on'; return; }
+    if (!layout || layout.picture !== true || !p) return setPreviewState('on');
     var sig = p.signal ? signalParts(p.signal) : [];
     $('pvMode').textContent = p.mode ? p.mode.display : '';
     $('pvLight').innerHTML = lightHtml(p);
     $('pvSig').innerHTML = spans(sig);
-    $('preview').className = 'on' + (p.mode || sig.length ? ' info' : '');
+    setPreviewState('on' + (p.mode || sig.length ? ' info' : ''));
   }
 
   function blankPreview() {
     if (tilePreview.target && tilePreview.target.tv) stopTvStream();
     else releaseVideo();
     tilePreview.blank = true;
-    $('preview').className = 'on blank';
+    setPreviewState('on blank');
     renderNow();
   }
 
@@ -2463,8 +2543,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     $('pvMode').textContent = t('home.tv.stream', 'Internet stream');
     $('pvLight').innerHTML = '';
     $('pvSig').innerHTML = spans(fmt);
-    $('preview').className = 'on' + (!guide.open && layout.picture === true && fmt.length ? ' info' : '');
-    placePreview();
+    setPreviewState('on' + (!guide.open && layout.picture === true && fmt.length ? ' info' : ''));
   }
   function startTvPreview(target) {
     var gen = tilePreview.gen;
@@ -2477,13 +2556,25 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     tilePreview.timer = setTimeout(function () { if (gen === tilePreview.gen && !tilePreview.playing) blankPreview(); }, TV_PREVIEW_START_MS);
   }
 
+  /*
+   * webOS 4's browser has no service/webos-broadcast-preview, and plain
+   * service/webos-broadcast plays the channel in 1.5 to 2 s there (a C8,
+   * 4.4.3, #1208), at the cost of making it the TV's last channel. Nor has
+   * webOS 4 the videooutput service a channel's signal is read from, so a
+   * channel playing there is not blanked as off air for want of one.
+   */
+  function oldBroadcast() {
+    return !!(data && data.supported && parseInt(data.supported.webos, 10) <= 4);
+  }
+
   function startPreview(target) {
     if (target.tv) return startTvPreview(target);
     var gen = tilePreview.gen, v = $('pvVideo'), s = document.createElement('source');
     var current = function () { return gen === tilePreview.gen; };
     v.muted = previewMuted();
     v.defaultMuted = v.muted;
-    s.setAttribute('type', target.port ? 'service/webos-external' : 'service/webos-broadcast-preview');
+    s.setAttribute('type', target.port ? 'service/webos-external' :
+                   oldBroadcast() ? 'service/webos-broadcast' : 'service/webos-broadcast-preview');
     s.setAttribute('src', target.port ? 'ext://hdmi:' + target.port : 'tv://' + target.item.id);
     v.appendChild(s);
     v.onplaying = function () {
@@ -4918,6 +5009,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     return null;
   }
   function onPointer(e) {
+    if (pointerOff()) return;
     if (!pointing) restorePointerCursor();
     pointerX = e.clientX;
     pointerY = e.clientY;
@@ -4927,14 +5019,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   }
 
   function restorePointerCursor() {
-    if (document.hidden) return;
-    var system = window.webOSSystem;
-    if (!system || typeof system.setCursor !== 'function') system = window.PalmSystem;
-    // Restore the native shape after another app; CSS alone may leave its
-    // blank cursor in use. webOS still controls key-mode hiding and idle time.
-    try {
-      if (system && typeof system.setCursor === 'function') system.setCursor('default');
-    } catch (e) {}
+    // Reapply the chosen shape after another app; webOS controls visibility.
+    applyPointer(true);
   }
   // Focuses the tile under the pointer, without moving its row.
   function hoverTile(target) {
@@ -4983,6 +5069,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   }
   function onClick(e) {
     if (!data || !layout || layoutBusy) return;
+    if (pointerOff()) return clickAsOk();
     if (player.open) return playerClick(e.target);
     if (guide.open) return guideClick(e.target);
     if (adder.open) return adderClick(e.target);
@@ -6095,11 +6182,11 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   }
 
   function returned() {
-    restorePointerCursor();
     rest(false);
     refreshGeneration++;
     verticalAnchor = null;
     tilePreview.opened = null;
+    applyPointer(true);
     var dark = faded;
     if (!dark) fadeIn();
     initialEscape = false;
@@ -6140,6 +6227,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   window.addEventListener('load', function () { queueChannelTitles(200); });
   document.addEventListener('transitionend', channelWidthChanged);
   document.addEventListener('webkitTransitionEnd', channelWidthChanged);
+  document.addEventListener('keydown', noteOkKey, true);
+  document.addEventListener('keyup', noteOkKey, true);
   document.addEventListener('keydown', onKeyDown, true);
   document.addEventListener('keyup', onKeyUp, true);
   document.addEventListener('mousemove', onPointer);
@@ -6158,8 +6247,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   document.addEventListener('onwheel' in document ? 'wheel' : 'mousewheel', onWheel);
   // webOS says when the pointer hides, after a few still seconds or a key.
   document.addEventListener('cursorStateChange', function (e) {
-    if (e.detail && e.detail.visibility) restorePointerCursor();
-    else stopPointing();
+    if (!(e.detail && e.detail.visibility)) stopPointing();
+    else applyPointer(true);
   });
   window.addEventListener('focus', restorePointerCursor);
   document.addEventListener('mouseout', function (e) { if (!e.relatedTarget) stopPointing(); });

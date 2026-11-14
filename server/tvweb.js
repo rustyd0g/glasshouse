@@ -19,7 +19,7 @@
  * first 4096 bytes of a downloaded tvweb.js for this line (up to 0.82.2), and
  * refuses a release where it is further down (#586).
  */
-var TVWEB_VERSION = '0.146.2';
+var TVWEB_VERSION = '0.149.0';
 
 var http = require('http');
 var fs = require('fs');
@@ -52,16 +52,19 @@ var oled = require('./lib/oled');
 var screensavers = require('./lib/screensavers');
 var haEntity = require('./lib/haentity');
 var idlesaver = require('./lib/idlesaver');
+var nosignal = require('./lib/nosignal');
 var appsModule = require('./lib/apps');
 var iconServer = require('./lib/iconserver');
 var samrescan = require('./lib/samrescan');
 var servicesModule = require('./lib/services');
 var preload = require('./lib/preload');
 var appDns = require('./lib/appdns');
+var appHosts = require('./lib/apphosts');
 var doh = require('./lib/doh');
 var quickAccess = require('./lib/quickaccess');
 var remoteKeys = require('./lib/remotekeys');
 var inputBar = require('./lib/inputbar');
+var homebar = require('./lib/homebar');
 var clockFormat = require('./lib/clock');
 var homeScreen = require('./lib/homescreen');
 /*
@@ -559,7 +562,8 @@ lgSettings.init({ luna: luna, lunaCached: lunaCached, clearLunaCache: clearLunaC
 audioCapabilities.init({ luna: luna, lunaCached: lunaCached, clearLunaCache: clearLunaCache, hdmiReceiverMap: telemetry.hdmiReceiverMap });
 btAudio.init({ luna: luna, clearLunaCache: clearLunaCache });
 game.init({ lunaCached: lunaCached, inputKey: telemetry.inputKey });
-privacy.init({ luna: luna, lunaCached: lunaCached, config: CONFIG, lgSettings: lgSettings, services: servicesModule });
+appHosts.init({});
+privacy.init({ luna: luna, lunaCached: lunaCached, config: CONFIG, lgSettings: lgSettings, services: servicesModule, appHosts: CLI_MODE ? null : appHosts });
 oled.init({ luna: luna, config: CONFIG });
 samrescan.init({ luna: luna });
 appsModule.init({ luna: luna, config: CONFIG });
@@ -584,9 +588,29 @@ inputBar.init({
   webosVersion: telemetry.detectWebosVersion(),
   writeSettings: routes.writeSettings,
   wanted: remoteKeys.opensInputBar,
-  drop: function (cb) { remoteKeys.dropInputBar(cb); },
+  // Glasshouse Bar is an overlay as the bar is, so it goes where the bar does.
+  drop: function (cb) {
+    remoteKeys.dropInputBar(function () {
+      if (!homebar.enabled() || inputBar.allowed()) return cb();
+      homebar.disable(function () { cb(); });
+    });
+  },
   // liveState is set up further on; the bar only asks once started.
   on: function () { return !liveState || (liveState.state.snapshot().power || {}).systemOn !== false; }
+});
+homebar.init({
+  luna: luna,
+  stateDir: __dirname,
+  app: function (action, cb) { tvApp(action, cb, 'homebar-app'); },
+  setHomeKey: remoteKeys.setHome,
+  allowed: function () { return inputBar.allowed(); },
+  standing: function () { return inputBar.standing(); },
+  on: function () { return !liveState || (liveState.state.snapshot().power || {}).systemOn !== false; },
+  // Glasshouse Home, or a launcher in its place, off first: LG's Home keeps its place.
+  homeOff: function (cb) {
+    if (!glasshouseHome || !glasshouseHome.enabled()) return cb({ ok: true });
+    glasshouseHome.disable(cb);
+  }
 });
 homeScreen.init({ luna: luna, config: CONFIG, inputNames: telemetry.inputNameMap, stateDir: __dirname, webosVersion: telemetry.detectWebosVersion() });
 // webOS 10's layout is an overlay mount, gone after a restart of the TV.
@@ -606,11 +630,15 @@ screensavers.init({
   KEY_BACK: controls.KEY_BACK,
   inputKey: telemetry.inputKey,
   watchKeys: function (on) { if (!on || remotebuttons.isSupported()) remotebuttons.want('screensaver', on); },
+  watchPointer: function (on) { if (!on || remotebuttons.isSupported()) remotebuttons.want('saverPointer', on); },
   mediaState: telemetry.readMediaState,
   haEntity: haEntity
 });
 idlesaver.init({ luna: luna, mediaState: telemetry.readMediaState,
   watching: function () { return !!(iptv && iptv.watching()); } });
+// A mount does not outlive a reboot: the plain No Signal screen is mounted again.
+nosignal.init({ luna: luna });
+nosignal.apply();
 telemetry.init({
   luna: luna,
   lunaCached: lunaCached,
@@ -706,8 +734,11 @@ remotebuttons.init({
   onHomeKey: function (down) {
     if (glasshouseHome) glasshouseHome.homeKey(down);
   },
-  onAnyKey: function () {
-    screensavers.keyPressed();
+  onAnyKey: function (code) {
+    screensavers.keyPressed(code);
+  },
+  onPointer: function () {
+    screensavers.pointerUsed();
   }
 });
 
@@ -873,6 +904,8 @@ function checkHomebrewChannelApp() {
       remoteKeys.restore(function (keys) {
         if (!keys) return console.error('uninstall: remote key restore failed; server kept for retry');
         forgetHomeAssistant(function () {
+          // LG's block list outlives the server, so its entries come off it first.
+          servicesModule.releaseBlocked();
           // A stub stays mounted over LG's program, even with its file deleted, until unmounted.
           var unstub = servicesModule.stubTargets().map(function (t) { return 'umount ' + JSON.stringify(t) + ' 2>/dev/null; '; }).join('');
           child_process.spawn('/bin/sh', ['-c',
@@ -1026,6 +1059,7 @@ routes.init({
   home: glasshouseHome,
   homePicture: homePicture,
   homeLauncher: homeLauncher,
+  homebar: homebar,
   iptv: iptv,
   screensavers: screensavers,
   haEntity: haEntity,
@@ -1164,6 +1198,13 @@ if (CLI_MODE) {
     // left alone: it is installed when a key is set to it.
     tvApp('refresh', function (r) {
       if (r && r.refreshed && r.ok) console.log('inputbar: app refreshed to current release');
+      // One at a time: the installer takes one job.
+      tvApp('refresh', function (r2) {
+        if (r2 && r2.refreshed && r2.ok) console.log('homebar: app refreshed to current release');
+        // A reinstall closes the copy kept loaded, so it is loaded again now
+        // rather than at the first press.
+        homebar.poke();
+      }, 'homebar-app');
     }, 'inputbar-app');
   });
 } else {
@@ -2131,8 +2172,9 @@ if (!CLI_MODE) {
   });
   // The input bar is preloaded while a remote key opens it and the TV is on.
   inputBar.start();
+  homebar.start();
   liveState.state.onChange(function (ev) {
-    if (ev.group === 'power' && ev.key === 'systemOn' && ev.value === true) inputBar.poke();
+    if (ev.group === 'power' && ev.key === 'systemOn' && ev.value === true) { inputBar.poke(); homebar.poke(); }
   });
 
   telemetry.detectDeviceInfo(function() {

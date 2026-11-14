@@ -51,9 +51,11 @@ var SETTINGS = 'com.webos.service.settings/';
 var ROWS = ['app', 'rec', 'dev', 'ch', 'iptv'];
 // How a row is ordered: as arranged ('custom'), or the tile opened last first ('recent').
 var SORTS = ['custom', 'recent'];
-var SHOW_KEYS = ['showClock', 'showLastOn', 'showAppCount', 'showInputCount', 'showChannelCount', 'showCec', 'showTvLogos'];
+var SHOW_KEYS = ['showClock', 'showLastOn', 'showAppCount', 'showInputCount', 'showChannelCount', 'showCec', 'showTvLogos', 'showPointer'];
 // Where the weather badge's weather comes from: nowhere, Home Assistant's pushes, or Open-Meteo.
 var WEATHER_SOURCES = ['off', 'ha', 'internet'];
+// The live preview beside the clock: 356x200, 512x288 or 640x360 on the 1920x1080 view.
+var PREVIEW_SIZES = ['small', 'medium', 'large'];
 // Each kind of motion on the view, on unless switched off: the wallpaper's
 // slow drift and its cross-fade between parts of the day, rows easing to the
 // chosen tile, and Recent apps, search and the folder sliding in.
@@ -100,9 +102,16 @@ var TUNER_TILE = 'tv';
  * sam. Search's own icon on a G3 (webOS 9.2) is a pair of arrows, so its tile
  * shows a letter instead.
  */
+var AIRPLAY_APP = 'airplay';
 var LG_SIDEBAR_APPS = [
-  { id: 'com.webos.app.notificationcenter', icon: true },
-  { id: 'com.webos.app.voice', icon: false }
+  { id: 'com.webos.app.notificationcenter', icon: true, overlay: true },
+  { id: 'com.webos.app.voice', icon: false, overlay: true },
+  /*
+   * AirPlay has no launch point on webOS 9 (a C2, 9.2.2) or 10 (a B4, 10.3.2),
+   * where only LG's Home Hub opens it, and on webOS 4 its tile is a bookmark,
+   * which this list leaves out. Its page also holds AirPlay's settings (#1435).
+   */
+  { id: AIRPLAY_APP, icon: true, overlay: false }
 ];
 var MAX_CHANNELS = 40;
 /*
@@ -280,6 +289,16 @@ var escaped = false;
 var foreground = '';
 // When something other than the view last came to the front, for the open watch.
 var otherOpenedAt = 0;
+/*
+ * An app opened from the view, and when. Hidden for it, the view stops beating
+ * while the app has no window in front yet: Nuvio on a 55NANO756PR (webOS
+ * 6.5.3) showed LG's loading screen for about 6.5 s, and the view, taken for
+ * hung 6 s after the open, was opened again over it, which ended Nuvio's
+ * launch (#1408). Until the app is in front, or this long after the open, a
+ * view that stops beating is waited for.
+ */
+var LAUNCH_GRACE_MS = 30000;
+var launchedAt = 0;
 var lastSource = null;
 // What ha.js's 'weather' text entity last received over MQTT (setWeather
 // below), kept in home-weather.json so a restart does not hide it.
@@ -417,6 +436,8 @@ function defaults() {
     showChannelCount: true,
     showCec: true,
     showTvLogos: true,
+    // The Magic Remote's pointer on the view (#1212).
+    showPointer: true,
     // Where the weather comes from, and the place Open-Meteo is asked about.
     weather: 'ha',
     weatherPlace: null,
@@ -425,6 +446,8 @@ function defaults() {
     previewAlways: false,
     // The live preview in the tile it shows, rather than beside the clock.
     previewInTile: false,
+    // Its size beside the clock, one of PREVIEW_SIZES.
+    previewSize: 'small',
     // The live preview's sound: muted unless switched on, as Home is often
     // passed through on the way to something else.
     previewSound: false,
@@ -531,6 +554,7 @@ function normalise(raw) {
   d.view = raw.view === 'alternative' ? 'alternative' : 'standard';
   d.previewAlways = raw.previewAlways === true;
   d.previewInTile = raw.previewInTile === true;
+  d.previewSize = PREVIEW_SIZES.indexOf(raw.previewSize) !== -1 ? raw.previewSize : 'small';
   d.previewSound = raw.previewSound === true;
   d.wallAnim = WALL_ANIMS.indexOf(raw.wallAnim) !== -1 ? raw.wallAnim : 'off';
   d.animTheme = raw.animTheme === 'custom' || ANIM_THEMES.some(function (th) { return th.id === raw.animTheme; }) ? raw.animTheme : 'auto';
@@ -686,12 +710,14 @@ function setLayout(body, cb) {
     showChannelCount: typeof body.showChannelCount === 'boolean' ? body.showChannelCount : c.showChannelCount,
     showCec: typeof body.showCec === 'boolean' ? body.showCec : c.showCec,
     showTvLogos: typeof body.showTvLogos === 'boolean' ? body.showTvLogos : c.showTvLogos,
+    showPointer: typeof body.showPointer === 'boolean' ? body.showPointer : c.showPointer,
     // showWeather is the switch an older dashboard still sends.
     weather: body.weather !== undefined ? body.weather
       : typeof body.showWeather === 'boolean' ? (body.showWeather ? 'ha' : 'off') : c.weather,
     weatherPlace: body.weatherPlace !== undefined ? body.weatherPlace : c.weatherPlace,
     previewAlways: typeof body.previewAlways === 'boolean' ? body.previewAlways : c.previewAlways,
     previewInTile: typeof body.previewInTile === 'boolean' ? body.previewInTile : c.previewInTile,
+    previewSize: body.previewSize !== undefined ? body.previewSize : c.previewSize,
     previewSound: typeof body.previewSound === 'boolean' ? body.previewSound : c.previewSound,
     wallAnim: body.wallAnim !== undefined ? body.wallAnim : c.wallAnim,
     animTheme: body.animTheme !== undefined ? body.animTheme : c.animTheme,
@@ -739,7 +765,7 @@ function layoutOf(c) {
     searchHintSeen: c.searchHintSeen, picture: c.picture, livePreview: c.livePreview, search: c.search, recommended: c.recommended,
     fade: c.fade, wallDrift: c.wallDrift, wallCrossfade: c.wallCrossfade, smoothScroll: c.smoothScroll, slidePanels: c.slidePanels,
     darkening: c.darkening, hideUnused: c.hideUnused, showClock: c.showClock, rowsBottom: c.rowsBottom, view: c.view,
-    showLastOn: c.showLastOn, showAppCount: c.showAppCount, showInputCount: c.showInputCount, showChannelCount: c.showChannelCount, showCec: c.showCec, showTvLogos: c.showTvLogos, weather: c.weather, weatherPlace: c.weatherPlace, previewAlways: c.previewAlways, previewInTile: c.previewInTile, previewSound: c.previewSound, wallAnim: c.wallAnim,
+    showLastOn: c.showLastOn, showAppCount: c.showAppCount, showInputCount: c.showInputCount, showChannelCount: c.showChannelCount, showCec: c.showCec, showTvLogos: c.showTvLogos, showPointer: c.showPointer, weather: c.weather, weatherPlace: c.weatherPlace, previewAlways: c.previewAlways, previewInTile: c.previewInTile, previewSize: c.previewSize, previewSound: c.previewSound, wallAnim: c.wallAnim,
     animTheme: c.animTheme, animSky: c.animSky, animLight: c.animLight, animThemes: ANIM_THEMES,
     wallShuffleMinutes: c.wallShuffleMinutes, shuffleMinutes: SHUFFLE_MINUTES, colours: c.colours,
     // Not saved: { host, by } while the ad blocker blocks LG's search (lib/home-search).
@@ -837,16 +863,20 @@ function launchPoints(cb) {
   }, cb);
 }
 
-// Each of LG_SIDEBAR_APPS that this TV has, on the end of the list.
+// Each of LG_SIDEBAR_APPS that this TV has and has no tile for, on the end of the list.
 function sidebarApps(todo, out, done) {
   var app = todo.shift();
   if (!app) return done(out);
   luna('com.webos.applicationManager/getAppInfo', { id: app.id }, function (r) {
     var info = r && r.returnValue && r.appInfo;
-    if (info && info.id === app.id) {
-      var icon = app.icon && info.icon && info.folderPath ? info.folderPath + '/' + info.icon : '';
-      // Both open over Home rather than in its place, so the view stays as it is.
-      out.push({ id: app.id, title: String(info.title || app.id), icon: icon, overlay: true });
+    var listed = out.some(function (a) { return a.id === app.id; });
+    if (info && info.id === app.id && !listed) {
+      var file = info.mediumLargeIcon || info.icon;
+      var icon = app.icon && file && info.folderPath ? info.folderPath + '/' + file : '';
+      var entry = { id: app.id, title: String(info.title || app.id), icon: icon };
+      // Notifications and voice open over Home rather than in its place, so the view stays as it is.
+      if (app.overlay) entry.overlay = true;
+      out.push(entry);
     }
     sidebarApps(todo, out, done);
   });
@@ -1345,6 +1375,9 @@ function now(cb) {
         if (chosen.length) on = chosen;
         cb({
           kind: 'input', appId: id, since: since, port: port,
+          // Under a Home screen or launcher, so not on screen: choosing it
+          // in the input bar must still switch to it.
+          behindHome: foreground === HOME_APP || foreground === LG_HOME,
           title: on.length ? on.map(function (d) { return d.name; }).join(' / ') : null,
           via: on.length === 1 ? on[0].via : null,
           devices: on.map(function (d) { return d.id; })
@@ -1384,6 +1417,17 @@ function launch(id, params, cb) {
 }
 
 /*
+ * AirPlay as LG's Home Hub opens it (webOS 10.3.2), and by launching its app
+ * where the TV refuses that: both open the same page on a C2 (webOS 9.2.2).
+ */
+function openAirPlay(cb) {
+  luna('airplay.service/showAirplayPage', {}, function (r) {
+    if (r && r.returnValue) return cb({ ok: true });
+    launch(AIRPLAY_APP, null, cb);
+  });
+}
+
+/*
  * Opens a tile: { kind: 'app'|'dev'|'ch'|'lg', id }. Only what the catalogue
  * lists can be opened, so this is not a way to launch anything at all. A
  * device opens its HDMI input with LG's CEC selection parameters where known.
@@ -1412,6 +1456,7 @@ function open(body, cb) {
       if (!hit) return cb({ ok: false, error: msg('srv.home.unknownTile', 'that is not on Glasshouse Home') });
       // A saved page opens as LG's tile opens it: the browser, at its address.
       if (hit.page) return launch(BROWSER_APP, { target: hit.page }, opened('app', id, cb));
+      if (id === AIRPLAY_APP) return openAirPlay(opened('app', id, cb));
       launch(id, null, opened('app', id, cb));
     });
   }
@@ -1475,7 +1520,10 @@ function open(body, cb) {
 // A tile's callback that first records it as opened, if it opened.
 function opened(row, id, cb) {
   return function (r) {
-    if (r && r.ok) noteOpened(row, id);
+    if (r && r.ok) {
+      noteOpened(row, id);
+      launchedAt = nowMs();
+    }
     cb(r);
   };
 }
@@ -1707,6 +1755,17 @@ function isStandalone() {
 function homeKeyRead() {
   return /^3\./.test(String(webosVersion || ''));
 }
+
+/*
+ * webOS 5 and 6 open LG's full-screen Home when an app closes, where webOS 4
+ * shows the input behind it with LG's ribbon only on Home. The standalone
+ * view does not hold LG's Home's place, so a C1 (webOS 6.5.3) showed LG's
+ * Home after every app (#1454).
+ */
+function lgHomeOpensOnClose() {
+  return /^[56]\./.test(String(webosVersion || ''));
+}
+
 
 // The Home key's target in the key filter, where the TV has one.
 function setHomeKey(id, cb) {
@@ -2306,6 +2365,11 @@ function watchBeat(ms) {
       recoverView('view not answering', false);
     }
     if (webAppMgrRunning() !== true) return hung();
+    var starting = launchedAt ? LAUNCH_GRACE_MS - (nowMs() - launchedAt) : 0;
+    if (starting > 0) {
+      console.log('home: the view is hidden for an app still starting; waiting for it');
+      return watchBeat(starting);
+    }
     behindAnother(function (app) {
       if (!app) return hung();
       console.log('home: the view is behind ' + app + ', not hung');
@@ -2375,11 +2439,21 @@ function foregroundChanged(id) {
     return;
   }
   stopBeatWatch();
+  // LG's Home opened by the TV itself, not by one of the ways back to it,
+  // which set escaped: Glasshouse Home is opened over it, as Home would.
+  if (isStandalone() && lgHomeOpensOnClose() && !escaped && powerActive && (id === LG_HOME || id === LG_FULLHOME)) {
+    console.log('home: LG\'s Home opened on its own (from ' + (was || 'nothing') + '); opening Glasshouse Home');
+    return launch(HOME_APP, null, function (r) {
+      if (!r || !r.ok) console.error('home: could not open Glasshouse Home over LG\'s Home');
+    });
+  }
   // sam names nothing in front for a moment between apps.
   if (!id || !escaped) return;
   // webOS 4: LG's ribbon opens over the view, so anything opened from it
   // comes after the view; Glasshouse Home has the Home key again.
   if (isStandalone()) {
+    // webOS 5 and 6: LG's Home itself in front is the trip there, not an app after it.
+    if (lgHomeOpensOnClose() && (id === LG_HOME || id === LG_FULLHOME)) return;
     escaped = false;
     setHomeKey(HOME_APP, function () {});
     return;
@@ -2789,7 +2863,8 @@ function init(opts) {
     exec: opts.exec,
     kill: opts.kill,
     blankAtStart: function () { return startLayoutAvailable() && readConfig().hideLgHomeAtStart === true; },
-    blockFirst: function () { return /^1[01]\./.test(String(webosVersion || '')); }
+    blockFirst: function () { return /^1[01]\./.test(String(webosVersion || '')); },
+    restartAllowed: function () { return /^7\./.test(String(webosVersion || '')); }
   });
   webosVersion = opts.webosVersion || null;
   lgHomeWatchMs = opts.lgHomeWatchMs || LG_HOME_WATCH_MS;
@@ -2831,6 +2906,7 @@ function init(opts) {
   lastSource = null;
   powerActive = true;
   powerState = null;
+  launchedAt = 0;
   saverEndedAt = 0;
   homeDownInSaver = false;
   lastBeatAt = 0;

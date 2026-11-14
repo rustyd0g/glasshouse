@@ -15,13 +15,13 @@ Glasshouse Home displays a clock and date (following the TV's 12-hour or 24-hour
 
     ---
 
-    Installed applications with native icons, saved web pages, and quick tiles for **Notifications**, **Search**, and **LG Home**. Promotional clutter starts hidden, and apps can be reordered, hidden, or grouped into a **More apps** folder.
+    Installed applications with native icons, saved web pages, and quick tiles for **Notifications**, **Search**, **AirPlay** and **LG Home**. **AirPlay** is there wherever the TV has LG's AirPlay app, which LG's own Home has no tile for on webOS 9 and 10; it opens AirPlay's page, which also holds its settings, such as Require Code. Promotional clutter starts hidden, and apps can be reordered, hidden, or grouped into a **More apps** folder.
 
 -   **Magic Remote & navigation**
 
     ---
 
-    Hover to focus, click to open, and rest near row edges to glide smoothly across off-screen tiles. The scroll wheel and arrow keys navigate seamlessly, preserving focused tiles and scroll positions when returning from an app.
+    Hover to focus, click to open, and rest near row edges to glide smoothly across off-screen tiles. The scroll wheel and arrow keys navigate seamlessly, preserving focused tiles and scroll positions when returning from an app. **Up** and **Down** go to the tile directly above or below on screen, the left one where two sit equally under it.
 
 -   **Inputs & HDMI-CEC devices**
 
@@ -351,13 +351,13 @@ Its colours: **Time of day**, the default, follows the four times of day, and th
 
 ## Switching it on and off
 
-Under **Choose your launcher** on the web dashboard's **Home** tab, choose **Glasshouse Home** (and confirm on the second press), or switch it on in the TV app's **Home** section. The same choice offers **LG Home**, [Glasshouse Minimal](#glasshouse-minimal) and [Custom](#custom-launcher). Glasshouse Home is mounted over LG's launcher without modifying the root filesystem (on webOS 4 it runs as a standalone app, `com.tvweb.home`, with the remote's Home key intercepted by the compositor filter). Choosing **LG Home** (or running `tvwebctl restore-glasshouse-home` over SSH) restores LG's launcher within a few seconds. On webOS 5 and 6 each switch restarts LG's app manager (sam), so the app in front comes back a moment later and a switch takes a few seconds longer.
+Under **Choose your launcher** on the web dashboard's **Home** tab, preview cards offer **LG Home**, **Glasshouse Home**, [Glasshouse Minimal](#glasshouse-minimal), [Glasshouse Bar](#glasshouse-bar) and [Custom](#custom-launcher); select one (and confirm on the second press), or switch it on in the TV app's **Home** section. Glasshouse Home is mounted over LG's launcher without modifying the root filesystem (on webOS 3 to 6 it runs as a standalone app, `com.tvweb.home`, beside LG's, with the remote's Home key pointed at it by the compositor filter, as taking LG's launcher's place there restarts LG's app manager, which stopped protected video and HDMI audio on webOS 5 and 6). On webOS 5 and 6, where closing an app opens LG's full-screen Home, Glasshouse Home is opened over it, unless LG's Home was asked for, from the **LG Home** tile or a held **Home**. Choosing **LG Home** (or running `tvwebctl restore-glasshouse-home` over SSH) restores LG's launcher within a few seconds.
 
 * **Reaching LG's Home without turning Glasshouse Home off:**
   * Select the **LG Home** tile at the end of the Apps row, unless it has been hidden.
   * Hold the remote's **Home** button for 1 second (a short press on LG's Home returns to Glasshouse Home).
   * Stop the Glasshouse server: if Glasshouse Home stops answering or the server is stopped/uninstalled, LG's Home automatically takes its place back.
-  * Glasshouse Home not opening: if a short press of **Home** brings nothing from Glasshouse Home, LG's Home opens instead. Where the TV's web app manager, which runs Glasshouse Home, has stopped, this is decided after five seconds, and the web app manager is started again first and Glasshouse Home given one more try. Where it is running, Glasshouse Home may only be slow to load, as on the first press after a reboot, so it is given 20 seconds. A press of **Home** that only ends the screen saver opens nothing, as on LG's own Home, and is not taken for one that should open Glasshouse Home.
+  * Glasshouse Home not opening: if a short press of **Home** brings nothing from Glasshouse Home, LG's Home opens instead. Where the TV's web app manager, which runs Glasshouse Home, has stopped, this is decided after five seconds, and the web app manager is started again first and Glasshouse Home given one more try. Where it is running, Glasshouse Home may only be slow to load, as on the first press after a reboot, so it is given 20 seconds. An app opened from Glasshouse Home is given 30 seconds to show its window before Glasshouse Home counts as not answering, as some, such as Nuvio, show LG's loading screen for several seconds first. A press of **Home** that only ends the screen saver opens nothing, as on LG's own Home, and is not taken for one that should open Glasshouse Home.
 * **Cold boot & standby:** [Open Home at power-on](#open-home-at-power-on) controls whether the TV opens the Home screen when switched on or stays on the last input (LG's Home Auto Launch). With Quick Start+ (Active Standby) on, Glasshouse Home opens immediately on wake (and on TVs like the C4 on webOS 10.3.1 that start on their last input anyway, Glasshouse Home is opened over it when Open Home at power-on is on). On a cold boot (Quick Start+ off), Glasshouse Home takes over about 25–40 seconds after power-on; pressing Home during startup keeps the TV on the current input with a brief notice until ready.
 * **Hide LG's Home while the TV starts (webOS 9 optional setting):** Replaces LG's Home layout with a blank screen during the first seconds of a cold boot so LG's launcher never flashes on screen.
 
@@ -372,6 +372,14 @@ Under **Choose your launcher** on the web dashboard's **Home** tab, choose **Gla
 **Glasshouse Minimal**, beside **Glasshouse Home** under **Choose your launcher**, is a second home screen that comes with Glasshouse, made to be as plain as it can: the TV's apps and inputs as two lists of names on black, and the time, in the type of the Glasshouse TV app. **Left** and **Right** choose between Apps and Inputs, **Up** and **Down** move through them, and **OK** opens; **Home** comes back to the first app, and the last entry under Apps opens LG's Home. With Glasshouse Home on, choosing **Glasshouse Minimal** puts it in Glasshouse Home's place within a few seconds; from LG's Home it takes a second press. Choosing **Glasshouse Home** goes back. It works as a custom launcher does, below: the Home button, Back and waking open it, and **Rows and tiles** decides which apps and inputs it lists and in what order, with those in More apps after the rest. Every few minutes the whole screen moves a few pixels, so that the names do not stay in one place on an OLED panel.
 
 ![Glasshouse Minimal on a C2 (webOS 9.2.2): Apps and Inputs, with the apps listed as names on black](../screenshots/launcher-minimal.jpg)
+
+## Glasshouse Bar
+
+**Glasshouse Bar**, under **Choose your launcher**, is a launcher that leaves the picture on screen. The remote's **Home** button brings up a row along the bottom, over whatever is playing: the apps of Glasshouse Home's Apps row, in the order and with the hiding set on this tab (apps in **More apps** and saved web pages are left out), the **LG Home** tile where that row has it, and the inputs and Live TV as the Inputs row has them, the input on screen marked. **Left** and **Right** move along it, **OK** opens, and **Back** or **Home** closes it. With the Magic Remote, pointing at a tile picks it and clicking opens it.
+
+LG's Home keeps its place, so the TV shows LG's Home when an app closes and at power-on, as it does without Glasshouse Home; choosing Glasshouse Bar switches Glasshouse Home off. It is an overlay window opened by the remote's Home key, as the [input bar](inputs.md#input-bar) is, so it is offered where the input bar is: webOS 4, 6 and 9, where it has been tried, and webOS 5, 7, 8 and 10 with the input bar's switch under **Server** → **Advanced** → **Experimental features**. webOS 3 and 11 do not offer it.
+
+Its app, `com.tvweb.homebar`, has no tile of its own. It is kept loaded in the background while chosen, so a press shows it at once. Choosing any other launcher gives the Home button back and removes the app.
 
 ## Custom launcher
 
@@ -434,7 +442,7 @@ The Home tab's **Home customisation** section holds what applies to whichever Ho
     * **Starting up:** Open Home at power-on, Hide LG's Home while the TV starts.
     * **Layout:** Alternative View, Rows along the bottom.
     * **Shown on Home:** Clock and date, Last watched, App count, CEC addresses, Channel logos, Weather, Picture details.
-    * **Live preview:** Live preview, with Preview sound, Keep the preview on and Preview in the tile once it is on.
+    * **Live preview:** Live preview, with Preview sound, Keep the preview on, Preview in the tile and Preview size once it is on.
     * **Search.**
     * **Animations:** Fade in and out, Wallpaper drift, Wallpaper cross-fade, Smooth scrolling, Sliding panels.
 * While LG's Home is: **Open Home at power-on**, **Home screen layout** and **Hide home screen system apps**.
@@ -472,6 +480,7 @@ Individual toggles in the **Shown on Home** section control informative badges a
 * **CEC addresses:** Displays physical HDMI-CEC port addresses (such as `1.0.0.0` or `2.1.0.0`) on each input tile.
 * **Channel logos:** Displays graphical channel logos on Internet TV tiles; when disabled, channels display plain text names instead.
 * **Picture details:** Displays the active picture preset, OLED light / backlight level, and signal format in the top-right corner.
+* **Magic Remote pointer:** On by default. Switched off, the remote's pointer is hidden on Glasshouse Home and moving the remote no longer moves the focus, so only the arrow keys move around Home; OK opens the tile in focus. The wheel still scrolls the rows. Apps, inputs and LG's menus keep the pointer.
 
 ### Weather badge
 
@@ -489,8 +498,9 @@ When enabled, resting on an input or a TV channel for a moment shows it live in 
 
 * **Picture details plate:** With [Picture details](#badges-and-labels) also enabled, the plate moves beside the preview window, level with its foot, and describes what it shows: incoming HDMI resolution, refresh rate, HDR, chroma, picture preset, and backlight/OLED light levels. Changing Picture details updates the plate during a preview without restarting video playback.
 * **AV receiver handling:** Devices connected behind an AV receiver share its HDMI input, so each shows what that input shows. Moving to another input takes the TV's HDMI receiver off the active input without sending CEC commands.
-* **Tuner channels:** Previewing a channel does not make it the TV's last-watched channel. An input with no incoming signal or a channel off-air displays a status notice.
+* **Tuner channels:** Previewing a channel does not make it the TV's last-watched channel, except on webOS 4, whose browser plays channels only the way that does. An input with no incoming signal or a channel off-air displays a status notice; on webOS 4, which reports no signal for a channel, a channel that plays stays up.
 * **Screen saver:** The preview pauses while the screen saver runs over Home, and resumes when dismissed. Pressing **OK** releases the preview while the input or channel opens full screen.
+* **Preview size:** Small (356×200, the default), Medium (512×288) or Large (640×360) on the 1920×1080 view, in both the standard and Alternative views. Medium and Large keep the small preview's top right corner and grow down and left. Under them go the name of what they show, on the left, in place of Last watched, and the picture details, on the right; the rows start lower to make room. Not offered with Preview in the tile, where the tile sets the size. On the TV app, **OK** steps through the sizes.
 * **Additional options (webOS 5+):**
     * **Preview sound (off by default):** Plays the sound of the input or channel in the preview. Off, the preview is silent. Switching it from a dashboard changes a preview already playing. Opening a channel full screen always has sound.
     * **Preview in the tile:** Renders the preview inside the hovered tile itself, under the tile's name, rather than beside the clock.

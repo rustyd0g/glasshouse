@@ -185,6 +185,10 @@ function luna(uri, p, cb) {
       r.appInfo = { id: p.id, title: 'Notifications', icon: 'icon_notification.png', folderPath: '/usr/palm/applications/' + p.id };
     } else if (p.id === 'com.webos.app.voice' && tv.sidebarApps) {
       r.appInfo = { id: p.id, title: 'Search', icon: 'icon.png', folderPath: '/usr/palm/applications/' + p.id };
+    } else if (p.id === 'airplay' && tv.airplay) {
+      // As a C2 (webOS 9.2.2) has it: no launch point, visible false.
+      r.appInfo = { id: p.id, title: 'AirPlay', icon: 'AirPlay_Icon-77x77.png', mediumLargeIcon: 'AirPlay_Icon-115x115.png',
+                    visible: false, folderPath: '/usr/palm/applications/airplay' };
     }
     else if (!tv.oldAppInstalled) r = { returnValue: false, errorText: 'Invalid appId specified' };
   } else if (uri === 'com.palm.webappmanager/killApp') {
@@ -199,6 +203,9 @@ function luna(uri, p, cb) {
     r.reason = tv.powerOnReason || 'remoteKey';
   } else if (uri === 'com.webos.applicationManager/closeByAppId') {
     tv.events.push('close ' + p.id);
+  } else if (uri === 'airplay.service/showAirplayPage') {
+    tv.order.push('airplay page');
+    if (tv.airplayPageRefused) r = { returnValue: false, errorText: 'Denied method call' };
   } else if (uri === 'com.webos.applicationManager/launch') {
     tv.order.push('launch ' + p.id);
     tv.launched.push(p.id);
@@ -215,6 +222,8 @@ function luna(uri, p, cb) {
       { id: 'com.webos.app.hdmi1', title: 'HDMI 1', lptype: 'bookmark' }
     ];
     if (tv.newApp) r.launchPoints.push({ id: 'new.app', title: 'New', icon: '/x/new.png' });
+    // As a B8 (webOS 4.4.3) lists AirPlay's tile: a bookmark of its app.
+    if (tv.airplayBookmark) r.launchPoints.push({ id: 'airplay', launchPointId: '1001', lptype: 'bookmark', title: 'AirPlay', icon: '/x/airplay.png' });
     // Saved web pages as a C2 (webOS 9.2.2) lists them: bookmarks of the browser.
     if (tv.savedPages) r.launchPoints.push(
       { id: 'com.webos.app.browser', launchPointId: '576150', lptype: 'bookmark', title: 'home assistant',
@@ -563,10 +572,17 @@ step('last watched on a receiver\'s port is the device the TV last selected ther
   ];
   (function nextCase() {
     var c = cases.shift();
-    if (!c) return done();
+    if (!c) {
+      // Under a Home screen the input is still what was on, but not on screen.
+      foreground('com.webos.app.home');
+      return home.now(function (r) {
+        assert.deepEqual([r.kind, r.port, r.behindHome], ['input', 2, true], 'an input under Home is said to be behind it');
+        done();
+      });
+    }
     hdmi2.lastUniqueId = c.last;
     home.now(function (r) {
-      assert.deepEqual([r.kind, r.port, r.title, r.via, r.devices], ['input', 2, c.title, c.via, c.devices], 'lastUniqueId ' + c.last);
+      assert.deepEqual([r.kind, r.port, r.title, r.via, r.devices, r.behindHome], ['input', 2, c.title, c.via, c.devices, false], 'lastUniqueId ' + c.last);
       nextCase();
     });
   })();
@@ -638,11 +654,12 @@ step('the TV\'s tuner is the first tile in the Inputs row, on the channel it was
     home.open({ kind: 'dev', id: 'tv' }, function (r) {
       assert.ok(r.ok);
       assert.deepEqual(tv.launches, [{ id: 'com.webos.app.livetv' }]);
-      home.setLayout({ order: { dev: ['hdmi1', 'tv'] }, previewAlways: true, previewInTile: true, previewSound: true }, function (r2) {
+      home.setLayout({ order: { dev: ['hdmi1', 'tv'] }, previewAlways: true, previewInTile: true, previewSound: true, previewSize: 'large' }, function (r2) {
         assert.ok(r2.ok);
         assert.strictEqual(r2.layout.previewAlways, true, 'the live preview can be kept on');
         assert.strictEqual(r2.layout.previewInTile, true, 'and shown in its tile');
         assert.strictEqual(r2.layout.previewSound, true, 'and given its sound');
+        assert.strictEqual(r2.layout.previewSize, 'large', 'and made larger');
         home.catalogue(function (c2) {
           assert.deepEqual(c2.order.dev.slice(0, 2), ['hdmi1', 'tv'], 'and once placed, it stays where it was put');
           done();
@@ -694,6 +711,9 @@ step('a TV with no channels tuned has no tuner tile, and the tile will not open'
     assert.strictEqual(home.normalise({ previewAlways: true, previewInTile: 'yes' }).previewInTile, false);
     assert.strictEqual(home.normalise({}).previewSound, false, 'and silent unless its sound is switched on');
     assert.strictEqual(home.normalise({ previewSound: 'yes' }).previewSound, false);
+    assert.strictEqual(home.normalise({}).previewSize, 'small', 'and small unless made larger');
+    assert.strictEqual(home.normalise({ previewSize: 'medium' }).previewSize, 'medium');
+    assert.strictEqual(home.normalise({ previewSize: 'huge' }).previewSize, 'small', 'and only one of the sizes offered');
     home.open({ kind: 'dev', id: 'tv' }, function (r) {
       assert.strictEqual(r.ok, false);
       assert.deepEqual(tv.launches, []);
@@ -1554,6 +1574,57 @@ step('on webOS 4, a Home press the view does not answer closes it and opens it a
   });
 });
 
+// A C1 (webOS 6.5.3) showed LG's Home after every app closed (#1454).
+step('on webOS 5 and 6, LG\'s Home opened by the TV is covered by Glasshouse Home, and one asked for is left', function (done) {
+  var homeKey = '';
+  start(null, {
+    webosVersion: '6.5.3',
+    allowExperimental: function () { return true; },
+    installApp: function (action, cb) { tv.oldAppInstalled = true; cb({ ok: true }); },
+    setHomeKey: function (id, cb) { homeKey = id; cb({ ok: true }); },
+    injectKey: function (code, cb) { if (cb) cb(true); }
+  });
+  home.enable(function (r) {
+    assert.ok(r.ok, r.error);
+    foreground('netflix');
+    tv.launched = [];
+    // The app closes, and the TV opens LG's Home.
+    foreground(LG_HOME);
+    assert.deepEqual(tv.launched, [OLD_APP], 'Glasshouse Home opened over it');
+    foreground(OLD_APP);
+    // The LG Home tile: LG's Home asked for, and left.
+    home.open({ kind: 'lg' }, function () {
+      tv.launched = [];
+      foreground(LG_HOME);
+      assert.deepEqual(tv.launched, [], 'not covered when asked for');
+      assert.strictEqual(homeKey, '', 'and the Home key is LG\'s while it is open');
+      // An app opened from it: the Home key is Glasshouse Home's again, and
+      // LG's Home opened when that app closes is covered once more.
+      foreground('netflix');
+      assert.strictEqual(homeKey, OLD_APP);
+      foreground(LG_HOME);
+      assert.deepEqual(tv.launched, [OLD_APP]);
+      home.disable(function () {
+        // webOS 4 shows LG's ribbon over the input: nothing to cover.
+        start(null, {
+          webosVersion: '4.4.3',
+          allowExperimental: function () { return true; },
+          installApp: function (action, cb) { tv.oldAppInstalled = true; cb({ ok: true }); },
+          setHomeKey: function (id, cb) { cb({ ok: true }); }
+        });
+        home.enable(function (r2) {
+          assert.ok(r2.ok, r2.error);
+          foreground('netflix');
+          tv.launched = [];
+          foreground(LG_HOME);
+          assert.deepEqual(tv.launched, [], 'webOS 4 left as it was');
+          home.disable(function () { done(); });
+        });
+      });
+    });
+  });
+});
+
 step('a switch-on that cannot give the Home key to the app removes the app it installed', function (done) {
   var actions = [];
   start(null, {
@@ -1944,6 +2015,39 @@ step('LG\'s notifications and search are on the Apps row where the TV has them',
         assert.ok(r.ok, r.error);
         assert.deepEqual(tv.launched, ['com.webos.app.voice']);
         done();
+      });
+    });
+  });
+});
+
+step('AirPlay is on the Apps row where the TV has its app, and opens as LG\'s Home Hub opens it (#1435)', function (done) {
+  start(null);
+  tv.airplay = true;
+  tv.airplayBookmark = true;
+  home.catalogue(function (c) {
+    var airplay = c.apps.filter(function (a) { return a.id === 'airplay'; });
+    assert.strictEqual(airplay.length, 1, 'once, though webOS 4 also lists a bookmark of it');
+    assert.strictEqual(airplay[0].title, 'AirPlay');
+    assert.ok(!airplay[0].overlay, 'it opens in Home\'s place');
+    assert.ok(c.order.app.indexOf('airplay') !== -1, 'on the row, shown unless hidden on the Home tab');
+    home.iconPath('airplay', function (p) {
+      assert.strictEqual(p, '/usr/palm/applications/airplay/AirPlay_Icon-115x115.png', 'the larger of its icons');
+      home.open({ kind: 'app', id: 'airplay' }, function (r) {
+        assert.ok(r.ok, r.error);
+        assert.deepEqual(tv.order.slice(-1), ['airplay page']);
+        assert.deepEqual(tv.launched, [], 'not launched as an app where the page opens');
+        // Where the TV refuses the page, the app is launched.
+        tv.airplayPageRefused = true;
+        home.open({ kind: 'app', id: 'airplay' }, function (r2) {
+          assert.ok(r2.ok, r2.error);
+          assert.deepEqual(tv.launched, ['airplay']);
+          // Without the app, no tile.
+          start(null);
+          home.catalogue(function (c2) {
+            assert.strictEqual(c2.apps.filter(function (a) { return a.id === 'airplay'; }).length, 0);
+            done();
+          });
+        });
       });
     });
   });
@@ -2566,6 +2670,24 @@ step('last watched, the app count, CEC addresses and channel logos show until sw
   });
 });
 
+// #1212: the Magic Remote's pointer on Glasshouse Home, on unless switched off.
+step('the pointer is on until switched off, takes only true or false, and is saved', function (done) {
+  start(null);
+  assert.strictEqual(home.layout().showPointer, true, 'on by default');
+  home.setLayout({ showPointer: 'off' }, function (r) {
+    assert.strictEqual(r.layout.showPointer, true, 'not a boolean, left as it was');
+    home.setLayout({ showPointer: false }, function (r2) {
+      assert.strictEqual(r2.layout.showPointer, false);
+      var saved = home.normalise(JSON.parse(fs.readFileSync(path.join(dir, 'home.json'), 'utf8')));
+      assert.strictEqual(saved.showPointer, false, 'saved off');
+      home.setLayout({ showPointer: true }, function (r3) {
+        assert.strictEqual(r3.layout.showPointer, true);
+        done();
+      });
+    });
+  });
+});
+
 step('the clock shows until switched off, the rows sit along the bottom only when switched on, and both are saved', function (done) {
   start(null);
   var l = home.layout();
@@ -3171,6 +3293,58 @@ step('a Home press that only ends the screen saver opens nothing, however tvpowe
         wait(25000, function () {
           assert.ok(tv.launched.indexOf(LG_HOME) !== -1, 'with no view opening, LG\'s Home is opened as before');
           home.disable(function () { done(); });
+        });
+      });
+    });
+  });
+});
+
+// #1412: an A2 (webOS 7.3.0) took Glasshouse Home only through a sam restart,
+// and lost it when 0.145.0 stopped restarting sam.
+step('on webOS 7, where sam takes neither the nudge nor a block and release, Glasshouse Home takes its place through a restart', function (done) {
+  start(null, { webosVersion: '7.3.0' });
+  tv.rescanAbsent = true;
+  home.enable(function (r) {
+    assert.ok(r.ok, r.error);
+    assert.ok(tv.events.indexOf('restart') !== -1, 'sam restarted as the last way');
+    assert.ok(taken(), 'Glasshouse Home has LG\'s Home\'s place');
+    tv.events = [];
+    home.disable(function (d) {
+      assert.ok(d.ok, d.error);
+      assert.ok(tv.events.indexOf('restart') !== -1, 'and restarted to give it back');
+      assert.strictEqual(taken(), false, 'LG\'s Home has its place again');
+      done();
+    });
+  });
+});
+
+// #1408: Nuvio on a 55NANO756PR (webOS 6.5.3) had LG's loading screen up for
+// 6.5 s, and the view, beating no more behind it, was opened again over it.
+step('an app opened from the view has time to start before the hidden view counts as hung', function (done) {
+  start({ enabled: true });
+  home.start(function () {
+    foreground(LG_HOME);
+    home.beat();
+    tv.windows = [];   // the app's loading screen: no card window yet
+    tv.launched = [];
+    home.open({ kind: 'app', id: 'netflix' }, function (r) {
+      assert.ok(r.ok, r.error);
+      wait(12000, function () {
+        assert.deepEqual(tv.launched, ['netflix'], 'nothing opened over the app while it starts');
+        foreground('netflix');
+        wait(40000, function () {
+          assert.deepEqual(tv.launched, ['netflix'], 'and nothing once it is in front');
+          // An app that never comes up: the view is checked once the grace is over.
+          foreground(LG_HOME);
+          home.beat();
+          home.open({ kind: 'app', id: 'cdp-30' }, function (r2) {
+            assert.ok(r2.ok, r2.error);
+            tv.launched = [];
+            wait(45000, function () {
+              assert.ok(tv.launched.length > 0, 'past the grace, a view that stays silent is opened again');
+              home.disable(function () { done(); });
+            });
+          });
         });
       });
     });
