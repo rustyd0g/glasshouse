@@ -196,8 +196,8 @@ html.resting #wall{visibility:hidden}
 .alternative #clock{font-variant-numeric:tabular-nums;-webkit-font-feature-settings:"tnum";font-feature-settings:"tnum"}
 .alternative:not(.arranging) .row > h2{display:none}
 .alternative .row{margin-bottom:10px}
-.alternative .tile{border-radius:18px;margin-right:12px;background:rgba(20,15,29,.45)}
-.alternative .tile.focus{background:rgba(34,25,48,.86)}
+.alternative .tile{border-radius:18px;margin-right:12px;background:rgba(12,11,10,.45)}
+.alternative .tile.focus{background:rgba(20,19,16,.86)}
 .alternative .app{width:160px;padding:12px}
 .alternative .app img,.alternative .app .mono{width:100px;height:100px;border-radius:16px}
 .alternative .app .mono{line-height:100px}
@@ -205,7 +205,7 @@ html.resting #wall{visibility:hidden}
 .alternative .app .fold{width:100px;height:100px;padding:9px}
 .alternative .app .fold i,.alternative .app .fold i img{width:37px;height:37px}
 .alternative .app .fold i{line-height:37px;font-size:18px}
-.alternative .dev{width:420px;height:108px}
+.alternative .dev{width:420px;min-height:128px}
 .alternative .dev .nm{font-size:26px}
 .alternative .dev .path,.alternative .dev .st{font-size:17px}
 .row{-webkit-flex:0 0 auto;flex:0 0 auto}
@@ -247,8 +247,14 @@ html.resting #wall{visibility:hidden}
 .app img,.app .mono{display:block;width:112px;height:112px;margin:0 auto;border-radius:14px}
 .app .mono{background:#2a2825;color:#ece7df;font-family:'Outfit',sans-serif;font-size:44px;font-weight:300;line-height:112px}
 .app .nm{font-size:21px;font-weight:600;margin-top:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.no-app-labels .app{width:140px}
+.no-app-labels.alternative .app{width:124px}
+.no-app-labels .app .nm{display:none}
+/* Dark monochrome icons on transparent (AirPlay on webOS 4) sit on warm white
+   so a black background never swallows them. */
+.app img.dark-ico,.chip img.dark-ico{background:#ece7df}
 
-.dev{width:470px;height:124px;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;
+.dev{width:470px;min-height:142px;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;
   -webkit-justify-content:space-between;justify-content:space-between}
 .dev .dhead{display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;min-width:0}
 .dev .dtx{-webkit-flex:1 1 auto;flex:1 1 auto;min-width:0}
@@ -257,7 +263,7 @@ html.resting #wall{visibility:hidden}
 .alternative .dev .dico{width:46px;height:46px;margin-right:14px}
 .dev .nm{font-family:'Outfit',sans-serif;font-size:30px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dev .path{font-size:20px;color:#a39d93;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dev .st{font-size:19px;color:#6b665e;display:-webkit-flex;display:flex;-webkit-justify-content:space-between;justify-content:space-between}
+.dev .st{margin-top:12px;font-size:19px;color:#6b665e;display:-webkit-flex;display:flex;-webkit-justify-content:space-between;justify-content:space-between}
 .dev .st em{font-style:normal}
 .dev.last .st em{color:#e9ad55}
 .row .dev.unused{opacity:.3}
@@ -310,9 +316,13 @@ html.resting #wall{visibility:hidden}
   font-size:20px;color:#a39d93;padding:14px 22px;border-radius:6px;background:#141310;border-left:3px solid #e9ad55}
 .arranging #banner{display:-webkit-flex;display:flex}
 #banner b{color:#ece7df;font-weight:600;margin-right:8px}
-#banner .keys{-webkit-flex:1 1 auto;flex:1 1 auto;margin-left:34px}
-#banner .btn{margin-left:12px;padding:8px 18px;border-radius:5px;color:#ece7df;background:#231d12;outline:2px solid transparent}
+#banner .keys{-webkit-flex:1 1 auto;flex:1 1 auto;margin-left:34px;font-size:18px;line-height:1.35}
+#banner .btn{margin-left:12px;padding:8px 18px;border-radius:5px;color:#ece7df;background:#231d12;outline:2px solid transparent;white-space:nowrap}
 #banner .btn.focus{outline-color:#e9ad55}
+#btnHide::before,#btnFolder::before,#btnReset::before{content:'';display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:9px;vertical-align:1px}
+#btnHide::before{background:#e05252}
+#btnFolder::before{background:#46b868}
+#btnReset::before{background:#d9b343}
 
 #toast{position:absolute;z-index:1;left:112px;bottom:26px;font-size:23px;color:#ece7df;padding:14px 22px;border-radius:6px;
   background:#141310;border-left:3px solid #e9ad55;opacity:0;-webkit-transform:translateY(8px);transform:translateY(8px);
@@ -320,7 +330,7 @@ html.resting #wall{visibility:hidden}
 #toast.show{opacity:1;-webkit-transform:none;transform:none}
 .playing #toast{z-index:6}
 #toast small{display:block;font-size:18px;color:#a39d93;margin-top:4px}
-.arranging #toast{bottom:96px}
+.arranging #toast{bottom:112px}
 
 /* Recent apps: Back's panel, in place of the one in LG's Home. The
    snapshots are the panel: each a small copy of the screen as it was left,
@@ -720,7 +730,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
 
   <div id="banner">
     <span><b data-t="home.arrange.title">Arranging</b><span id="bannerState">&mdash;</span></span>
-    <span class="keys" data-t="home.arrange.keys">OK picks a tile up or puts it down. Held, the arrows move it or its row, and Back hides or shows it, or removes a channel. Left of a row, OK sets its order.</span>
+    <span class="keys" data-t="home.arrange.keys">OK picks up or puts down. Held, arrows move it or its row; put down, Up or Down reaches this bar. Green moves an app in or out of More apps, and Red or Back hides or removes it. Left of a row, OK sets its order.</span>
     <span class="btn" id="btnHide" data-t="home.arrange.hide">Hide or show</span>
     <span class="btn" id="btnFolder" data-t="home.arrange.folder">Into or out of More apps</span>
     <span class="btn" id="btnReset" data-t="home.arrange.reset">Reset</span>
@@ -805,7 +815,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   var lastOn = { kind: null };
   // last: the tile focused last, which the bar's Hide or show acts on. rail:
   // the search mark in the left gutter has the focus.
-  var state = { row: 0, col: {}, arranging: false, held: false, bar: -1, last: null, rail: false };
+  var state = { row: 0, col: {}, arranging: false, held: false, bar: -1, barFrom: '', last: null, rail: false };
   var BAR = ['btnHide', 'btnFolder', 'btnReset', 'btnDone'];
   var build = null;
   var okDownAt = 0, okTimer = null, okLong = false, okInRecents = false, okInFolder = false, backDown = false;
@@ -920,7 +930,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   // ---------------------------------------------------------------- items
 
   function byId(kind, id) {
-    if (kind === 'app' && id === LG_HOME_TILE) return { id: LG_HOME_TILE, title: t('home.lgHome', 'LG Home'), lg: true };
+    if (kind === 'app' && id === LG_HOME_TILE) return { id: LG_HOME_TILE, title: (layout && layout.appNames && layout.appNames[id]) || t('home.lgHome', 'LG Home'), lg: true };
     if (indexedData !== data) {
       itemIndex = { app: Object.create(null), dev: Object.create(null), ch: Object.create(null), rec: Object.create(null), iptv: Object.create(null) };
       ['app', 'dev', 'ch', 'rec', 'iptv'].forEach(function (row) {
@@ -962,7 +972,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     if (kind === 'iptv' && data.sources && data.sources.iptv && (state.arranging || (!out.length && !hasLineup))) {
       out.push({ id: ADD_TILE, add: true, name: t('home.tv.addTitle', 'Add channels') });
     } else if (kind === 'iptv' && (out.length || hasLineup) && !state.arranging) {
-      out.push({ id: GUIDE_TILE, guide: true, name: t('home.tv.guide', 'Guide') });
+      out.push({ id: GUIDE_TILE, guide: true, name: t('home.tv.guide', 'IPTV Guide') });
     }
     return out;
   }
@@ -1055,7 +1065,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     if (kind === 'dev') {
       if (layout.showInputCount === false) return '';
       var ports = [];
-      items('dev').forEach(function (d) { if (!d.unused && !d.tuner && ports.indexOf(d.port) === -1) ports.push(d.port); });
+      items('dev').forEach(function (d) { if (!d.unused && !d.tuner && d.port && ports.indexOf(d.port) === -1) ports.push(d.port); });
       return ports.length === 1 ? t('home.row.inputsNoteOne', 'Devices on HDMI {port}', { port: ports[0] })
         : t('home.row.inputsNote', 'Devices on {n} HDMI inputs', { n: ports.length });
     }
@@ -1101,7 +1111,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
 
   function render() {
     stageClass();
-    var viewMode = (layout.view || 'standard') + previewSizeClass(), geometryChanged = renderedView !== viewMode;
+    var viewMode = (layout.view || 'standard') + previewSizeClass() + (layout.showAppLabels === false ? '/icons' : '/labels'), geometryChanged = renderedView !== viewMode;
     renderedView = viewMode;
     if (geometryChanged) verticalAnchor = null;
     var container = $('rows'), changed = geometryChanged, changedRows = [];
@@ -1113,13 +1123,15 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
         view.element.className = 'row';
         view.element.setAttribute('data-key', kind);
       }
-      // The view or preview size can change geometry without changing row markup.
+      // View, preview size and app labels can change geometry without changing row markup.
       if (geometryChanged) view.dirty = true;
       var list = items(kind), html = rowMarkup(kind, list);
-      if (html !== view.markup) {
+      // Icon contrast is applied on load; remembering it must not replace the row.
+      var markup = html.replace(/<img class="dark-ico"/g, '<img');
+      if (markup !== view.markup) {
         if (liveTile && view.element.contains(liveTile)) parkPreview();
         view.element.innerHTML = html;
-        view.markup = html;
+        view.markup = markup;
         view.tiles = view.element.querySelectorAll('.tile');
         view.sort = view.element.querySelector('.sort');
         view.focusTile = null;
@@ -1185,21 +1197,71 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   var hiddenLabel = '<span class="hid">' + esc(t('home.hidden', 'Hidden')) + '</span>';
   var folderLabel = '<span class="fld">' + esc(t('home.folder.label', 'In More apps')) + '</span>';
 
+  var darkIconCache = {};
+  function isDarkIcon(img) {
+    try {
+      var canvas = document.createElement('canvas');
+      canvas.width = 24;
+      canvas.height = 24;
+      var ctx = canvas.getContext('2d');
+      if (!ctx) return false;
+      ctx.drawImage(img, 0, 0, 24, 24);
+      var data = ctx.getImageData(0, 0, 24, 24).data;
+      var trans = 0, vis = 0, dark = 0;
+      for (var i = 0; i < data.length; i += 4) {
+        var a = data[i + 3];
+        if (a < 32) { trans++; continue; }
+        if (a >= 64) {
+          vis++;
+          if ((data[i] + data[i + 1] + data[i + 2]) / 3 < 70) dark++;
+        }
+      }
+      return trans > 60 && vis > 0 && dark === vis;
+    } catch (e) { return false; }
+  }
+  function isAppImg(el) {
+    if (!el || el.tagName !== 'IMG') return false;
+    var p = el.parentNode;
+    if (!p) return false;
+    var c = p.className || '';
+    if (/(^| )app( |$)|(^| )chip( |$)/.test(c)) return true;
+    return !!(p.parentNode && /(^| )fold( |$)/.test(p.parentNode.className || ''));
+  }
+  document.addEventListener('load', function (e) {
+    var img = e.target;
+    if (!isAppImg(img)) return;
+    var src = img.getAttribute('src');
+    if (!src || img.naturalWidth === 0) return;
+    if (!(src in darkIconCache)) darkIconCache[src] = isDarkIcon(img);
+    if (darkIconCache[src] && img.className.indexOf('dark-ico') === -1) {
+      img.className = (img.className ? img.className + ' ' : '') + 'dark-ico';
+    }
+  }, true);
+  function appImgTag(src) {
+    return '<img' + (darkIconCache[src] ? ' class="dark-ico"' : '') + ' src="' + esc(src) + '" alt="">';
+  }
   function appIcon(a) {
-    return a.icon ? '<img src="' + esc(a.icon) + '" alt="">' :
+    return a.icon ? appImgTag(a.icon) :
       '<span class="mono">' + esc(a.lg ? 'LG' : String(a.title).charAt(0)) + '</span>';
   }
   // The first four of the folder's icons, as the tile that opens it.
   function folderIcon(inside) {
     var html = '';
     inside.slice(0, 4).forEach(function (a) {
-      html += '<i>' + (a.icon ? '<img src="' + esc(a.icon) + '" alt="">' : esc(a.lg ? 'LG' : String(a.title).charAt(0))) + '</i>';
+      html += '<i>' + (a.icon ? appImgTag(a.icon) : esc(a.lg ? 'LG' : String(a.title).charAt(0))) + '</i>';
     });
     return '<span class="fold">' + html + '</span>';
   }
 
   // Input tile icons, shared with the input bar (devicons.js).
   var devIcon = window.glasshouseDevIcon;
+
+  function devTileHtml(d, i, cls, path, status, cec) {
+    return '<div class="' + cls + '" data-c="' + i + '"><div class="dhead">' + devIcon(d) + '<div class="dtx"><div class="nm">' + esc(d.name) + '</div>' +
+      '<div class="path">' + esc(path) + '</div></div></div>' +
+      '<div class="st"><em>' + esc(status) + '</em><span>' + (cec ? esc(cec) : '') + '</span></div>' +
+      hiddenLabel + '</div>';
+  }
 
   var TILE = {
     app: function (a, i) {
@@ -1212,15 +1274,22 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     },
     dev: function (d, i) {
       if (d.tuner) return tunerTileHtml(d, i);
-      var last = layout.showLastOn !== false && lastOn.kind === 'input' && lastOn.port === d.port &&
+      var last = layout.showLastOn !== false && lastOn.kind === 'input' && d.port && lastOn.port === d.port &&
         (!lastOn.devices || lastOn.devices.indexOf(d.id) !== -1);
+      var isExtra = !!d.kind;
       var cls = 'tile dev' + (last ? ' last' : '') + (d.unused ? ' unused' : '') + (hidden('dev', d.id) ? ' hidden' : '');
-      var path = d.unused ? '' : d.via ? t('home.dev.through', 'HDMI {port}, through {via}', { port: d.port, via: d.via })
-                       : t('home.dev.port', 'HDMI {port}', { port: d.port });
-      return '<div class="' + cls + '" data-c="' + i + '"><div class="dhead">' + devIcon(d) + '<div class="dtx"><div class="nm">' + esc(d.name) + '</div>' +
-        '<div class="path">' + esc(path) + '</div></div></div>' +
-        '<div class="st"><em>' + esc(last ? t('home.dev.last', 'Last watched') : d.unused ? t('home.dev.unused', 'Nothing connected') : t('home.dev.connected', 'Connected')) + '</em>' +
-        '<span>' + (d.address && layout.showCec !== false ? esc(t('home.dev.cec', 'CEC {address}', { address: d.address })) : '') + '</span></div>' + hiddenLabel + '</div>';
+      var path = d.unused ? ''
+        : d.kind === 'dms' ? (d.address || 'Media Server')
+        : d.kind === 'usb' ? 'USB'
+        : isExtra ? ''
+        : d.via ? t('home.dev.through', 'HDMI {port}, through {via}', { port: d.port, via: d.via })
+        : t('home.dev.port', 'HDMI {port}', { port: d.port });
+      var status = isExtra && d.kind !== 'dms' && d.kind !== 'usb' ? ''
+        : last ? t('home.dev.last', 'Last watched')
+        : d.unused ? t('home.dev.unused', 'Nothing connected')
+        : t('home.dev.connected', 'Connected');
+      var cec = !isExtra && d.address && layout.showCec !== false ? t('home.dev.cec', 'CEC {address}', { address: d.address }) : '';
+      return devTileHtml(d, i, cls, path, status, cec);
     },
     ch: function (c, i) {
       var cls = 'tile ch' + (hidden('ch', c.id) ? ' hidden' : '');
@@ -1237,7 +1306,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       if (c.guide) {
         return '<div class="tile ch tv add" data-c="' + i + '"><div class="glyph"><svg viewBox="0 0 48 36" width="48" height="36" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
           '<path d="M2 6h10M18 6h28M2 18h22M30 18h16M2 30h6M14 30h32"/></svg></div>' +
-          '<div class="nm">' + esc(c.name) + '</div><div class="prog quiet">' + esc(t('home.tv.guideDesc', 'What is on now and later')) + '</div></div>';
+          '<div class="nm">' + esc(c.name) + '</div></div>';
       }
       if (c.add) {
         return '<div class="tile ch tv add" data-c="' + i + '"><div class="glyph"><span class="mono">+</span></div>' +
@@ -1270,10 +1339,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     var last = layout.showLastOn !== false && lastOn.kind === 'channel';
     var cls = 'tile dev tuner' + (last ? ' last' : '') + (hidden('dev', d.id) ? ' hidden' : '');
     var path = d.channel ? d.channel.number + ' ' + d.channel.name : '';
-    return '<div class="' + cls + '" data-c="' + i + '"><div><div class="nm">' + esc(d.name) + '</div>' +
-      '<div class="path">' + esc(path) + '</div></div>' +
-      '<div class="st"><em>' + esc(last ? t('home.dev.last', 'Last watched') : t('ctl.liveTv', 'Live TV')) + '</em><span></span></div>' +
-      hiddenLabel + '</div>';
+    return devTileHtml(d, i, cls, path, last ? t('home.dev.last', 'Last watched') : t('ctl.liveTv', 'Live TV'), '');
   }
 
   // noScroll: focus only, as the pointer does, leaving each row where it is.
@@ -2230,7 +2296,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       (finder.open ? ' finding' : '') + (finder.typing ? ' typing' : '') + (searchOn() ? '' : ' no-search') +
       (folder.open ? ' folder' : '') + (document.hidden ? ' page-hidden' : '') +
       (!layout || layout.showClock === false ? ' no-clock' : '') + (layout && layout.rowsBottom === true ? ' rows-bottom' : '') +
-      (layout && layout.view === 'alternative' ? ' alternative' : '') + (player.open ? ' playing' : '') + (adder.open ? ' adding' : '') +
+      (layout && layout.view === 'alternative' ? ' alternative' : '') + (layout && layout.showAppLabels === false ? ' no-app-labels' : '') +
+      (player.open ? ' playing' : '') + (adder.open ? ' adding' : '') +
       (adder.open && adder.typing ? ' adtyping' : '') + (guide.open ? ' guiding' : '') + previewSizeClass();
     if ($('stage').className !== value) {
       $('stage').className = value;
@@ -3838,7 +3905,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   function renderGuideStrip() {
     var it = guide.list[guide.row], p = it && !guide.tabs ? guideFocus(it) : null;
     $('source').className = it ? '' : 'none';
-    $('srcKind').textContent = p && p.start <= Date.now() && Date.now() < p.end ? t('home.tv.onNow', 'On now') : t('home.tv.guide', 'Guide');
+    $('srcKind').textContent = p && p.start <= Date.now() && Date.now() < p.end ? t('home.tv.onNow', 'On now') : t('home.tv.guide', 'IPTV Guide');
     $('srcTitle').textContent = p ? p.title : it ? it.name : ' ';
     $('srcVia').textContent = it ? (p ? t('home.tv.guideVia', '{name}, {from} to {to}', { name: it.name, from: hm(new Date(p.start)), to: hm(new Date(p.end)) })
       : tvUnplayable(it) || t('home.tv.guideNone', 'No guide for these hours')) : ' ';
@@ -4282,10 +4349,12 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     // Decoded off the page's thread: decoded on it, the screenshots of five
     // apps held the page 300 to 350 ms as Recent apps opened on a C2 (9.2.2).
     recents.apps.forEach(function (a, i) {
-      var mono = '<span class="mono">' + esc(String(a.title).charAt(0)) + '</span>';
+      var app = byId('app', a.id);
+      var title = (app && app.title) || (layout && layout.appNames && layout.appNames[a.id]) || a.title;
+      var mono = '<span class="mono">' + esc(String(title).charAt(0)) + '</span>';
       var shot = a.image ? '<img src="/api/home/recents/image?id=' + encodeURIComponent(a.id) + '&v=' + encodeURIComponent(a.imageVersion || recents.stamp) + '" alt="" decoding="async">' : mono;
       html += '<div class="tile rc" data-c="' + i + '"><div class="shot">' + shot + '</div>' +
-        '<div class="nm">' + esc(a.title) + '</div><span class="x">' + esc(t('home.recents.close', 'Close')) + '</span></div>';
+        '<div class="nm">' + esc(title) + '</div><span class="x">' + esc(t('home.recents.close', 'Close')) + '</span></div>';
     });
     $('recentsTrack').innerHTML = html || '<div class="empty"><b>' + esc(t('home.recents.none', 'Nothing is open')) + '</b>' +
       esc(t('home.recents.noneDesc', 'Apps stay here while they are open.')) + '</div>';
@@ -4561,7 +4630,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       var mono = '<span class="mono">' + esc(String(hit.title).charAt(0)) + '</span>';
       var chips = '';
       hit.apps.forEach(function (a, c) {
-        chips += '<span class="chip" data-c="' + c + '">' + (a.icon ? '<img src="' + esc(a.icon) + '" alt="">' : '<span class="mono">' + esc(String(a.title).charAt(0)) + '</span>') +
+        chips += '<span class="chip" data-c="' + c + '">' + (a.icon ? appImgTag(a.icon) : '<span class="mono">' + esc(String(a.title).charAt(0)) + '</span>') +
           '<span class="nm">' + esc(a.title) + '</span></span>';
       });
       html += '<div class="hit" data-r="' + i + '"><div class="poster">' + (hit.poster ? '<img src="' + esc(hit.poster) + '" alt="">' : mono) + '</div>' +
@@ -4818,6 +4887,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     if (!last) return;
     var kind = last.kind, it = byId(kind, last.id);
     if (!it) return;
+    state.held = false;
     if (kind === 'ch') {
       layout.channels = layout.channels.filter(function (id) { return id !== it.id; });
       data.order.ch = data.order.ch.filter(function (id) { return id !== it.id; });
@@ -4846,6 +4916,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     var last = state.last;
     if (!last || last.kind !== 'app') return toast(t('home.arrange.folderAppsOnly', 'Only apps go into More apps'));
     if (!byId('app', last.id)) return;
+    state.held = false;
     if (!layout.folder) layout.folder = [];
     if (inFolder('app', last.id)) leaveFolder(last.id);
     else {
@@ -4873,8 +4944,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   }
 
   function pressBar(b) {
-    if (BAR[b] === 'btnHide') { state.bar = -1; toggleHidden(); }
-    else if (BAR[b] === 'btnFolder') { state.bar = -1; toggleFolder(); }
+    if (BAR[b] === 'btnHide') { state.bar = -1; state.barFrom = ''; toggleHidden(); }
+    else if (BAR[b] === 'btnFolder') { state.bar = -1; state.barFrom = ''; toggleFolder(); }
     else if (BAR[b] === 'btnReset') resetLayout();
     else setArranging(false);
   }
@@ -4883,16 +4954,20 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     if (state.bar >= 0) {
       if (k === KEY.left) state.bar = Math.max(0, state.bar - 1);
       else if (k === KEY.right) state.bar = Math.min(BAR.length - 1, state.bar + 1);
-      else if (k === KEY.up) state.bar = -1;
+      else if (k === KEY.up || (state.barFrom === 'up' && k === KEY.down)) { state.bar = -1; state.barFrom = ''; }
       else if (k === KEY.ok) return pressBar(state.bar);
       return applyFocus();
     }
     if (k === KEY.left) return state.held ? shiftTile(-1) : move(0, -1);
     if (k === KEY.right) return state.held ? shiftTile(1) : move(0, 1);
-    if (k === KEY.up) return state.held ? shiftRow(-1) : move(-1, 0);
+    if (k === KEY.up) {
+      if (state.held) return shiftRow(-1);
+      if (state.row === 0) { state.bar = 0; state.barFrom = 'up'; return applyFocus(); }
+      return move(-1, 0);
+    }
     if (k === KEY.down) {
       if (state.held) return shiftRow(1);
-      if (state.row === layout.rows.length - 1) { state.bar = 0; return applyFocus(); }
+      if (state.row === layout.rows.length - 1) { state.bar = 0; state.barFrom = 'down'; return applyFocus(); }
       return move(1, 0);
     }
     if (k === KEY.ok) return pickUp();
@@ -5926,13 +6001,20 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
    * accent.
    */
   var LOOK = $('look').textContent, lookShown = '';
+  function hexRgb(hex) {
+    var n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
   function shade(hex, f) {
-    var n = parseInt(hex.slice(1), 16), out = '#';
-    [n >> 16, (n >> 8) & 255, n & 255].forEach(function (v) {
+    var out = '#';
+    hexRgb(hex).forEach(function (v) {
       var x = Math.round(v * f);
       out += (x < 16 ? '0' : '') + x.toString(16);
     });
     return out;
+  }
+  function rgbaStr(rgb, f, a) {
+    return 'rgba(' + Math.round(rgb[0] * f) + ',' + Math.round(rgb[1] * f) + ',' + Math.round(rgb[2] * f) + ',' + a + ')';
   }
   function applyMotion(l) {
     smoothScroll = l.smoothScroll !== false;
@@ -5950,16 +6032,31 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     $('scrim').style.opacity = String(n / 100 * (anim.style === 'off' ? 1 : ANIM_SCRIM));
   }
 
-  function applyColours(c) {
-    var key = c ? c.text + c.accent : '';
+  function applyColours(c, highlight) {
+    var key = (c ? c.text + c.accent : '') + '|' + (highlight || '');
     if (key === lookShown) return;
     lookShown = key;
-    if (!c) { $('look').textContent = LOOK; return; }
-    var swap = { '#ece7df': c.text, '#a39d93': shade(c.text, 0.69), '#6b665e': shade(c.text, 0.45),
-                 '#e9ad55': c.accent, '#231d12': shade(c.accent, 0.15) };
-    // Replace once: a chosen accent may itself be one of the original colours.
-    $('look').textContent = LOOK.replace(/outline-color:#ece7df\b|#(?:ece7df|a39d93|6b665e|e9ad55|231d12)\b/g,
-      function (m) { return m === 'outline-color:#ece7df' ? 'outline-color:' + c.accent : swap[m]; });
+    if (!c && !highlight) { $('look').textContent = LOOK; return; }
+    var css = LOOK;
+    if (c) {
+      var swap = { '#ece7df': c.text, '#a39d93': shade(c.text, 0.69), '#6b665e': shade(c.text, 0.45),
+                   '#e9ad55': c.accent, '#231d12': shade(c.accent, 0.15) };
+      // Replace once: a chosen accent may itself be one of the original colours.
+      css = css.replace(/outline-color:#ece7df\b|#(?:ece7df|a39d93|6b665e|e9ad55|231d12)\b/g,
+        function (m) { return m === 'outline-color:#ece7df' ? 'outline-color:' + c.accent : swap[m]; });
+    }
+    if (highlight) {
+      var hRgb = hexRgb(highlight);
+      var focusRgba = rgbaStr(hRgb, 1, '.86');
+      var tileRgba = rgbaStr(hRgb, 0.6, '.45');
+      css = css.replace(/rgba\(20,19,16,\.(?:35|86)\)|rgba\(12,11,10,\.45\)|#24211b\b/g, function (m) {
+        if (m === 'rgba(12,11,10,.45)') return tileRgba;
+        if (m === '#24211b') return highlight;
+        if (m === 'rgba(20,19,16,.35)') return rgbaStr(hRgb, 1, '.35');
+        return focusRgba;
+      });
+    }
+    $('look').textContent = css;
   }
 
   // ---------------------------------------------------------------- data
@@ -5992,7 +6089,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       if (!searchOn()) { closeSearch(); state.rail = false; }
       setFadeOn(layout.fade === true);
       applyMotion(layout);
-      applyColours(layout.colours);
+      applyColours(layout.colours, layout.tileHighlight);
       applyDarkening(layout.darkening);
       stageClass();
       renderNow();

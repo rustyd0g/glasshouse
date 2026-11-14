@@ -1359,6 +1359,32 @@ off it fired as the TV resumed, 250 ms after the server saw the screen on in
 one wake and before it did in another, and took the view, which had not yet
 had a chance to beat, for hung (#1277).
 
+## Switching off without Active Standby (webOS 4.4.3, 49SK8500PLA; webOS 5.6.2, OLED48CX8LC)
+
+An LCD, and an OLED that is not running panel care, go from Active to Suspend
+at once. Glasshouse logs `Active -> Suspend` and `TV switched off` 10 to 25 ms
+apart, and the system is asleep after that: the clock since boot moved 2 s
+across a 140 s standby, and the watchdog reported `resumed after 140s
+suspended`. Home Assistant saw nothing of the "off" status published in those
+milliseconds, only the broker's will once the connection had been silent for
+its keepalive.
+
+Changing the will as the TV switches off does not finish in that time either:
+on the 49SK8500PLA, switched off at 20:09:39, the broker published the old
+will, `offline`, at 20:09:54 (keepalive 10 s). The OLED48CX8LC did the same
+twice: the reconnect with the new will was logged 3.3 s after the switch-off,
+and the will that came out 15 s later was still `offline`. After a Wake-on-LAN
+into Active Standby, which leaves seconds before it sleeps again, the change
+did take and the will came out as `asleep`.
+
+What a TV has written in its last moments before it sleeps stays in its send
+buffer and goes out as it wakes. On the OLED48CX8LC an off published at the
+reconnect just before it slept reached the broker a second before the TV's own
+power answer, which showed Power off for that second.
+
+An OLED running panel care (OLED48C31LA, webOS 11.2.0) goes Active to Active
+Standby first and stays up for 6 to 15 s before Suspend, and its "off" arrives.
+
 ## Keeping a TV awake while off (webOS 4.4.3, B8)
 
 The question was whether the B8 could stay reachable while switched off, as
@@ -1704,6 +1730,14 @@ app in front. Remote Keys puts its own filter first.
   On a CX (webOS 5.5), the microphone button set to an app through the filter
   opened it on a press and on a hold alike, and set back to LG's own it started
   voice control again (#1034).
+- **Red and Green pass straight through on webOS 4.** On a B8 (webOS 4.4.3),
+  `/usr/lib/qt5/qml/KeyFilters/` matches `WebOS.Key_webOS_Yellow`
+  (`appLaunch.js`, a 5 s hold calling `global.launchAGP`) and
+  `WebOS.Key_webOS_Blue` (`systemUi.js`, `magnifier.blueReleased()`), while
+  `WebOS.Key_webOS_Red` and `WebOS.Key_webOS_Green` have no filter case and
+  reach the foreground app directly, though `libwebosglobalplugin.so` and
+  `/usr/share/X11/xkb/keycodes/lg` (`IR_KEY_RED`..`IR_KEY_BLUE`, 406–409)
+  define all four.
 - **Filters get the compositor's timers.** `StarfishKeyFilter.qml` hands every
   filter `genericTimer` (`set(ms, callback)`, `cancel`, `isRunning`), as LG's
   `appLaunch.js` uses it. On a change to the key it cancels every
@@ -3588,7 +3622,10 @@ and filesystem do (#1369).
 
 LG's AirPlay app, `airplay`, has `"visible": false` in its appinfo, and on the C2
 no launch point at all, as on a B4 with webOS 10.3.2 (#1435); on a B8 with
-webOS 4.4.3 its tile is a bookmark that `airplay-adaptor` adds. Home Hub opens
+webOS 4.4.3 its tile is a bookmark that `airplay-adaptor` adds, and its
+`AirPlay_Icon-115x115.png` (8-bit gray+alpha) draws pure black (`0`) on a
+transparent background with `iconColor` and `bgColor` empty on its launch
+point. Home Hub opens
 it with `airplay.service/showAirplayPage`, which is in the public group. On the
 C2 that call and a plain `applicationManager/launch` of `airplay` open the same
 page: the Wi-Fi network, the TV's AirPlay name, How to Use AirPlay, and AirPlay

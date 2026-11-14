@@ -232,10 +232,10 @@ var KEYS = [
   { key: 'search', symbol: 'Qt.Key_Search', title: 'Search' },
   { key: 'info', symbol: 'WebOS.Key_webOS_Info', title: 'Info' },
   { key: 'help', symbol: 'Qt.Key_Help', title: 'Help' },
-  { key: 'red', symbol: 'WebOS.Key_webOS_Red', title: 'Red' },
-  { key: 'green', symbol: 'WebOS.Key_webOS_Green', title: 'Green' },
-  { key: 'yellow', symbol: 'WebOS.Key_webOS_Yellow', title: 'Yellow' },
-  { key: 'blue', symbol: 'WebOS.Key_webOS_Blue', title: 'Blue' }
+  { key: 'red', symbol: 'WebOS.Key_webOS_Red', title: 'Red', color: true },
+  { key: 'green', symbol: 'WebOS.Key_webOS_Green', title: 'Green', color: true },
+  { key: 'yellow', symbol: 'WebOS.Key_webOS_Yellow', title: 'Yellow', color: true },
+  { key: 'blue', symbol: 'WebOS.Key_webOS_Blue', title: 'Blue', color: true }
 ];
 
 var lunaFn = null;
@@ -308,7 +308,10 @@ function keyByName(name) {
 
 /*
  * The keys this TV's filters name. The compositor's enum may know more, but
- * a key its filters never match on is not one its remotes send.
+ * a key its filters never match on is not one its remotes send. The four
+ * colour keys are offered together when any one of them is named: webOS 4's
+ * filters only have cases for Yellow and Blue, passing Red and Green straight
+ * to the app in front.
  */
 function keysOnTv() {
   if (tvKeys) return tvKeys;
@@ -320,7 +323,10 @@ function keysOnTv() {
   } catch (e) {
     return null;
   }
-  tvKeys = KEYS.filter(function (k) { return !k.nativeOnly && src.indexOf(k.symbol) !== -1; });
+  var hasColor = KEYS.some(function (k) { return k.color && src.indexOf(k.symbol) !== -1; });
+  tvKeys = KEYS.filter(function (k) {
+    return !k.nativeOnly && ((k.color && hasColor) || src.indexOf(k.symbol) !== -1);
+  });
   return tvKeys;
 }
 
@@ -1461,6 +1467,8 @@ function describeKeys(keys, inChain, cb, native) {
       var inputs = inputChoices();
       var media = native ? screenOffChoice() : actionChoices().concat(mediaChoices());
       var cc = country();
+      titles[HOME_ASSISTANT] = msg('srv.remoteKeys.homeAssistant', 'Home Assistant');
+      titles[HOME_GUIDE] = msg('srv.remoteKeys.homeGuide', 'Glasshouse Home\'s guide');
       switchers.concat(inputs, actionChoices(), mediaChoices(), homeChoices(false), barChoices(false)).forEach(function (c) { titles[c.id] = c.title; });
       var out = keys.map(function (k) {
         var set = Object.prototype.hasOwnProperty.call(map, k.key);

@@ -36,6 +36,9 @@ html,body{width:1920px;height:1080px;background:transparent;overflow:hidden;font
 .ico{display:block;width:112px;height:112px;margin:0 auto 14px;border-radius:20px;background:#333 center/contain no-repeat}
 .ico.letter{line-height:112px;font-size:52px;font-weight:600;color:#fff;background:#3a3a3a}
 .nm{font-size:24px;padding:0 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.no-app-labels .tile:not(.input){width:156px;height:156px;margin-top:22px;padding-top:20px}
+.no-app-labels .tile:not(.input) .ico{margin-bottom:0}
+.no-app-labels .tile:not(.input) .nm{display:none}
 .input .head{display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;height:100%}
 .dico{-webkit-flex:0 0 auto;flex:0 0 auto;width:60px;height:60px;margin-right:18px}
 .dico svg{display:block;width:100%;height:100%}
@@ -111,6 +114,7 @@ html,body{width:1920px;height:1080px;background:transparent;overflow:hidden;font
       });
     }
     if (e.kind === 'tuner') return launch('com.webos.app.livetv', null, cb);
+    if (e.appId) return launch(e.appId, e.deviceId ? { requestDevice: e.deviceId } : null, cb);
     if (e.kind === 'input') {
       var params = typeof e.uniqueId === 'number' && e.uniqueId > 0 && e.uniqueId < 15 ?
         { id: 'uniqueId', value: String(e.uniqueId) } : {};
@@ -147,7 +151,10 @@ html,body{width:1920px;height:1080px;background:transparent;overflow:hidden;font
     var order = (cat.order && cat.order.app) || (cat.apps || []).map(function (a) { return a.id; });
     order.forEach(function (id) {
       if (hiddenApps.indexOf(id) !== -1 || folder.indexOf(id) !== -1) return;
-      if (id === LG_HOME_TILE) return out.push({ kind: 'lg', id: id, name: 'LG Home', letter: 'LG' });
+      if (id === LG_HOME_TILE) {
+        var lgName = (layout.appNames && layout.appNames[id]) || 'LG Home';
+        return out.push({ kind: 'lg', id: id, name: lgName, letter: lgName.slice(0, 2).toUpperCase() || 'LG' });
+      }
       var a = byId[id];
       // Saved web pages are left out: their addresses are not sent out by the
       // server (#1268), and its POSTs, which open one, refuse this page.
@@ -158,24 +165,31 @@ html,body{width:1920px;height:1080px;background:transparent;overflow:hidden;font
     });
     var devById = {};
     (cat.devices || []).forEach(function (d) { devById[d.id] = d; });
+    var seenApps = {};
+    out.forEach(function (it) { seenApps[it.id] = true; });
     var devOrder = (cat.order && cat.order.dev) || (cat.devices || []).map(function (d) { return d.id; });
     devOrder.forEach(function (id) {
       var d = devById[id];
-      if (!d || hiddenDevs.indexOf(id) !== -1) return;
+      if (!d || hiddenDevs.indexOf(id) !== -1 || seenApps[id]) return;
       if (d.unused && layout.hideUnused === true) return;
-      out.push({ kind: d.tuner ? 'tuner' : 'input', id: d.id, name: d.name, port: d.port, input: d.input,
-                 uniqueId: d.uniqueId, dicon: window.glasshouseDevIcon ? window.glasshouseDevIcon(d) : '' });
+      out.push({ kind: d.tuner ? 'tuner' : (d.kind || 'input'), id: d.id, name: d.name, port: d.port, input: d.input,
+                 uniqueId: d.uniqueId, appId: d.appId || null, deviceId: d.deviceId || null,
+                 dicon: window.glasshouseDevIcon ? window.glasshouseDevIcon(d) : '' });
     });
     return out;
   }
 
   function tileHtml(e, i) {
-    var cls = 'tile' + (e.kind === 'input' || e.kind === 'tuner' ? ' input' : '') + (i === focus ? ' focus' : '') +
-      (e.kind === 'input' && e.port === onPort ? ' now' : '');
-    if (e.kind === 'input' || e.kind === 'tuner') {
+    var isDev = e.kind === 'input' || e.kind === 'tuner' || e.kind === 'dms' || e.kind === 'usb' || e.kind === 'screenshare' || e.kind === 'allinputs';
+    var cls = 'tile' + (isDev ? ' input' : '') + (i === focus ? ' focus' : '') +
+      (e.kind === 'input' && e.port && e.port === onPort ? ' now' : '');
+    if (isDev) {
+      var sub = e.kind === 'input' ? 'HDMI ' + e.port
+        : e.kind === 'dms' ? 'Media Server'
+        : e.kind === 'usb' ? 'USB' : '';
       return '<div class="' + cls + '" data-i="' + i + '"><div class="head">' + (e.dicon || '') +
         '<div class="txt"><div class="nm">' + esc(e.name) + '</div>' +
-        (e.kind === 'input' ? '<div class="path">HDMI ' + esc(e.port) + '</div>' : '') + '</div></div></div>';
+        (sub ? '<div class="path">' + esc(sub) + '</div>' : '') + '</div></div></div>';
     }
     var ico = e.icon ? '<span class="ico" style="background-image:url(\'' + esc(e.icon) + '\')"></span>'
       : '<span class="ico letter">' + esc(e.letter) + '</span>';
@@ -184,7 +198,7 @@ html,body{width:1920px;height:1080px;background:transparent;overflow:hidden;font
   function render() {
     var html = '', wasApp = true;
     list.forEach(function (e, i) {
-      var isApp = e.kind !== 'input' && e.kind !== 'tuner';
+      var isApp = e.kind === 'app' || e.kind === 'lg' || e.kind === 'airplay';
       if (wasApp && !isApp && i > 0) html += '<span class="gap"></span>';
       wasApp = isApp;
       html += tileHtml(e, i);
@@ -243,8 +257,9 @@ html,body{width:1920px;height:1080px;background:transparent;overflow:hidden;font
   $('row').addEventListener('click', function () { choose(); });
 
   var CACHE = 'glasshouse.homebar';
-  var moved = false, waiting = 0, now = null, cat = null;
+  var moved = false, waiting = 0, now = null, cat = null, labelsOff = false;
   function show() {
+    $('bar').className = labelsOff ? 'no-app-labels' : '';
     render();
     tick();
     clearInterval(clockTimer);
@@ -256,13 +271,15 @@ html,body{width:1920px;height:1080px;background:transparent;overflow:hidden;font
     if (!cat) { if (!list.length) close(); return; }
     var fresh = tilesFrom(cat);
     if (!fresh.length) return close();
+    var nextLabelsOff = !!(cat.layout && cat.layout.showAppLabels === false);
     var port = now && now.kind === 'input' && now.behindHome !== true ? now.port : null;
-    var same = JSON.stringify(fresh) === JSON.stringify(list) && port === onPort;
-    try { window.localStorage.setItem(CACHE, JSON.stringify({ list: fresh, onPort: port })); } catch (e) {}
+    var same = JSON.stringify(fresh) === JSON.stringify(list) && port === onPort && nextLabelsOff === labelsOff;
+    try { window.localStorage.setItem(CACHE, JSON.stringify({ list: fresh, onPort: port, labelsOff: nextLabelsOff })); } catch (e) {}
     if (same && document.body.className === 'on') return;
     var keepId = moved && list[focus] ? list[focus].id : null;
     list = fresh;
     onPort = port;
+    labelsOff = nextLabelsOff;
     focus = 0;
     if (keepId) for (var i = 0; i < list.length; i++) if (list[i].id === keepId) focus = i;
     show();
@@ -285,6 +302,7 @@ html,body{width:1920px;height:1080px;background:transparent;overflow:hidden;font
       if (kept && kept.list && kept.list.length) {
         list = kept.list;
         onPort = kept.onPort;
+        labelsOff = !!kept.labelsOff;
         show();
       }
     } catch (e) {}

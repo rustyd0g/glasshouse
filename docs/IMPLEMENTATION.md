@@ -898,7 +898,10 @@ the file and leaves `glasshouse.remoteKeys` as an empty map.
 
 Only keys this TV's own filter files name are offered, found by searching them
 for the symbol (`WebOS.Key_webOS_Disneyplus` is in a C5's `appLaunch.js` and
-not a CX's). The compositor's enum knows more names than a given remote sends,
+not a CX's), with the four colour keys offered together when any one of them
+is named, since webOS 4's filters only match `WebOS.Key_webOS_Yellow` and
+`WebOS.Key_webOS_Blue` and pass Red and Green straight to the foreground app.
+The compositor's enum knows more names than a given remote sends,
 and a case on an unknown symbol would never match. Home and Back are not
 offered, since the dashboard's own Home screen changes rely on them; volume,
 mute, channel and power are handled by the microcontroller before any filter
@@ -1008,7 +1011,7 @@ on from it.
 
 ## The input bar
 
-The [input bar](dashboard/inputs.md#input-bar) is a web app of its own,
+The [input bar](dashboard/inputs.md#glasshouse-input-bar) is a web app of its own,
 `com.tvweb.inputbar` (`assets/inputbar-app/`), whose `appinfo.json` asks for
 an overlay window (`"defaultWindowType": "overlay"`, `"transparent": true`)
 with no splash (`"noSplashOnLaunch": true`, `"spinnerOnLaunch": false`). The
@@ -1704,7 +1707,7 @@ feature off, or `tvwebctl restore-home` before uninstalling, deletes the webOS
 ## Glasshouse Home
 
 `lib/home.js` runs a home screen of Glasshouse's own in place of LG's, opt-in
-from the dashboard's Home tab (webOS 4, 5, 6, 7, 9, 10 and 11; webOS 3, standalone as on webOS 4, webOS 8, and webOS 12 and later with `allowExperimentalHome`). The view is `assets/home.html`,
+from the dashboard's Home tab on every webOS version, standalone on webOS 2 to 6 and laid over LG's Home from webOS 7. `lib/compat.js` says where it has been reported working; elsewhere the dashboard warns and links to a report. The view is `assets/home.html`,
 opened by a small web app whose files are `assets/home-app/index.html` and its
 icons.
 
@@ -1940,7 +1943,7 @@ server's 10-second limit; launches allow 20 seconds for sequential detail reads.
 
 `lib/home-launcher.js` puts another page in the view's place; everything that
 gets the view in front of the TV is unchanged. The app in LG's Home's place
-(or `com.tvweb.home` on webOS 3 to 6, refreshed on server start once it is not in front) opens
+(or `com.tvweb.home` on webOS 2 to 6, refreshed on server start once it is not in front) opens
 `/assets/home.html` as before, and while a launcher is chosen
 and Glasshouse Home is on, the server answers that with a redirect to
 `/home/launcher/`. The heartbeat's reply carries `launcher`, a revision that

@@ -257,19 +257,13 @@ webos_major=$(sed -n 's/.*webOS[^0-9]*\([0-9][0-9]*\)\..*/\1/p' /etc/issue 2>/de
 # under it, and its own layout too. The server does the same at its start,
 # for a hook that did not run.
 # On webOS 10 and later LG's Home is a Flutter app run as
-# "flutter-client -i com.webos.app.home"; webOS 8 and webOS 12 and later, where
-# it is untried, only with allowExperimentalHome in config.json. sam ignores the
-# nudge there (above), so the app is reread with a block and release first.
+# "flutter-client -i com.webos.app.home". sam ignores the nudge there (above),
+# so the app is reread with a block and release first. Laid over LG's Home on
+# webOS 7 and later, as lib/home.js offers it there (lib/compat).
 homeapp=/usr/palm/applications/com.webos.app.home
 homestage=/var/lib/tvweb/home-takeover
 home_os=0
-[ "$webos_major" = "7" ] && home_os=1
-[ "$webos_major" = "9" ] && home_os=1
-[ "$webos_major" = "10" ] && home_os=1
-[ "$webos_major" = "11" ] && home_os=1
-if [ "$webos_major" = "8" ] || [ "${webos_major:-0}" -ge 12 ] 2>/dev/null; then
-  grep -q '"allowExperimentalHome"[[:space:]]*:[[:space:]]*true' /var/lib/tvweb/config.json 2>/dev/null && home_os=1
-fi
+[ "${webos_major:-0}" -ge 7 ] 2>/dev/null && home_os=1
 # Only Glasshouse Home's own staged copy, told by device and inode as
 # lib/home-takeover.js does: another launcher, such as CleanYourTV, may be
 # mounted here by a hook that ran before this one.
@@ -331,7 +325,7 @@ home_open_at_boot() {
     return 0
   fi
   target_home=com.webos.app.home
-  case "$webos_major" in 3|4|5|6) target_home=com.tvweb.home ;; esac
+  case "$webos_major" in 2|3|4|5|6) target_home=com.tvweb.home ;; esac
   luna-send -n 1 luna://com.webos.applicationManager/launch "{\"id\":\"$target_home\"}" 2>/dev/null |
     grep -q '"returnValue": *true' || return 0
   # The server watches for the view from its start and opens LG's Home if it
@@ -360,7 +354,7 @@ if [ "$home_os" -eq 1 ] && [ -f "$homestage/appinfo.json" ] &&
     for pid in $(lg_home_pids); do kill "$pid" 2>/dev/null; done
     echo "$(date): sam did not take Glasshouse Home - LG's Home kept"
   fi
-elif { [ "$webos_major" = "3" ] || [ "$webos_major" = "4" ] || [ "$webos_major" = "5" ] || [ "$webos_major" = "6" ]; } && grep -q '"enabled"[[:space:]]*:[[:space:]]*true' /var/lib/tvweb/home.json 2>/dev/null; then
+elif { [ "$webos_major" = "2" ] || [ "$webos_major" = "3" ] || [ "$webos_major" = "4" ] || [ "$webos_major" = "5" ] || [ "$webos_major" = "6" ]; } && grep -q '"enabled"[[:space:]]*:[[:space:]]*true' /var/lib/tvweb/home.json 2>/dev/null; then
   home_open_at_boot
 fi
 

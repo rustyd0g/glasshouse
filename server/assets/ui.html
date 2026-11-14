@@ -1193,50 +1193,35 @@
 
 <section class="priv panel" id="inputspane" role="tabpanel" hidden>
   <div class="lbl" data-t="tab.inputs">Inputs</div>
-  <div class="pv-sub apps-grp-d" data-t="inputs.desc">The TV&rsquo;s HDMI inputs: which ones are offered, the bar that switches between them, and what an empty one shows.</div>
-
-  <div class="tab-grp" id="inputs-grp-list" hidden>
-    <div class="apps-grp-h" data-t="inputs.yours">Your inputs</div>
-    <div class="pv-sub apps-grp-d" data-t="inputs.yours.desc">The inputs Glasshouse Home&rsquo;s Inputs row and the input bar offer, in Glasshouse Home&rsquo;s order. Hiding one here hides it on both.</div>
-    <div class="prot-table" id="inputs-list"></div>
-  </div>
 
   <div class="tab-grp" id="inputs-grp-bar" hidden>
-    <div class="apps-grp-h" data-t="apps.inputBar">Input bar</div>
+    <div class="pv-sec" data-t="apps.inputBar">Glasshouse Input bar</div>
     <div class="pv-sub apps-grp-d" data-t="inputs.bar.desc">A strip of your inputs over the picture, in place of LG&rsquo;s list. A key on the remote opens it and steps through them.</div>
-    <div class="prot-table">
-      <div class="prot-row" id="inputs-bar-choice">
-        <div class="prot-main">
-          <div class="prot-title" data-t="inputs.bar.inputKey">The Input key opens</div>
-          <div class="prot-desc" id="inputs-bar-choice-note"></div>
-        </div>
-        <div class="prot-status inputs-pair">
-          <button type="button" class="pill idle" id="inputs-bar-lg" onclick="setInputKey(false)" data-t="inputs.bar.lg">LG&rsquo;s list</button>
-          <button type="button" class="pill idle" id="inputs-bar-ours" onclick="setInputKey(true)" data-t="apps.inputBar">Input bar</button>
-        </div>
-      </div>
-      <div class="prot-row">
-        <div class="prot-main">
-          <div class="prot-title" data-t="inputs.bar.otherKeys">Other keys</div>
-          <div class="prot-desc" id="inputs-bar-note"></div>
-        </div>
-        <div class="prot-status"><button type="button" class="pill idle" onclick="openRemoteKeys()" data-t="apps.remoteKeys">Remote keys</button></div>
-      </div>
+    <div id="inputs-bar-compat"></div>
+    <div class="pv-g" data-t="inputs.bar.inputKey">The Input key opens</div>
+    <div class="hm-grid hm-grid-2" id="inputs-bar-choice">
+      <button type="button" class="hm-card" id="inputs-bar-lg" onclick="setInputKey(false)">&mdash;</button>
+      <button type="button" class="hm-card" id="inputs-bar-ours" onclick="setInputKey(true)">&mdash;</button>
     </div>
+    <div class="pv-sub" id="inputs-bar-choice-note" hidden></div>
+    <div class="prot-table" id="inputs-bar-opts" style="margin-top:12px"></div>
+  </div>
+
+  <div class="tab-grp" id="inputs-grp-list" hidden>
+    <div class="pv-sec" data-t="inputs.yours">Your inputs</div>
+    <div class="pv-sub apps-grp-d" data-t="inputs.yours.desc">The inputs Glasshouse Input bar and Glasshouse launchers offer, and their order. Hiding one here hides it on both.</div>
+    <div id="inputs-list"></div>
   </div>
 
   <div class="tab-grp" id="inputs-grp-nosignal" hidden>
-    <div class="apps-grp-h" data-t="ss.noSignal">No Signal screen</div>
+    <div class="pv-sec" data-t="ss.noSignal">No Signal screen</div>
     <div class="pv-sub apps-grp-d" data-t="inputs.noSignal.desc">What an input with nothing coming in shows.</div>
-    <div class="prot-table">
-      <div class="prot-row">
-        <div class="prot-main">
-          <div class="prot-title" id="inputs-nosignal-lbl" data-t="ss.noSignal.plain">Just “No Signal”</div>
-          <div class="prot-desc" id="inputs-nosignal-desc"></div>
-        </div>
-        <div class="prot-status"><button type="button" class="pill idle" id="inputs-nosignal-btn" aria-labelledby="inputs-nosignal-lbl inputs-nosignal-btn" onclick="toggleNoSignal()">&mdash;</button></div>
-      </div>
+    <div class="hm-grid hm-grid-3" id="inputs-nosignal-cards">
+      <button type="button" class="hm-card" id="inputs-nosignal-lg" onclick="setNoSignal('lg')">&mdash;</button>
+      <button type="button" class="hm-card" id="inputs-nosignal-plain" onclick="setNoSignal('plain')">&mdash;</button>
+      <button type="button" class="hm-card" id="inputs-nosignal-icon" onclick="setNoSignal('icon')">&mdash;</button>
     </div>
+    <div class="pv-sub" id="inputs-nosignal-desc" hidden></div>
   </div>
 
   <div class="pv-note" id="inputs-none" hidden data-t="inputs.none">Nothing about this TV&rsquo;s inputs can be changed from here.</div>
@@ -1270,11 +1255,12 @@
         <button type="button" id="home-mode-bar" onclick="homeChooseBar(true)" hidden>&mdash;</button>
         <button type="button" id="home-mode-launcher" onclick="homeChooseLauncher()">&mdash;</button>
       </div>
+      <div id="home-compat"></div>
     </div>
     <div id="home-notes">
       <div class="pv-sub" id="home-state-desc"></div>
       <div class="pv-note warn" id="home-restart-note" hidden data-t="home.restartsAppsAny">On this TV, switching away from LG Home or back to it, or holding Home for LG&rsquo;s Home, restarts the TV&rsquo;s app manager, which closes the apps that are open.</div>
-      <details class="pv-note warn" id="home-exp">
+      <details class="pv-note warn" id="home-exp" hidden>
         <summary data-t="tv.audio.experimental">Experimental</summary>
         <div data-t="home.experimentalAny">Experimental: it may not always work as expected. Glasshouse Home, Glasshouse Minimal and custom launchers each replace LG&rsquo;s Home screen. If one misbehaves, hold Home on the remote for a second to open LG&rsquo;s Home, or choose LG Home here to switch back. For the first half minute after the TV starts from cold, Home shows a message that it is starting.</div>
       </details>
@@ -1396,6 +1382,13 @@
         <div class="prot-desc" id="home-show-channel-count-alt" hidden data-t="home.showAppCountAlt">Not shown in Alternative View, whose rows have no titles.</div>
       </div>
       <div class="prot-status"><button type="button" class="pill idle" id="home-show-channel-count" onclick="homeShow('showChannelCount')">&mdash;</button></div>
+    </div>
+    <div class="prot-row home-gh-row home-show-row" hidden>
+      <div class="prot-main">
+        <div class="prot-title" data-t="home.showAppLabels">App labels</div>
+        <div class="prot-desc" data-t="home.showAppLabelsDesc">Under each app icon on Glasshouse Home and Glasshouse Bar. Off leaves the icons on their own.</div>
+      </div>
+      <div class="prot-status"><button type="button" class="pill idle" id="home-show-app-labels" onclick="homeShow('showAppLabels')">&mdash;</button></div>
     </div>
     <div class="prot-row home-gh-row home-show-row" hidden>
       <div class="prot-main">
@@ -1609,12 +1602,13 @@
   <div id="home-tv"></div>
 
   <div class="pv-g" data-t="home.colours.title">Colours</div>
-  <div class="sub" data-t="home.colours.desc">The text on Glasshouse Home, and the accent that frames the chosen tile and marks what was last on. The quieter text is a shade of the text colour.</div>
+  <div class="sub" data-t="home.colours.desc">The text on Glasshouse Home, the highlight behind the chosen tile, and the accent that frames it and marks what was last on. The quieter text is a shade of the text colour.</div>
   <div class="home-looks" id="home-looks"></div>
   <div class="home-custom">
     <label><input type="color" id="home-col-text" onchange="homeCustomColours()"> <span data-t="home.colours.text">Text</span></label>
     <label><input type="color" id="home-col-accent" onchange="homeCustomColours()"> <span data-t="home.colours.accent">Accent</span></label>
-    <button type="button" id="home-col-reset" onclick="homeSaveLayout({ colours: homeDefaultLook() })" data-t="home.colours.reset">Use the default colours</button>
+    <label><input type="color" id="home-col-highlight" onchange="homeCustomHighlight()"> <span data-t="home.colours.highlight">Tile highlight</span></label>
+    <button type="button" id="home-col-reset" onclick="homeSaveLayout({ colours: homeDefaultLook(), tileHighlight: null })" data-t="home.colours.reset">Use the default colours</button>
   </div>
 
   <div class="pv-g" data-t="home.bg.title">Background</div>
@@ -1691,37 +1685,35 @@
   <details class="pv-d" id="pv-adv">
   <summary><span data-t="tab.advanced">Advanced</span> <span class="cur" data-t="pv.advanced.sub">Every setting, one by one</span></summary>
 
-  <div class="pv-top">
-    <div>
-      <div class="pv-h" data-t="pv.adblock">Ad &amp; telemetry blocker</div>
-      <div class="pv-sub" data-t="pv.adblock.desc">Stops the TV reaching LG's ad, tracking and diagnostics servers.</div>
-      <div class="btns" style="max-width:520px">
-        <button id="ab-off" onclick="setAdBlockMode('off')" data-t="common.off">Off</button>
-        <button id="ab-ads" onclick="setAdBlockMode('ads')" data-t="pv.adblock.ads">Ads &amp; telemetry</button>
-        <button id="ab-full" onclick="setAdBlockMode('full')" data-t="pv.adblock.full">Everything</button>
-      </div>
-      <div class="sub" id="adblock-detail" style="margin-top:12px">&mdash;</div>
-      <div class="pv-note" id="adblock-reconnect" hidden data-t="pv.adblock.reconnect">LG's apps, such as the Content Store and LG Channels, can take about a minute to connect again. If one shows an error, exit it and open it again after a minute.</div>
-      <div class="pv-note warn" id="adblock-help" hidden data-t="pv.adblock.troubleshoot">If an app or one of LG's
-        services stops working while the blocker is on, switch it off to check whether it is the cause.</div>
-      <div class="pv-note warn"><b data-t="pv.adblock.full.warn">Everything also blocks LG's platform services, so
-        the LG ThinQ app can no longer control the TV, and the app store, software updates and LG
-        Channels may stop working.</b> <span data-t="pv.adblock.full.search">Where it blocks LG's search, Glasshouse Home's
-        search is hidden until the blocker is back on Ads &amp; telemetry or off.</span> <span data-t="pv.adblock.full.updates">To stop only system updates, use Block TV software
-        updates in the Advanced tab.</span></div>
+  <div class="pv-ab">
+    <div class="pv-h" data-t="pv.adblock">Ad &amp; telemetry blocker</div>
+    <div class="pv-sub" data-t="pv.adblock.desc">Stops the TV reaching LG's ad, tracking and diagnostics servers.</div>
+    <div class="hm-grid hm-grid-3" id="ab-cards">
+      <button type="button" class="hm-card" id="ab-off" onclick="setAdBlockMode('off')">&mdash;</button>
+      <button type="button" class="hm-card" id="ab-ads" onclick="setAdBlockMode('ads')">&mdash;</button>
+      <button type="button" class="hm-card" id="ab-full" onclick="setAdBlockMode('full')">&mdash;</button>
     </div>
+    <div class="sub" id="adblock-detail" style="margin-top:14px" hidden>&mdash;</div>
+    <div class="pv-note" id="adblock-reconnect" hidden data-t="pv.adblock.reconnect">LG's apps, such as the Content Store and LG Channels, can take about a minute to connect again. If one shows an error, exit it and open it again after a minute.</div>
+    <div class="pv-note warn" id="adblock-help" hidden data-t="pv.adblock.troubleshoot">If an app or one of LG's
+      services stops working while the blocker is on, switch it off to check whether it is the cause.</div>
+    <div class="pv-note warn"><b data-t="pv.adblock.full.warn">Everything also blocks LG's platform services, so
+      the LG ThinQ app can no longer control the TV, and the app store, software updates and LG
+      Channels may stop working.</b> <span data-t="pv.adblock.full.search">Where it blocks LG's search, Glasshouse Home's
+      search is hidden until the blocker is back on Ads &amp; telemetry or off.</span> <span data-t="pv.adblock.full.updates">To stop only system updates, use Block TV software
+      updates in the Advanced tab.</span></div>
+  </div>
 
-    <div>
-      <div class="pv-h" data-t="pv.adid">Advertising identifier</div>
-      <div class="pv-sub" data-t="pv.adid.desc">A unique ID your TV hands to advertisers so they can recognise it and
-        target ads at you. Resetting it breaks the link to any profile built from past activity.</div>
-      <div id="pv-adid"></div>
-      <div id="pv-lmt"></div>
-      <div class="sub" id="pv-adnote" style="margin-top:8px"></div>
-      <div class="btns" style="margin-top:14px;max-width:520px">
-        <button id="adid-reset" onclick="privAction('resetAdId')" data-t="pv.adid.reset">Reset advertising ID</button>
-        <button id="adcookies-clear" onclick="privAction('clearAdCookies')" data-t="pv.cookies.clear">Clear ad cookies</button>
-      </div>
+  <div class="pv-adid-sec">
+    <div class="pv-h" data-t="pv.adid">Advertising identifier</div>
+    <div class="pv-sub" data-t="pv.adid.desc">A unique ID your TV hands to advertisers so they can recognise it and
+      target ads at you. Resetting it breaks the link to any profile built from past activity.</div>
+    <div id="pv-adid"></div>
+    <div id="pv-lmt"></div>
+    <div class="sub" id="pv-adnote" style="margin-top:8px"></div>
+    <div class="btns" style="margin-top:14px;max-width:520px">
+      <button id="adid-reset" onclick="privAction('resetAdId')" data-t="pv.adid.reset">Reset advertising ID</button>
+      <button id="adcookies-clear" onclick="privAction('clearAdCookies')" data-t="pv.cookies.clear">Clear ad cookies</button>
     </div>
   </div>
 
@@ -2244,14 +2236,6 @@
           </div>
           <div class="prot-status"><button type="button" class="pill idle" id="exp-screensaver" onclick="toggleExpScreensaver()">&mdash;</button></div>
         </div>
-        <div class="prot-row" id="exp-inputbar-row" hidden>
-          <div class="prot-main">
-            <div class="prot-title" data-t="server.experimental.inputBar">Input bar</div>
-            <div class="prot-desc" data-t="server.experimental.inputBar.short">Offers the input bar under Remote keys on the Remote tab: a strip of the HDMI inputs over the picture, stepped through with the remote&rsquo;s Input key.</div>
-            <div class="prot-desc" data-t="server.experimental.inputBar.warn">Tried on webOS 4, 6 and 9 only. Switching it off sets any key using it back to LG&rsquo;s and removes its app.</div>
-          </div>
-          <div class="prot-status"><button type="button" class="pill idle" id="exp-inputbar" onclick="toggleExpInputBar()">&mdash;</button></div>
-        </div>
       </div>
     </details>
   </div>
@@ -2401,6 +2385,7 @@
 </div>
 
 <script src="/assets/i18n.js"></script>
+<script src="/assets/devicons.js"></script>
 <!-- The server puts these back inline as one script, in this order: see inlineUI in lib/routes.js. -->
 <script src="/assets/ui/core.js"></script>
 <script src="/assets/ui/theme.js"></script>
