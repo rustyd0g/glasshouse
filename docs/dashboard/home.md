@@ -15,6 +15,8 @@ Preview cards at the top of the **Home** tab switch between five launcher option
 | **[Custom](#custom-launcher)** | Replaces LG's Home with an uploaded `.ipk`/`.zip`/`.html` app or a full-screen web URL (such as Home Assistant). | Same as Glasshouse Home |
 
 > [!NOTE]
+> On webOS 2 and 3, which have no remote key filters, Glasshouse Home reads the Home press from the remote itself and opens straight after, so LG's ribbon shows for about a second first, each time Home is pressed, even with Glasshouse Home already open (a 60UJ6519, webOS 3.9.3). Taking the press before LG's ribbon sees it would need a native program on the TV; see [why](../tested-tvs.md#why-some-versions-are-not-offered).
+>
 > On webOS 4 (tried on a B8), LG's launcher is an in-compositor ribbon and Glasshouse Home runs as a standalone app (`com.tvweb.home`) launched by the remote key filter, so **Back** dismisses it. On webOS 5 and 6 (tried on a CX, C1 and B1), running standalone avoids app-manager restarts that break DRM/audio on takeover mounts, though switching the launcher itself or holding Home for LG's Home restarts the app manager and closes open apps. On webOS 7, 9, 10 and 11, Glasshouse Home is bind-mounted over LG's Home without modifying the root filesystem.
 
 ![Glasshouse Home on an OLED55G36LA (webOS 9.2): clock and the Apps, Inputs and Channels rows over an uploaded afternoon wallpaper](../screenshots/home.jpg)
@@ -41,7 +43,7 @@ Preview cards at the top of the **Home** tab switch between five launcher option
 
     ---
 
-    Displays the TV tuner, HDMI ports with device icons, HDMI-CEC devices behind receivers, and discovered Media Servers, USB storage, AirPlay, Screen Share, and All Inputs tiles. Configured on the [Inputs tab](inputs.md#your-inputs). See [Inputs and connected devices](#inputs-and-connected-devices).
+    Displays the TV tuner, HDMI ports with device icons, AV and Component inputs where the TV has them, HDMI-CEC devices behind receivers, and discovered Media Servers, USB storage, AirPlay, Screen Share, and All Inputs tiles. Configured on the [Inputs tab](inputs.md#your-inputs). See [Inputs and connected devices](#inputs-and-connected-devices).
 
 -   **Channels**
 
@@ -123,7 +125,7 @@ The **Inputs** row displays the TV's tuner, HDMI ports, and connected media/cast
 
 * **Live TV tuner:** A **TV** tile comes first on TVs with channels tuned, showing the last active channel; selecting it opens Live TV.
 * **HDMI ports and CEC devices:** Each HDMI port is listed, alongside separate tiles for connected HDMI-CEC devices discovered through an AV receiver or soundbar (for example, *"HDMI 2, through STEREO 70s"*). Selecting a CEC tile wakes the device and switches intermediary receivers to that source.
-* **Media servers, USB, AirPlay & Screen Share:** Attached USB storage, AirPlay, Screen Share, LG's All Inputs / Home Hub, and (when **Show media servers** is switched on under [Inputs](inputs.md#your-inputs)) discovered DLNA media servers are offered alongside your HDMI inputs.
+* **Media servers, USB, AirPlay & Screen Share:** Attached USB storage, AirPlay, Screen Share, LG's All Inputs / Home Hub, and (when **Show media servers** is switched on under [Inputs](inputs.md#your-inputs)) discovered DLNA media servers are offered alongside your HDMI inputs. Screen Share opens Home Hub's guide to sharing a phone's screen, and is offered only where Home Hub has that guide: LG's Screen Share app itself opens only while a phone is connected. Where AirPlay is also on the Apps row, Glasshouse Bar shows it there only, so hiding it there hides it from the Bar.
 * **Device icons:** Each tile automatically picks an icon matching the source or device name (console, handheld, streaming box, soundbar, disc player, PC, cable box, media server, USB, AirPlay, Screen Share, or HDMI plug).
 * **Customising inputs:** Renaming, showing/hiding, reordering, and **Hide inputs with nothing connected** live on the [Inputs tab](inputs.md#your-inputs) so they can be arranged whether a Glasshouse launcher or the [Glasshouse Input bar](inputs.md#glasshouse-input-bar) is in use. Inputs can also be reordered and hidden directly in arrange mode on Glasshouse Home. An input keeps its name, place and hiding when the TV starts or stops listing the device on it, as many consoles and boxes drop off that list when switched off; where a port has two devices, such as a console behind a receiver, each keeps its own.
 
@@ -390,6 +392,8 @@ Under **Choose your launcher** on the web dashboard's **Home** tab, preview card
 LG's Home keeps its place, so the TV shows LG's Home when an app closes and at power-on, as it does without Glasshouse Home; choosing Glasshouse Bar switches Glasshouse Home off. It is an overlay window opened by the remote's Home key, as the [input bar](inputs.md#glasshouse-input-bar) is, so it is offered on webOS 4 to 10; webOS 3 and 11 do not offer it.
 
 Its app, `com.tvweb.homebar`, has no tile of its own. It is kept loaded in the background while chosen, so a press shows it at once. Choosing any other launcher gives the Home button back and removes the app.
+
+With the Magic Remote, a notch of the scroll wheel moves the row a tile, and resting the pointer near either end of the row steps it along, as on Glasshouse Home. **Smooth scrolling**, under Animations on the Home tab, applies to the Bar too: off, the row jumps rather than glides.
 
 ## Custom launcher
 

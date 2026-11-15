@@ -402,6 +402,274 @@ async function visitInputBarBehindHome(browser, base, problems) {
   }
 }
 
+async function visitHomeBarPrewarm(browser, base, problems) {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => problems.push('Glasshouse Bar: ' + e.message));
+  let port = 1, iconHits = 0, catHits = 0;
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await page.addInitScript(() => {
+    window.PalmSystem = { launchParams: '{"preload":"full"}' };
+    window.PalmServiceBridge = function () {};
+    window.PalmServiceBridge.prototype.call = function (uri, body) {
+      if (this.onservicecallback) this.onservicecallback(JSON.stringify({ returnValue: true }));
+    };
+    window.close = function () { window.closed = true; };
+  });
+  await page.route('http://localhost:8080/**', route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/assets/devicons.js') return route.continue({ url: base + '/assets/devicons.js' });
+    if (url.pathname === '/api/home/icon') {
+      iconHits++;
+      return route.fulfill({ status: 200, contentType: 'image/png', body: png });
+    }
+    if (url.pathname === '/api/home/now') return route.fulfill({ json: { kind: 'input', port, behindHome: false } });
+    if (url.pathname === '/api/home/catalogue') {
+      catHits++;
+      return route.fulfill({
+        json: {
+          ok: true,
+          layout: {},
+          order: { app: ['app1'], dev: ['hdmi1', 'hdmi2'] },
+          apps: [{ id: 'app1', title: 'Test App', icon: '/api/home/icon?id=app1' }],
+          devices: [
+            { id: 'hdmi1', name: 'HDMI 1', input: 'hdmi1', port: 1 },
+            { id: 'hdmi2', name: 'HDMI 2', input: 'hdmi2', port: 2 }
+          ]
+        }
+      });
+    }
+    return route.fulfill({ json: {} });
+  });
+  try {
+    await page.goto(base + '/assets/homebar-app/index.html');
+    await page.waitForSelector('#row .ico');
+    await page.waitForFunction(() => document.querySelectorAll('#row .tile').length === 3);
+    const pre = await page.evaluate(() => {
+      window.__icoNode = document.querySelector('#row .ico');
+      return { on: document.body.classList.contains('on'), tiles: document.querySelectorAll('#row .tile').length };
+    });
+    if (pre.on) problems.push('Glasshouse Bar: showed window during preload');
+    if (pre.tiles !== 3 || iconHits < 1 || catHits < 1) problems.push('Glasshouse Bar: did not prewarm row and icons while hidden');
+    port = 2;
+    const beforeCat = catHits;
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('webOSRelaunch')));
+    await page.waitForSelector('body.on');
+    await page.waitForFunction(n => window.performance.getEntriesByType('resource').filter(r => r.name.indexOf('/api/home/catalogue') !== -1).length > n, beforeCat);
+    const post = await page.evaluate(() => ({
+      sameNode: document.querySelector('#row .ico') === window.__icoNode,
+      nowNames: Array.from(document.querySelectorAll('#row .tile.now .nm')).map(el => el.textContent),
+      closed: !!window.closed
+    }));
+    if (!post.sameNode) problems.push('Glasshouse Bar: redrew icon DOM node when opened with changed active input');
+    if (post.nowNames.length !== 1 || post.nowNames[0] !== 'HDMI 2') problems.push('Glasshouse Bar: active input dot was ' + JSON.stringify(post.nowNames));
+    if (post.closed) problems.push('Glasshouse Bar: closed on first open');
+
+    // A preload relaunch while open is ignored; distinct keyfilter press ids
+    // toggle immediately (even within 200 ms) while duplicates of the same press do not.
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('webOSRelaunch', { detail: { preload: 'full' } })));
+    const afterPreload = await page.evaluate(() => ({ cls: document.body.className, closed: !!window.__closed }));
+    if (afterPreload.cls !== 'on' || afterPreload.closed) problems.push('Glasshouse Bar: preload relaunch toggled bar: ' + JSON.stringify(afterPreload));
+
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('webOSRelaunch', { detail: { glasshouse: 'bar', press: 10 } })));
+    const afterClose = await page.evaluate(() => document.body.className);
+    if (afterClose !== '') problems.push('Glasshouse Bar: rapid press 10 did not start close: ' + JSON.stringify(afterClose));
+
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('webOSRelaunch', { detail: { glasshouse: 'bar', press: 10 } })));
+    const afterDup = await page.evaluate(() => document.body.className);
+    if (afterDup !== '') problems.push('Glasshouse Bar: duplicate press 10 cancelled close: ' + JSON.stringify(afterDup));
+
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('webOSRelaunch', { detail: { glasshouse: 'bar', press: 11 } })));
+    await page.waitForTimeout(200);
+    const afterReopen = await page.evaluate(() => ({ cls: document.body.className, closed: !!window.__closed }));
+    if (afterReopen.cls !== 'on' || afterReopen.closed) problems.push('Glasshouse Bar: rapid press 11 did not cancel fade-out: ' + JSON.stringify(afterReopen));
+  } finally {
+    await page.close();
+  }
+}
+
+// AirPlay is an app and an input under one id: hidden as an app, it stays out
+// of the Bar, and where only the input has it, it is drawn as an input with its
+// icon (#1500, #1502). Screen Share opens with its launch parameters.
+// A row longer than the screen moves a tile a notch of the wheel, and steps
+// along while the pointer rests at its far end, as Glasshouse Home's does
+// (#1500, #1531).
+async function visitHomeBarScroll(browser, base, problems) {
+  const fail = what => problems.push('Glasshouse Bar scrolling: ' + what);
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  page.on('pageerror', e => fail(e.message));
+  await page.addInitScript(() => {
+    window.PalmSystem = { launchParams: '{}' };
+    window.PalmServiceBridge = function () {};
+    window.PalmServiceBridge.prototype.call = function () {
+      if (this.onservicecallback) this.onservicecallback(JSON.stringify({ returnValue: true }));
+    };
+    window.close = function () {};
+  });
+  const apps = Array.from({ length: 16 }, (_, i) => ({ id: 'app' + i, title: 'App ' + i }));
+  let layout = {};
+  await page.route('http://localhost:8080/**', route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/assets/devicons.js') return route.continue({ url: base + '/assets/devicons.js' });
+    if (url.pathname === '/api/home/now') return route.fulfill({ json: {} });
+    if (url.pathname === '/api/home/catalogue') return route.fulfill({ json: { ok: true, layout, order: { app: apps.map(a => a.id), dev: [] }, apps, devices: [] } });
+    return route.fulfill({ json: {} });
+  });
+  const shift = () => page.evaluate(() => {
+    const m = /translateX\((-?[\d.]+)px\)/.exec(document.getElementById('row').style.transform || '');
+    return m ? -parseFloat(m[1]) : 0;
+  });
+  try {
+    await page.goto(base + '/assets/homebar-app/index.html');
+    await page.waitForFunction(() => document.querySelectorAll('#row .tile').length === 16 && document.body.className.indexOf('on') !== -1);
+    await page.mouse.move(960, 900);
+    const moved = what => page.waitForFunction(w => (document.getElementById('row').style.transform || '') !== w,
+      what, { timeout: 2000 }).then(() => true, () => false);
+    let before = await page.evaluate(() => document.getElementById('row').style.transform || '');
+    await page.mouse.wheel(0, 120);
+    await moved(before);
+    const afterWheel = await shift();
+    if (!(afterWheel > 0)) fail('a notch of the wheel did not move the row (shift ' + afterWheel + ')');
+    before = await page.evaluate(() => document.getElementById('row').style.transform || '');
+    await page.mouse.wheel(0, -120);
+    await moved(before);
+    if (await shift() !== 0) fail('a notch back did not return the row (shift ' + await shift() + ')');
+    const bar = await page.evaluate(() => { const r = document.getElementById('bar').getBoundingClientRect(); return { y: r.top + r.height / 2 }; });
+    await page.mouse.move(1900, bar.y);
+    await page.waitForTimeout(700);
+    const atEdge = await shift();
+    if (!(atEdge > afterWheel)) fail('resting at the far end did not step the row along (shift ' + atEdge + ')');
+    await page.mouse.move(960, bar.y);
+    const stopped = await shift();
+    await page.waitForTimeout(500);
+    if (await shift() !== stopped) fail('the row kept moving after the pointer left the end');
+    // Smooth scrolling switched off on the Home tab: the row jumps rather than glides.
+    if (await page.evaluate(() => document.getElementById('row').style.transition) === 'none') fail('the row does not glide with Smooth scrolling on');
+    layout = { smoothScroll: false };
+    await page.goto(base + '/assets/homebar-app/index.html');
+    await page.waitForFunction(() => document.querySelectorAll('#row .tile').length === 16 && document.body.className.indexOf('on') !== -1);
+    if (await page.evaluate(() => document.getElementById('row').style.transition) !== 'none') fail('the row still glides with Smooth scrolling off');
+  } finally {
+    await page.close();
+  }
+}
+
+// The Bar's icons are images decoded in the frame that draws them, and it
+// keeps them beside its cached row, so opened with nothing loaded (the icon
+// server not answering) it still draws every one at once.
+async function visitHomeBarIconsReady(browser, base, problems) {
+  const fail = what => problems.push('Glasshouse Bar icons: ' + what);
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  let iconsUp = true;
+  await context.addInitScript(() => {
+    window.PalmSystem = { launchParams: '{}' };
+    window.PalmServiceBridge = function () {};
+    window.PalmServiceBridge.prototype.call = function () {
+      if (this.onservicecallback) this.onservicecallback(JSON.stringify({ returnValue: true }));
+    };
+    window.close = function () {};
+  });
+  await context.route('http://localhost:8080/**', route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/assets/devicons.js') return route.continue({ url: base + '/assets/devicons.js' });
+    if (url.pathname === '/api/home/icon') {
+      return iconsUp ? route.fulfill({ status: 200, contentType: 'image/png', body: png, headers: { 'Access-Control-Allow-Origin': '*' } })
+        : route.fulfill({ status: 503, body: '' });
+    }
+    if (url.pathname === '/api/home/now') return route.fulfill({ json: {} });
+    if (url.pathname === '/api/home/catalogue') return route.fulfill({ json: { ok: true, layout: {}, order: { app: ['a1', 'a2'], dev: [] },
+      apps: [{ id: 'a1', title: 'One', icon: '/api/home/icon?id=a1' }, { id: 'a2', title: 'Two', icon: '/api/home/icon?id=a2' }], devices: [] } });
+    return route.fulfill({ json: {} });
+  });
+  const page = await context.newPage();
+  page.on('pageerror', e => fail(e.message));
+  try {
+    await page.goto(base + '/assets/homebar-app/index.html');
+    await page.waitForFunction(() => document.querySelectorAll('#row .ico').length === 2);
+    const kind = await page.evaluate(() => { const i = document.querySelector('#row .ico'); return i ? i.tagName + ' ' + i.getAttribute('decoding') : 'none'; });
+    if (kind !== 'IMG sync') fail('the icons are ' + kind + ', not images decoded in the frame that draws them');
+    const kept = await page.waitForFunction(() => {
+      try { return Object.keys(JSON.parse(localStorage.getItem('glasshouse.homebar.icons') || '{}')).length === 2; } catch (e) { return false; }
+    }, null, { timeout: 5000 }).then(() => true, () => false);
+    if (!kept) fail('the icons were not kept beside the row');
+    // Opened again with the icon server down: every icon from what was kept.
+    iconsUp = false;
+    await page.reload();
+    await page.waitForFunction(() => document.querySelectorAll('#row img.ico').length === 2);
+    const drawn = await page.waitForFunction(() => Array.from(document.querySelectorAll('#row img.ico')).every(i => i.complete && i.naturalWidth > 0),
+      null, { timeout: 3000 }).then(() => true, () => false);
+    if (!drawn) fail('opened with the icon server down, the kept icons were not drawn');
+    const fromKept = await page.evaluate(() => Array.from(document.querySelectorAll('#row img.ico')).every(i => i.src.indexOf('data:image/') === 0));
+    if (!fromKept) fail('the icons did not come from what was kept');
+  } finally {
+    await context.close();
+  }
+}
+
+async function visitHomeBarTiles(browser, base, problems) {
+  const fail = what => problems.push('Glasshouse Bar tiles: ' + what);
+  const devices = [
+    { id: 'hdmi1', name: 'HDMI 1', input: 'hdmi1', port: 1 },
+    { id: 'airplay', name: 'AirPlay', input: 'airplay', kind: 'airplay', appId: 'airplay' },
+    { id: 'screenshare', name: 'Screen Share', input: 'screenshare', kind: 'screenshare', appId: 'com.webos.app.homeconnect', params: { actionType: 'mobileGuide' } }
+  ];
+  const load = async (catalogue) => {
+    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    page.on('pageerror', e => fail(e.message));
+    await page.addInitScript(() => {
+      window.PalmSystem = { launchParams: '{}' };
+      window.__calls = [];
+      window.PalmServiceBridge = function () {};
+      window.PalmServiceBridge.prototype.call = function (uri, body) {
+        window.__calls.push({ uri, body: JSON.parse(body) });
+        if (this.onservicecallback) this.onservicecallback(JSON.stringify({ returnValue: true }));
+      };
+      window.close = function () {};
+    });
+    await page.route('http://localhost:8080/**', route => {
+      const url = new URL(route.request().url());
+      if (url.pathname === '/assets/devicons.js') return route.continue({ url: base + '/assets/devicons.js' });
+      if (url.pathname === '/api/home/now') return route.fulfill({ json: { kind: 'input', port: 1 } });
+      if (url.pathname === '/api/home/catalogue') return route.fulfill({ json: catalogue });
+      return route.fulfill({ json: {} });
+    });
+    await page.goto(base + '/assets/homebar-app/index.html');
+    await page.waitForFunction(() => document.querySelectorAll('#row .tile').length > 0 && document.querySelector('#row .tile.input svg'));
+    return page;
+  };
+  const tiles = page => page.evaluate(() => Array.from(document.querySelectorAll('#row .tile')).map(el => ({
+    name: el.querySelector('.nm').textContent, input: el.classList.contains('input'), svg: !!el.querySelector('svg') })));
+
+  let page = await load({ ok: true, layout: { hidden: { app: ['airplay'] } },
+    order: { app: ['app1', 'airplay'], dev: devices.map(d => d.id) },
+    apps: [{ id: 'app1', title: 'Test App' }, { id: 'airplay', title: 'AirPlay', icon: '/api/home/icon?id=airplay' }], devices });
+  try {
+    const t = await tiles(page);
+    if (t.some(x => x.name === 'AirPlay')) fail('AirPlay hidden as an app still shows: ' + JSON.stringify(t));
+    const i = t.findIndex(x => x.name === 'Screen Share');
+    if (i === -1) return fail('no Screen Share tile: ' + JSON.stringify(t));
+    await page.evaluate(n => {
+      const el = document.querySelectorAll('#row .tile')[n];
+      el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      el.click();
+    }, i);
+    await page.waitForFunction(() => window.__calls.some(c => /launch$/.test(c.uri)));
+    const launch = await page.evaluate(() => window.__calls.filter(c => /launch$/.test(c.uri)).pop().body);
+    if (launch.id !== 'com.webos.app.homeconnect' || !launch.params || launch.params.actionType !== 'mobileGuide') fail('Screen Share launched ' + JSON.stringify(launch));
+  } finally {
+    await page.close();
+  }
+
+  page = await load({ ok: true, layout: {}, order: { app: ['app1'], dev: devices.map(d => d.id) },
+    apps: [{ id: 'app1', title: 'Test App' }], devices });
+  try {
+    const air = (await tiles(page)).filter(x => x.name === 'AirPlay');
+    if (air.length !== 1 || !air[0].input || !air[0].svg) fail('AirPlay as an input only: ' + JSON.stringify(air));
+  } finally {
+    await page.close();
+  }
+}
+
 async function visitHomeWeather(browser, base, problems) {
   const page = await browser.newPage();
   page.on('pageerror', e => problems.push('Home weather: ' + e.message));
@@ -4290,8 +4558,11 @@ async function visitInputsAndRemote(browser, base, problems) {
   const devices = [{ id: 'TV', name: 'Live TV', tuner: true }, { id: 'HDMI_1', name: 'Console', port: 1 }, { id: 'HDMI_2', name: 'HDMI 2', port: 2, unused: true }];
   const keys = [{ key: 'input', title: 'Input', action: 'lg' }, { key: 'netflix', title: 'Netflix', action: 'open', id: 'com.tvweb.inputbar', opens: 'Input bar' }];
   let hasKeys = true;
+  let hasQuickAccess = false;
+  let appReads = 0;
   const writes = [];
   try {
+    await page.route('**/api/remote/available', route => route.fulfill({ json: { ok: true, available: hasKeys || hasQuickAccess } }));
     await page.route('**/api/inputs', route => route.fulfill({ json: { ok: true, writable: true, noSignal, inputBar: { standing: 'tried', allowed: true, experimental: false } } }));
     await page.route('**/api/home/catalogue', route => route.fulfill({ json: { ok: true, layout, order: { dev: ['TV', 'HDMI_1', 'HDMI_2'] },
       devices: devices.map(d => layout.deviceNames[d.id] ? Object.assign({}, d, { name: layout.deviceNames[d.id], defaultName: d.name }) : d) } }));
@@ -4305,11 +4576,12 @@ async function visitInputsAndRemote(browser, base, problems) {
       await route.fulfill({ json: { ok: true } });
     });
     await page.route('**/api/apps', async route => {
+      appReads++;
       // The page may close with this still on its way.
       try {
         const apps = await (await route.fetch()).json();
         apps.writable = true;
-        apps.quickAccess = null;
+        apps.quickAccess = hasQuickAccess ? { keys: [], choices: [] } : null;
         apps.remoteKeys = hasKeys ? { ok: true, supported: true, keys, choices: [] } : null;
         await route.fulfill({ json: apps });
       } catch (e) { /* closed */ }
@@ -4331,6 +4603,9 @@ async function visitInputsAndRemote(browser, base, problems) {
       }
       await route.fulfill({ json: Object.assign({ ok: true }, noSignal) });
     });
+    await page.goto(base + '/?tab=control');
+    await page.locator('#tab-btn-remote').waitFor({ state: 'visible' });
+    if (appReads) fail('opening Control fetched the Apps catalogue');
     await page.goto(base + '/?tab=inputs');
     await page.locator('#inputs-list .home-tile').first().waitFor();
     if (await page.locator('#inputs-list .home-tile').count() !== 3) fail('the inputs are not listed');
@@ -4372,6 +4647,13 @@ async function visitInputsAndRemote(browser, base, problems) {
     if (await page.evaluate(() => activeTab) !== 'remote') fail('the Remote tab button did not open Remote');
     if (!await page.locator('#remotepane #disc-remotekeys').isVisible()) fail('Remote keys are not on the Remote tab');
     if (await page.locator('#appspane #disc-remotekeys, #sspane [id*="nosignal"]').count()) fail('remote keys or No Signal remain on their old tabs');
+    hasKeys = false;
+    hasQuickAccess = true;
+    const readsBefore = appReads;
+    await page.goto(base + '/?tab=control');
+    await page.locator('#tab-btn-remote').waitFor({ state: 'visible' });
+    if (appReads !== readsBefore) fail('Quick Access visibility fetched the Apps catalogue');
+    hasQuickAccess = false;
     // A TV with no keys to set: no Remote tab, no input bar on Inputs, and no Your inputs while LG Home is active.
     hasKeys = false;
     await page.goto(base + '/?tab=inputs');
@@ -4825,7 +5107,7 @@ function groups(web, tv) {
     { job: 'tabs', tabs: web.map(t => ({ path: '/?tab=' + t, label: 'web ' + t })), visits: [visitHomeAnimations, visitHuesyncSettings, visitInputsAndRemote, visitAdblockCards, visitSaverEntitySlots] },
     { job: 'tabs', tabs: tv.map(t => ({ path: '/assets/dashboard.html?tab=' + t, label: 'TV ' + t })),
       visits: [visitTvDashboard, visitTvAudio, visitTvPictureWrites, visitPictureUnavailable, visitTvNonOled, visitTvHuesync] },
-    { job: 'home', tabs: [], visits: [visitHomePicture, visitHomePreview, visitHomePreviewOptions, visitHomePreviewWebos4, visitHomePreviewSize, visitHomePreviewSizeDetails, visitInputBarBehindHome, visitHomeUpDown, visitHomePointerOff, visitHomeOrder, visitHomeAvailability, visitHomeSearch, visitHomeWeather, visitHomeWeatherSetting] },
+    { job: 'home', tabs: [], visits: [visitHomePicture, visitHomePreview, visitHomePreviewOptions, visitHomePreviewWebos4, visitHomePreviewSize, visitHomePreviewSizeDetails, visitInputBarBehindHome, visitHomeBarPrewarm, visitHomeBarIconsReady, visitHomeBarTiles, visitHomeBarScroll, visitHomeUpDown, visitHomePointerOff, visitHomeOrder, visitHomeAvailability, visitHomeSearch, visitHomeWeather, visitHomeWeatherSetting] },
     { job: 'home', tabs: [], visits: [visitHomeArrangement, visitHomeVisibility, visitHomeColours, visitHomeInputsEditor, visitHomeEditor,
       visitHomeRecentsHidden, visitHomeUploads, visitHomeShuffle, visitHomeLauncher, visitHomeReadiness, visitAudioOverride, visitHomeRecents, visitHomeGuide,
       visitHomeFadeAndInputs] },

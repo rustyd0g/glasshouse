@@ -1455,6 +1455,17 @@ MAIN sink with `activation: true`). The same calls have run at every boot of an
 LG Home replacement on that C5 since 2026-10-11. A reboot between the two calls
 would leave the app blocked, so they stay together and the release is retried.
 
+Not every sam with the block has the release. A G3 (OLED77G3PUA, webOS 8.4.0,
+firmware 13.40.76) took `blockSystemApp` for `com.webos.app.home` and answered
+`releaseBlockSystemApp` with `Unknown method "releaseBlockSystemApp" for
+category "/"` (-1); LG's Home then answered a launch with -101 "not exist"
+until a reboot cleared the block, and `blockedSystemAppList` was not on disk
+(#1493). A C2 (webOS 9.2.2) answers the release the same way, though
+`/etc/palm/schemas/sam/applicationManager.blockSystemApp.schema` is there, so
+the schema does not say the release is. A release of an app that is not
+blocked changes nothing (a C5 answers `returnValue: true`), so it is asked
+first, and nothing is blocked where it is unknown.
+
 webOS 11 changes the block's parameters. On a G3 (OLED65G36LA, webOS 11.2.0,
 firmware 43.21.71) `/etc/palm/schemas/sam/applicationManager.blockSystemApp.schema`
 requires `forceBlockSystemApp` as well as `id` ("force blocking system app for
@@ -1897,7 +1908,10 @@ manager launched only HDMI 4 in nine minutes of the same file, and set back to
   and nothing opened; `getAppInfo` on a blocked app returns `returnValue:
   false`, a second block `errorCode` 1 "already blocked: <id>", and a release
   of an app not blocked `returnValue: true`. The adapter launched the view up
-  to 13 s after a press.
+  to 13 s after a press. A C3 (webOS 11.2.0) refused the block outright,
+  `errorCode` 1 "exist in listLaunchPoint: amazon.alexa.view": the view has a
+  launch point there (`hidden: false`), and sam will not block an app that
+  has one (#1498).
 - **Toasts can be refused, not closed.** `notification/closeToast` with a
   toast's id returned true and the toast stayed its 5 s. After
   `notification/disable` (`exceptions` optional), `createToast` was answered
@@ -1924,6 +1938,18 @@ and `com.miniclip.eightballpool` (8 Ball Pool). Both have `type: "stub"`,
 14 September and 6 October, their `appinfo.json` the minute they arrived. The
 notification list showed "Some apps are available for update" the same
 minute. Neither name is on Glasshouse's ad-blocking list.
+
+## LG's placeholder for YouTube (UM7290, webOS 4.10.2)
+
+A 55UM7290PTD has `/mnt/otncabi/usr/palm/applications/youtube.leanback.v4`:
+an `appinfo.json` with `type: "stub"`, version 0.0.1 and vendor `LG Electronics,
+Inc.`, the placeholder for the store's YouTube. The installer's check for an
+id that is already part of the TV system found it, so YouTube Foxtended
+(`youtube.leanback.v4`, a Homebrew Channel app that replaces YouTube on these
+TVs) was refused with "already part of the TV system". Installing it with
+`com.webos.appInstallService/dev/install` works, and puts the real app under
+`/media/developer/apps`, next to the placeholder. The installer now skips an
+id whose folder holds only a stub.
 
 ## Home screen (webOS 10 and 11)
 
@@ -3361,6 +3387,20 @@ re-wrote that input's EDID and hot-plugged it, and the app stayed in front.
 - On a B8 (webOS 4.4.3), 773 written to the remote's input device
   (`LGE RCU`, `event1`) reaches a reader of that device but opens nothing in
   the compositor; 125 written there opens LG's ribbon.
+- Read from the remote, a press opens Glasshouse Home about a second after
+  LG's ribbon, which shows each time, Glasshouse Home open or not; its tiles
+  were up 3.3 s after the ribbon (0.142.0, #1222).
+- `surface-manager` holds `/dev/input/event0` to `event8` open, and
+  `/dev/uinput` for writing. The input devices are `CHECK INPUT` (`event0`),
+  `LGE RCU` (`event1`), `Bluetooth-manager` (`event2`) and `LGE M-RCU -
+  Builtin [0]` (`event3`, also `mouse0` and `js0`, the Magic Remote's pointer).
+  `/dev/uinput` is there (`crw-------`, root). Taking Home before the ribbon
+  would need `EVIOCGRAB` on these and every other key written back through
+  uinput; the TV's Python is a stripped 2.7 with no `fcntl` module, and node
+  has no `ioctl`, so it would need a native program. Not tried.
+- `/usr/lib/qml` does not exist; `/usr/lib/qt5/qml` has `WebOSCompositor`,
+  `FavoriteChannels` (whose `SuperRibbon` names the ribbon) and LG's other QML
+  modules.
 
 ## A web app as the screen saver (OLED65C5PUA, webOS 10.3.1)
 
@@ -3443,7 +3483,13 @@ HDMI 3 in front.
   `document.hidden` true. A later launch reaches it as a relaunch
   (`APP_RELAUNCH`), and the window was shown 0.35 s after it. WebAppMgr waits
   for a new frame first (`Not PageFrameSwapped; Pending Show()`): a page with
-  nothing new to draw was shown 2.1 s later.
+  nothing new to draw was shown 2.1 s later. On a B8 (webOS 4.4.3), a normal
+  `launch` arriving 50–250 ms into a `"preload": "full"` start—or a preload
+  arriving 40–100 ms into a normal cold launch—leaves the app hidden with
+  `PalmSystem.launchParams` set to `{"preload":"full"}`; once running in front,
+  a `"preload": "full"` launch emits no `webOSRelaunch`. On the same B8, a single
+  relaunch with `params` dispatches duplicate `webOSRelaunch` events 1–19 ms
+  apart, each carrying `ev.detail` populated from `params`.
 - Launching a card window already on screen, as Glasshouse Home is, redraws
   it, which shows as a flash on each press.
 - In the compositor's key filters, `global.isForegroundApp(id)` is true for
@@ -3630,6 +3676,26 @@ it with `airplay.service/showAirplayPage`, which is in the public group. On the
 C2 that call and a plain `applicationManager/launch` of `airplay` open the same
 page: the Wi-Fi network, the TV's AirPlay name, How to Use AirPlay, and AirPlay
 and Apple Home, which holds its settings.
+
+## Screen Share without a phone (C2, webOS 9.2.2)
+
+`com.webos.app.miracast` ("Screen Share", a web app, `visible: false`) is
+LG's Miracast receiver. Launched on its own it came to the front and closed
+itself within 3 s, as owners saw from Glasshouse's tiles on a CX (webOS 5.6.2,
+#1500) and a C5 (webOS 10.3.1, #1502): its script closes the window when no
+connection comes. LG's Home Hub (`com.webos.app.homeconnect`) does not launch
+it either; its Screen Share entry is its own mobile guide panel, which a
+launch with `{ "actionType": "mobileGuide" }` opens (`onParamsCall` in its
+`main.js`, beside `iotConnectionGuide` and `iotPanel`). Launched that way, Home
+Hub stayed in front.
+
+## AV and Component inputs (32LM637B, webOS 4.5)
+
+eim's `getAllInputStatus` lists them beside HDMI as `AV_1` and `COMP_1`, each
+with `port: 1`, `connected` saying whether anything is plugged in, the label
+the owner gave it, and an app of its own: `com.webos.app.externalinput.av1`
+and `com.webos.app.externalinput.component`, not `com.webos.app.av1` (#1468).
+There is no `hdmiPlugIn` and no `subList` for them.
 
 ## Holding down LG's account client (C2, webOS 9.2.2; B4, webOS 10.3.2)
 

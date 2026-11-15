@@ -1112,6 +1112,7 @@ function namedDevices(c, list) {
     if (d.uniqueId !== undefined) copy.uniqueId = d.uniqueId;
     if (d.kind) copy.kind = d.kind;
     if (d.appId) copy.appId = d.appId;
+    if (d.params) copy.params = d.params;
     if (d.deviceId) copy.deviceId = d.deviceId;
     return copy;
   });
@@ -1176,15 +1177,37 @@ function extraDevices(cb) {
       });
       appInfo(AIRPLAY_APP, function (ap) {
         if (ap) out.push({ id: 'airplay', name: 'AirPlay', input: 'airplay', kind: 'airplay', appId: AIRPLAY_APP, port: 0, via: null, address: null });
-        appInfo('com.webos.app.miracast', function (mc) {
-          if (mc) out.push({ id: 'screenshare', name: String(mc.title || 'Screen Share'), input: 'screenshare', kind: 'screenshare', appId: 'com.webos.app.miracast', port: 0, via: null, address: null });
-          firstAppInfo(['com.webos.app.homeconnect', 'com.webos.app.inputmgr'], function (hub) {
+        firstAppInfo([HOME_HUB, 'com.webos.app.inputmgr'], function (hub) {
+          homeHubGuide(hub, function (guide) {
+            if (guide) {
+              out.push({ id: 'screenshare', name: 'Screen Share', input: 'screenshare', kind: 'screenshare', appId: HOME_HUB,
+                         params: { actionType: 'mobileGuide' }, port: 0, via: null, address: null });
+            }
             if (hub) out.push({ id: 'allinputs', name: 'All Inputs', input: 'allinputs', kind: 'allinputs', appId: hub.id, port: 0, via: null, address: null });
             cb(out);
           });
         });
       });
     });
+  });
+}
+
+/*
+ * Screen Share is LG's Miracast app, which runs only while a phone is
+ * connected: launched on its own it closes within 3 s (a C2, 9.2.2; a CX, a
+ * C5, #1500, #1502). LG's Home Hub opens its Screen Share guide instead, at
+ * actionType "mobileGuide", which its script names where it has the guide (a
+ * C2's). The tile is that, and is offered only where Home Hub has it.
+ */
+var HOME_HUB = 'com.webos.app.homeconnect';
+var homeHubMain = '/usr/palm/applications/' + HOME_HUB + '/main.js';
+var hubGuideKnown = null;
+function homeHubGuide(hub, cb) {
+  if (!hub || hub.id !== HOME_HUB) return cb(false);
+  if (hubGuideKnown !== null) return cb(hubGuideKnown);
+  fs.readFile(homeHubMain, 'utf8', function (err, text) {
+    hubGuideKnown = !err && text.indexOf('"mobileGuide"') !== -1;
+    cb(hubGuideKnown);
   });
 }
 
@@ -1205,9 +1228,28 @@ function devices(cb) {
   });
 }
 
+/*
+ * An AV or Component input, as eim names them on a 32LM637B (webOS 4.5):
+ * AV_1 and COMP_1, opened by their own apps, com.webos.app.externalinput.av1
+ * and com.webos.app.externalinput.component, with `connected` saying whether
+ * anything is plugged in (#1468). null for anything else.
+ */
+function analogInput(d) {
+  var m = d && typeof d.id === 'string' && /^(AV|COMP)_(\d)$/.exec(d.id);
+  if (!m || typeof d.appId !== 'string' || !d.appId) return null;
+  var kind = m[1] === 'AV' ? 'av' : 'component';
+  var input = (kind === 'av' ? 'av' : 'comp') + m[2];
+  var name = String(d.label || (kind === 'av' ? 'AV' : 'Component')).replace(/\s+/g, ' ').trim();
+  var out = { id: input, name: name, input: input, kind: kind, appId: d.appId, port: 0, via: null, address: null };
+  if (d.connected === false) out.unused = true;
+  return out;
+}
+
 function listDevices(devs, portsPlugged) {
   var out = [];
   devs.forEach(function (d) {
+    var analog = analogInput(d);
+    if (analog) return out.push(analog);
     var m = d && typeof d.id === 'string' && /^HDMI_(\d)$/.exec(d.id);
     if (!m) return;
     var plugged = typeof d.hdmiPlugIn === 'boolean' ? d.hdmiPlugIn
@@ -1775,7 +1817,7 @@ function open(body, cb) {
       if (!hit) hit = samePort(devs, id);
       if (!hit) return cb({ ok: false, error: msg('srv.home.unknownTile', 'that is not on Glasshouse Home') });
       if (hit.kind === 'airplay') return openAirPlay(opened('dev', hit.id, cb));
-      if (hit.appId) return launch(hit.appId, hit.deviceId ? { requestDevice: hit.deviceId } : null, opened('dev', hit.id, cb));
+      if (hit.appId) return launch(hit.appId, hit.params || (hit.deviceId ? { requestDevice: hit.deviceId } : null), opened('dev', hit.id, cb));
       var input = { app: names.inputAppId(hit.input), at: nowMs() };
       tileInput = input;
       // LG's picker selects the source behind a receiver through this launch parameter.
@@ -1938,8 +1980,9 @@ function switchTo(on, cb) {
     }
     (want ? takeover.take : takeover.release)(function (r) {
       if (!r.ok || (want && !readConfig().enabled)) return finish(r);
-      startingNotice(want && readConfig().enabled, function (k) {
-        if (!k || !k.ok) r = { ok: false, error: 'the TV did not take the Home key\'s starting notice' };
+      // The notice only says Glasshouse Home is on its way, so one the TV would
+      // not take is logged (startingNotice) and the switch stands (#1498).
+      startingNotice(want && readConfig().enabled, function () {
         finish(r);
       });
     });
@@ -3144,6 +3187,8 @@ function init(opts) {
   historyModule = opts.history || null;
   iptvModule = opts.iptv || null;
   if (opts.stateDir) stateDir = opts.stateDir;
+  if (opts.homeHubMain) homeHubMain = opts.homeHubMain;
+  hubGuideKnown = null;
   wallpapers.init(stateDir);
   recent.init(stateDir, opts.now);
   recentApps.init({ luna: lunaFn, excluded: function () { return readConfig().excludedRecents; } });

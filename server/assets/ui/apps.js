@@ -182,6 +182,7 @@ function renderAppsPanel() {
   renderAppDns(d);
   renderQuickAccess(d);
   renderRemoteKeys(d);
+  showRemoteTab();
 
   // Render Background Services
   const svcsList = q('apps-services-list');
@@ -373,7 +374,7 @@ window.addEventListener('resize', () => {
 // inputs and the apps.
 const RK_GROUPS = [
   { id: 'streaming', title: () => t('apps.remoteKeys.streaming', 'Streaming buttons'),
-    keys: ['netflix', 'amazon', 'disneyplus', 'rakutentv', 'lgchannels', 'hulu', 'iplayer', 'freeviewplay', 'slingtv', 'globoplay', 'shahid'] },
+    keys: ['netflix', 'amazon', 'disneyplus', 'rakutentv', 'lgchannels', 'ivi', 'okko', 'kinopoisk', 'shop', 'hulu', 'iplayer', 'freeviewplay', 'slingtv', 'globoplay', 'shahid'] },
   { id: 'assistant', title: () => t('apps.remoteKeys.assistant', 'Voice assistant buttons'), keys: ['voice', 'alexa', 'googleassistant'] },
   { id: 'colour', title: () => t('apps.remoteKeys.colour', 'Color keys'), keys: ['red', 'green', 'yellow', 'blue'] },
   // Anything else, including keys a later server offers.
@@ -382,7 +383,7 @@ const RK_GROUPS = [
 // The colour keys' own colours, the one place colour is the key's name.
 const RK_COLOURS = { red: 'var(--red)', green: 'var(--green)', yellow: '#f2c230', blue: 'var(--blue)' };
 // The volume controls' own glyphs; the rest share the play/pause one.
-const RK_MEDIA_GLYPHS = { 'media:volumeUp': '🔊', 'media:volumeDown': '🔉', 'media:mute': '🔇' };
+const RK_MEDIA_GLYPHS = { 'media:ok': '◉', 'media:volumeUp': '🔊', 'media:volumeDown': '🔉', 'media:mute': '🔇' };
 let rkData = null;     // the last remoteKeys answer, for the picker
 let rkOpen = null;     // the key whose picker is open
 let rkCols = 0;        // the columns its grid had when it opened
@@ -406,11 +407,23 @@ function rkDoes(k, kindOf) {
 }
 
 // The Remote tab: there where the TV has Quick Access or remote keys to set.
+let remoteAvailable = null;
+async function loadRemoteAvailable() {
+  try {
+    const r = await fetch(api('/api/remote/available'), { cache: 'no-store' });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.ok || typeof d.available !== 'boolean') return;
+    remoteAvailable = d.available;
+    showRemoteTab();
+  } catch (e) { console.error('loadRemoteAvailable failed:', e); }
+}
+
 function showRemoteTab() {
-  const has = !!(appsData && (appsData.quickAccess || appsData.remoteKeys));
+  const has = appsData ? !!(appsData.quickAccess || appsData.remoteKeys) : remoteAvailable;
   const btn = q('tab-btn-remote');
   if (btn) btn.hidden = !has;
-  if (!has && activeTab === 'remote') showTab('control');
+  if (has === false && activeTab === 'remote') showTab('control');
 }
 
 function renderRemoteKeys(d) {
@@ -428,8 +441,6 @@ function renderRemoteKeys(d) {
   }
   rkData = rk;
   rkWritable = !!d.writable;
-  // Neither on a TV: the tab has nothing to show.
-  showRemoteTab();
   renderInputs();
   // Left alone while a choice is being made in it.
   if (!list || (rkOpen && list.contains(document.activeElement))) return;
@@ -517,7 +528,7 @@ function toggleRemoteKey(tile) {
     ${k.replacesVoice ? `<div class="pv-note">${esc(t('apps.remoteKeys.replacesVoice', 'Set to anything else, this button no longer starts voice control. As LG has it brings it back.'))}</div>` : ''}
     ${k.turnsOffVoice ? `<div class="pv-note">${esc(t('apps.remoteKeys.turnsOffVoice', 'Setting this key switches off LG\'s voice assistant, so voice search, the AI assistant and the microphone stop working until it is As LG has it again.'))}</div>` : ''}
     <div class="rk-opts">${opt('lg', esc(t('apps.remoteKeys.lg', 'As LG has it')))}${k.noNothing ? '' : opt('nothing', `<span aria-hidden="true">⦸</span> ${esc(t('apps.remoteKeys.nothing', 'Nothing'))}`)}${switchers}${gone}</div>
-    ${media.length ? `<div class="rk-sub">${esc(t('apps.remoteKeys.media', 'Media'))}</div>
+    ${media.length ? `<div class="rk-sub">${esc(t('apps.remoteKeys.buttons', 'Buttons'))}</div>
     <div class="rk-opts">${media.map(c => opt(c.id, esc(c.title))).join('')}</div>` : ''}
     ${inputs.length ? `<div class="rk-sub">${esc(t('apps.remoteKeys.inputs', 'Inputs'))}</div>
     <div class="rk-opts">${inputs.map(c => opt(c.id, `<span translate="no">${esc(c.title)}</span>`)).join('')}</div>` : ''}

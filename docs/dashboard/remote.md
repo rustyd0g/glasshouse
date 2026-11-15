@@ -1,6 +1,6 @@
 # Remote
 
-The **Remote** tab, `/?tab=remote`, sets what the remote's keys do: the number keys held down, under **Quick Access**, and the other buttons, under **Remote keys**. It is left out on a TV with neither.
+The **Remote** tab, `/?tab=remote`, sets what the remote's keys do: the number keys held down, under **Quick Access**, and the other buttons, under **Remote keys**. It appears when the dashboard opens, and is left out on a TV with neither.
 
 # Quick Access
 
@@ -16,6 +16,8 @@ Sets what each number key on the remote opens when it is held: an installed app,
 
 Configures what individual remote buttons do when pressed. Each key appears as a tile showing its active assignment, grouped under **Streaming buttons**, **Color keys**, and **Other keys**. Selecting a tile opens its available choices beneath the row.
 
+On webOS 11, **Ivi**, **Okko**, **Kinopoisk** and **LG Shop** are also offered under Streaming buttons when LG enables their assignments. They can open an app or input, do nothing, or return to **As LG has it**. A listed button may be absent from the physical remote.
+
 Core keys (**Home**, **Back**, volume, mute, channel, and power) are reserved and cannot be reassigned. The microphone button can be reassigned; setting it to another action overrides both press and hold, replacing LG's voice control until returned to **As LG has it**.
 
 ## Available actions
@@ -26,7 +28,7 @@ Core keys (**Home**, **Back**, volume, mute, channel, and power) are reserved an
 * **Input switcher:** Opens LG's quick input picker on TVs that support it (such as a C5 on webOS 11).
 * **Screen off:** Blanks the display while audio continues playing; pressing any key turns the screen back on.
 * **Power off:** Puts the TV into standby on key release. When using TVs side by side, assigning this to a Magic Remote's RF button allows putting one TV into standby without an IR signal affecting the other. (The dedicated Power button is unchanged, and power actions are not offered in Quick Access).
-* **Media controls:** Sends **Play**, **Pause**, **Stop**, **Rewind**, **Fast forward**, **Volume up**, **Volume down**, or **Mute** to on-screen media. Volume commands repeat while held and control connected HDMI ARC soundbars.
+* **Buttons:** Acts as **OK**, or sends **Play**, **Pause**, **Stop**, **Rewind**, **Fast forward**, **Volume up**, **Volume down**, or **Mute** to on-screen media. **OK** puts the Magic Remote's OK, the scroll wheel's press, on a flat button too. Volume commands repeat while held and control connected HDMI ARC soundbars.
 * **Home & Guide:** Opens Glasshouse Home (or LG's Home if disabled), or opens Glasshouse Home's [IPTV guide](home.md#internet-tv).
 * **Home Assistant:** Silences TV handling while keeping the key labelled for Home Assistant automations. When MQTT is enabled, Home Assistant receives [Remote Button](../HOME-ASSISTANT-REMOTE-BUTTONS.md) events for streaming buttons, color keys, Google Assistant, and the microphone regardless of what they are set to on the TV.
 * **Nothing:** Disables the key completely on the TV.
@@ -53,7 +55,7 @@ Glasshouse intercepts keys in the compositor filter chain before apps see them. 
 On webOS 11 (LG's webOS 26), LG manages button assignments natively:
 
 * **Supported keys:** Streaming buttons, Apps, Guide, Home Hub (on MR25 remotes), **AI**, **Alexa**, and the **?** button (configurable separately for press and hold). Color keys, Input, Search, Info, Home, and **123** cannot be reassigned.
-* **Action limits:** LG only permits opening apps on webOS 11. Media controls, **Power off**, **Home Assistant**, and **Glasshouse Home's guide** are unavailable. A streaming button set to **Nothing** displays LG's "This function is not supported" notice, and the **?** button cannot be set to **Nothing**.
+* **Action limits:** LG only permits opening apps on webOS 11. **OK** and the media controls, **Power off**, **Home Assistant**, and **Glasshouse Home's guide** are unavailable. A streaming button set to **Nothing** displays LG's "This function is not supported" notice, and the **?** button cannot be set to **Nothing**.
 * **Screen off:** Available on Netflix, Prime Video, and Home Hub buttons. A streaming button displays LG's "This function is not supported" notice, and Glasshouse turns the screen off ~0.5 s after press. LG restores its streaming button assignments when the screen goes off, and Glasshouse reapplies them moments later.
 * **AI button:** Reassigning the AI button disables LG's voice assistant entirely (voice search, the AI assistant, and the microphone stop working until restored to **As LG has it**). Glasshouse opens the chosen target ~1 s after press.
-* **Alexa button:** Reassigning the Alexa button prevents Alexa from launching and suppresses all on-screen notices for 4 seconds to hide Amazon's "Alexa is loading" prompt. See [webOS 11: LG's own values](../IMPLEMENTATION.md#webos-11-lgs-own-values).
+* **Alexa button:** Reassigning the Alexa button prevents Alexa from launching and suppresses all on-screen notices for 4 seconds to hide Amazon's "Alexa is loading" prompt. Some TVs will not let Alexa be stopped from launching (seen on a C3 with webOS 11.2); there, once the TV has refused, the Alexa button is no longer offered and stays as LG has it. See [webOS 11: LG's own values](../IMPLEMENTATION.md#webos-11-lgs-own-values).
