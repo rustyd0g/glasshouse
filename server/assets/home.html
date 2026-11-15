@@ -24,14 +24,22 @@ body{font-family:'Manrope',sans-serif;color:#ece7df;-webkit-font-smoothing:antia
 #stage{position:absolute;left:0;top:0;width:1920px;height:1080px;background:#000;overflow:hidden;
   -webkit-transform-origin:0 0;transform-origin:0 0}
 
-/* Both pictures share a moving frame so a cross-fade keeps the same crop. */
+/* Two layers cross-fade when the slot changes. The drift keeps the picture
+   from sitting still on the panel; the scrim keeps the text side and the rows
+   dark. */
 #wall{position:absolute;left:0;top:0;right:0;bottom:0;overflow:hidden}
 #anim{position:absolute;left:0;top:0;width:1920px;height:1080px;display:none}
 #anim.on{display:block}
-#wall-drift{position:absolute;left:-3%;top:-3%;right:-3%;bottom:-3%}
-#wall .layer{position:absolute;left:0;top:0;right:0;bottom:0;background-position:center;background-size:cover;
-  background-repeat:no-repeat;opacity:0;-webkit-transition:opacity 2.4s ease;transition:opacity 2.4s ease}
-html.resting #wall{visibility:hidden}
+#wall .layer{position:absolute;left:-3%;top:-3%;right:-3%;bottom:-3%;background-position:center;background-size:cover;
+  background-repeat:no-repeat;opacity:0;-webkit-transition:opacity 2.4s ease;transition:opacity 2.4s ease;
+  -webkit-animation:drift 180s steps(360) infinite alternate;animation:drift 180s steps(360) infinite alternate}
+/* At rest while covered: the wallpaper is not animated under the screen saver or
+   another app. It stays shown, still, so that it is there the moment Home is
+   uncovered rather than coming in over a black screen a beat later; paused, it
+   is not drawn again. */
+html.resting #wall .layer{-webkit-animation-play-state:paused;animation-play-state:paused}
+@-webkit-keyframes drift{from{-webkit-transform:scale(1) translate(0,0)}to{-webkit-transform:scale(1.04) translate(-1.2%,-.8%)}}
+@keyframes drift{from{transform:scale(1) translate(0,0)}to{transform:scale(1.04) translate(-1.2%,-.8%)}}
 #scrim{position:absolute;left:0;top:0;right:0;bottom:0;
   -webkit-transition:opacity .2s;transition:opacity .2s;
   background:radial-gradient(ellipse 34% 30% at 92% 14%,rgba(0,0,0,.55),rgba(0,0,0,0)),
@@ -632,29 +640,22 @@ html.faded #stage{opacity:0}
 @media (prefers-reduced-motion:reduce){
   .track,#toast,.tile,#scrim,#folder,#folderGrid,#hits,.hit,.chip,#finder,#rail,#rail svg,#ask,html.fades #stage,
   #band,#chlist,#clItems,#adder,#adItems,#adAsk,#preview.full,#rows{-webkit-transition:none;transition:none}
+  #wall .layer{-webkit-animation:none;animation:none}
   .ch .scroll-text{display:inline!important;-webkit-animation:none!important;animation:none!important}
   .ch .scroll-copy{display:none}
   .ch .scrolling{text-overflow:ellipsis}
 }
 /* Each kind of motion switched off on its own from the layout (applyMotion).
    On body, as the fade's classes take html's. */
-body.no-drift #wall-drift{-webkit-animation-play-state:paused;animation-play-state:paused}
+body.no-drift #wall .layer{-webkit-animation:none;animation:none}
 body.no-crossfade #wall .layer{-webkit-transition:none;transition:none}
 body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide #folderGrid,body.no-slide #hits{-webkit-transition:none;transition:none}
-</style>
-<!-- Keep the drift timeline outside the stylesheet replaced by colour changes. -->
-<style id="wall-drift-animation">
-#wall-drift{-webkit-animation:drift 180s steps(360) infinite alternate;animation:drift 180s steps(360) infinite alternate;
-  -webkit-animation-play-state:paused;animation-play-state:paused}
-@-webkit-keyframes drift{from{-webkit-transform:scale(1) translate(0,0)}to{-webkit-transform:scale(1.04) translate(-1.2%,-.8%)}}
-@keyframes drift{from{transform:scale(1) translate(0,0)}to{transform:scale(1.04) translate(-1.2%,-.8%)}}
-@media (prefers-reduced-motion:reduce){#wall-drift{-webkit-animation-play-state:paused!important;animation-play-state:paused!important}}
 </style>
 <style id="channel-title-scroll"></style>
 </head>
 <body>
 <div id="stage" class="no-search no-clock">
-  <div id="wall"><canvas id="anim" width="0" height="0"></canvas><div id="wall-drift"><div class="layer"></div><div class="layer"></div></div></div>
+  <div id="wall"><canvas id="anim" width="0" height="0"></canvas><div class="layer"></div><div class="layer"></div></div>
   <div id="scrim"></div>
 
   <section id="now">
@@ -790,13 +791,21 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   // Held this long, OK arranges the tiles rather than opening one.
   var LONG_PRESS_MS = 800;
   var BEAT_MS = 5000;
+  var iptvWasUp = false;
+  /*
+   * Under the screen saver the page is covered, not hidden: no visibilitychange
+   * or relaunch says when it ends, so the heartbeat is how the page hears it,
+   * and comes this often meanwhile. At BEAT_MS the background stayed hidden up
+   * to 5 s after the screen saver ended (a C4, webOS 10.3).
+   */
+  var SAVER_BEAT_MS = 1000;
+  var beatTimer = null;
   var CLOSE_BEHIND_MS = 120000;
   var coveredSince = 0;
   function rest(on) {
     var cl = document.documentElement.classList;
     if (on === cl.contains('resting')) return;
     cl.toggle('resting', on);
-    syncWallpaperDrift();
     // Covered, the page is not hidden (webOS 4 keeps it running behind the app
     // in front), so the live preview and the animated background stop here as
     // well: under the screen saver the preview kept the tuner playing (#1209).
@@ -836,6 +845,12 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   function setText(id, value) {
     var element = $(id);
     if (element.textContent !== value) element.textContent = value;
+  }
+
+  function motionNow() {
+    // The TV can correct its clock after boot; animation timing follows elapsed time.
+    var clock = window.performance;
+    return clock && typeof clock.now === 'function' ? Math.floor(clock.now()) : Date.now();
   }
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
@@ -2307,6 +2322,9 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       $('stage').className = value;
       queueChannelTitles(200);
     }
+    // Home Assistant's media player shows IPTV while the guide or a player is up: told at once, not at the next heartbeat.
+    var iptvUp = !!(player.open || guide.open);
+    if (iptvUp !== iptvWasUp) { iptvWasUp = iptvUp; beat(); }
     applyPointer(false);
     followPreview();
   }
@@ -2940,7 +2958,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   function lease(on) {
     clearInterval(tvStream.leaseTimer);
     tvStream.leaseTimer = null;
-    var send = function () { postJson('/api/iptv/lease', { on: on, full: on && player.open && !tvStream.paused }); };
+    var send = function () { postJson('/api/iptv/lease', { on: on, full: on && player.open && !tvStream.paused, open: on && player.open }); };
     send();
     if (on) tvStream.leaseTimer = setInterval(send, 60000);
   }
@@ -5200,6 +5218,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
    * finds the last launch's parameters still there.
    */
   var guideAsked = false;
+  // A channel Home Assistant asked to play: { pl, key, at }, opened once the lineup has it.
+  var playAsked = null;
   var LOADED_KEY = 'glasshouse.home.loaded';
   /*
    * Each launch replaces the last one's request, so a Home press after Guide
@@ -5216,6 +5236,22 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       if (seen) return;
     }
     guideAsked = p.glasshouse === 'guide';
+    playAsked = p.glasshouse === 'play' && /^[0-9A-Za-z_-]{1,40}$/.test(String(p.pl || '')) && /^[a-z][0-9a-z]{1,24}$/.test(String(p.key || ''))
+      ? { pl: String(p.pl), key: String(p.key), at: Date.now() } : null;
+  }
+  function openAskedPlay() {
+    var want = playAsked;
+    if (!want || !data || !layout) return;
+    if (Date.now() - want.at > 20000) { playAsked = null; return; }
+    var found = null, items = lineupItems();
+    for (var i = 0; i < items.length; i++) if (items[i].pl === want.pl && items[i].key === want.key) { found = items[i]; break; }
+    // The lineup may still be on its way.
+    if (!found) return setTimeout(openAskedPlay, 700);
+    playAsked = null;
+    if (adder.open) closeAdder();
+    if (guide.open) closeGuide();
+    if (finder.open) { closeSearch(); state.rail = false; }
+    openPlayer(found);
   }
   function openAskedGuide() {
     if (!guideAsked || !data || !layout) return;
@@ -5242,50 +5278,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     for (var j = 0; j < WALL_SLOTS.length; j++) if (WALL_SLOTS[j].from <= h) slot = WALL_SLOTS[j];
     return slot;
   }
-  var WALL_DRIFT_MS = 360000; // 180 seconds in each direction.
-  var WALL_DRIFT_KEY = 'glasshouse.home.drift';
-  var wallDriftElapsed = 0, wallDriftSince = null, wallDriftMedia = null;
-
-  function motionNow() {
-    // The TV can correct its clock after boot; CSS motion follows elapsed time.
-    var clock = window.performance;
-    return clock && typeof clock.now === 'function' ? Math.floor(clock.now()) : Date.now();
-  }
-
-  function wallpaperDriftPhase(now) {
-    return (wallDriftElapsed + (wallDriftSince === null ? 0 : Math.max(0, now - wallDriftSince))) % WALL_DRIFT_MS;
-  }
-
-  function rememberWallpaperDrift() {
-    try { window.localStorage.setItem(WALL_DRIFT_KEY, String(wallpaperDriftPhase(motionNow()))); } catch (e) {}
-  }
-
-  function syncWallpaperDrift() {
-    var running = !document.hidden && !(layout && layout.wallDrift === false) && !document.documentElement.classList.contains('resting') &&
-      wallShown !== null && !(layout && layout.wallAnim && layout.wallAnim !== 'off') && !(wallDriftMedia && wallDriftMedia.matches);
-    if (running === (wallDriftSince !== null)) return;
-    if (running) wallDriftSince = motionNow();
-    else {
-      wallDriftElapsed = wallpaperDriftPhase(motionNow());
-      wallDriftSince = null;
-      rememberWallpaperDrift();
-    }
-    var motion = $('wall-drift');
-    motion.style.webkitAnimationPlayState = motion.style.animationPlayState = running ? 'running' : 'paused';
-  }
-
-  function restoreWallpaperDrift() {
-    try {
-      var saved = Number(window.localStorage.getItem(WALL_DRIFT_KEY));
-      if (isFinite(saved) && saved >= 0 && saved < WALL_DRIFT_MS) wallDriftElapsed = saved;
-    } catch (e) {}
-    // A negative delay restores the crop and direction before the image appears.
-    var motion = $('wall-drift');
-    motion.style.webkitAnimationDelay = motion.style.animationDelay = -wallDriftElapsed + 'ms';
-    wallDriftMedia = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (wallDriftMedia && wallDriftMedia.addListener) wallDriftMedia.addListener(syncWallpaperDrift);
-  }
-
   function readWallpapers(w) {
     wallAvailable = !!(w && w.available);
     wallSlots = w && w.slots;
@@ -5323,7 +5315,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
 
   function updateWall() {
     syncAnim();
-    syncWallpaperDrift();
     if (document.hidden) return;
     var slot = wallSlot(), shuffled = wallChoice === 'shuffle';
     var picture = shuffled && anim.style === 'off' && wallAvailable ? shufflePick() : null;
@@ -5334,7 +5325,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       var blank = $('wall').querySelectorAll('.layer');
       for (var b = 0; b < blank.length; b++) { blank[b].style.opacity = 0; blank[b].style.backgroundImage = ''; }
       wallShown = null;
-      syncWallpaperDrift();
       return;
     }
     // A shuffled picture's name never changes, so it needs no revision.
@@ -5358,7 +5348,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       if (shuffled ? wallChoice !== 'shuffle' || shuffle.id !== picture
         : wallChoice === 'shuffle' || wallRevision !== revision || wallSlot().key !== slot.key) return;
       wallShown = id;
-      syncWallpaperDrift();
       next.style.backgroundImage = 'url(' + src + ')';
       next.style.opacity = slot.strength;
       prev.style.opacity = 0;
@@ -6024,7 +6013,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     smoothScroll = l.smoothScroll !== false;
     document.body.className = (l.wallDrift === false ? 'no-drift ' : '') + (l.wallCrossfade === false ? 'no-crossfade ' : '') +
       (l.slidePanels === false ? 'no-slide' : '');
-    syncWallpaperDrift();
   }
 
   // The wallpaper's darkening, as a share of the scrim's own: 0 leaves the picture as it is.
@@ -6117,6 +6105,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       refreshGuide();
       refreshTvGuide();
       openAskedGuide();
+      openAskedPlay();
       // The player keeps its frozen order; its channels' names and guide follow.
       if (player.open) { renderBand(); if (player.list) renderList(); }
       if (guide.open) renderGuide();
@@ -6225,12 +6214,19 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     return out;
   }
 
+  // Each beat schedules the next, sooner while the screen saver covers the page.
+  function scheduleBeat(ms) {
+    clearTimeout(beatTimer);
+    beatTimer = setTimeout(beat, ms);
+  }
+
   function beat() {
+    scheduleBeat(BEAT_MS);
     // With no usable catalogue, let the server's ten-second watchdog recover Home.
     if (!data || !layout) return;
     // Whether the page has the keyboard: after a wake on webOS 11 it can be
     // in front and get no keys (#1122).
-    postJson('/api/home/beat', { focused: document.hasFocus(), visible: document.visibilityState || '', perf: takeTrace() }, function (r) {
+    postJson('/api/home/beat', { focused: document.hasFocus(), visible: document.visibilityState || '', iptv: !!(player.open || guide.open), perf: takeTrace() }, function (r) {
       if (r && r.ok) {
         beatFails = 0;
         // A custom launcher chosen in Glasshouse Home's place (lib/home-launcher).
@@ -6241,6 +6237,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
         // webOS 4: switched off, the standalone view closes itself, as Back does.
         if (r.enabled === false && standalone) return window.close();
         rest(!!r.covered);
+        if (r.saver) scheduleBeat(SAVER_BEAT_MS);
         renderWeather(r.weather || null);
         // webOS 4: two minutes behind another app, not the screen saver, the
         // view closes itself to give its memory back; Home opens it afresh.
@@ -6357,18 +6354,14 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   // Home pressed with the view already open reaches it as a relaunch.
   document.addEventListener('webOSRelaunch', function () { guideLaunch(); returned(); });
   document.addEventListener('visibilitychange', function () {
-    syncWallpaperDrift();
     if (document.hidden) { animStop(); darken(); stageClass(); } else { returned(); animRun(); }
   });
-  window.addEventListener('pagehide', rememberWallpaperDrift);
-  window.addEventListener('beforeunload', rememberWallpaperDrift);
   window.addEventListener('pagehide', function () { if (player.open) closePlayer(); stopPreview(); });
 
   // Started dark where fading is chosen; in at the first catalogue, or before
   // long without one.
   if (fadeOn) { faded = true; paintFade(false); setTimeout(fadeIn, 1500); }
   fit();
-  restoreWallpaperDrift();
   renderNow();
   updateWall();
   beat();
@@ -6376,7 +6369,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   guideLaunch(true);
   load();
   refreshWeather();
-  setInterval(beat, BEAT_MS);
   setInterval(function () {
     if (document.hidden) return;
     renderNow(); updateWall(); updateChannelProgress(); refreshPicture();

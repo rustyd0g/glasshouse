@@ -289,6 +289,49 @@ async function visitHomePicture(browser, base, problems) {
 // The weather badge: Home Assistant's last push or Open-Meteo's, brought by the heartbeat.
 // The input bar over a Home screen: the input last watched is under it, not
 // on screen, so OK on it switches to it rather than closing the bar.
+// Stepping with the arrows switches a second after the last step, or, with
+// Switch only on OK, not until OK (#1532).
+async function visitInputBarSwitchOnOk(browser, base, problems) {
+  for (const onOk of [false, true]) {
+    const name = 'Input bar, ' + (onOk ? 'switch only on OK' : 'switch after a step') + ': ';
+    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    page.on('pageerror', e => problems.push(name + e.message));
+    await page.clock.install();
+    await page.addInitScript(() => {
+      window.launches = [];
+      window.PalmServiceBridge = function () {};
+      window.PalmServiceBridge.prototype.call = function (uri, body) { window.launches.push(JSON.parse(body).id); };
+      window.close = function () { window.closed = true; };
+    });
+    await page.route('http://localhost:8080/**', route => {
+      const url = new URL(route.request().url());
+      if (url.pathname === '/assets/devicons.js') return route.continue({ url: base + '/assets/devicons.js' });
+      if (url.pathname === '/api/home/now') return route.fulfill({ json: { kind: 'input', port: 2, devices: ['hdmi2'], behindHome: false } });
+      if (url.pathname === '/api/home/catalogue') return route.fulfill({ json: { ok: true, layout: onOk ? { inputBarSwitchOnOk: true } : {}, order: { dev: ['hdmi1', 'hdmi2'] },
+        devices: [{ id: 'hdmi1', name: 'HDMI 1', input: 'hdmi1', port: 1 }, { id: 'hdmi2', name: 'Mac', input: 'hdmi2', port: 2 }] } });
+      return route.fulfill({ json: {} });
+    });
+    try {
+      await page.goto(base + '/assets/inputbar-app/index.html');
+      await page.waitForSelector('.tile.focus');
+      await page.clock.runFor(500);
+      await page.keyboard.press('ArrowLeft');
+      await page.clock.runFor(1500);
+      const afterStep = await page.evaluate(() => window.launches.slice());
+      if (!onOk && afterStep.indexOf('com.webos.app.hdmi1') === -1) problems.push(name + 'did not switch a second after the step');
+      if (onOk && afterStep.length) problems.push(name + 'switched without OK: ' + afterStep.join(', '));
+      if (onOk) {
+        await page.keyboard.press('Enter');
+        await page.clock.runFor(100);
+        const afterOk = await page.evaluate(() => window.launches.slice());
+        if (afterOk.indexOf('com.webos.app.hdmi1') === -1) problems.push(name + 'OK did not switch');
+      }
+    } finally {
+      await page.close();
+    }
+  }
+}
+
 async function visitInputBarBehindHome(browser, base, problems) {
   for (const behindHome of [true, false]) {
     const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
@@ -3455,131 +3498,6 @@ async function visitTvNonOled(browser, base, problems) {
   }
 }
 
-async function visitHomeWallpaperDrift(browser, base, problems) {
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-  page.on('pageerror', e => problems.push('Home wallpaper motion: ' + e.message));
-  const layout = { rows: ['app', 'dev', 'ch'], hidden: { app: [], dev: [], ch: [] }, channels: [],
-    hintSeen: true, searchHintSeen: true };
-  let revision = 'one', wallChoice = 'own';
-  const walls = () => ({ available: true, choice: wallChoice, pictures: ['pic000001', 'pic000002'],
-    slots: { morning: true, afternoon: true, evening: true, night: true }, revision });
-  await page.addInitScript(() => {
-    if (!sessionStorage.getItem('wallpaper-motion-seeded')) {
-      localStorage.setItem('glasshouse.home.drift', '225000');
-      sessionStorage.setItem('wallpaper-motion-seeded', '1');
-    }
-  });
-  await page.route('**/api/home/**', route => {
-    const pathname = new URL(route.request().url()).pathname;
-    if (pathname === '/api/home/wallpaper') return route.fulfill({ contentType: 'image/jpeg',
-      body: fs.readFileSync(path.join(ROOT, 'test/fixtures/home-wallpaper.jpg')) });
-    const body = pathname.endsWith('/catalogue')
-      ? { ok: true, layout, layoutVersion: revision, apps: [{ id: 'one', title: 'One' }], devices: [], channels: [],
-          order: { app: ['one'], dev: [], ch: [] }, sources: { channels: 0 }, wallpapers: walls() }
-      : pathname.endsWith('/now') ? { kind: null }
-      : { ok: true, build: 'one', layoutVersion: revision, wallpapers: walls() };
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
-  });
-  const check = (ok, detail) => { if (!ok) problems.push('Home wallpaper motion: ' + detail); };
-  const running = () => page.waitForFunction(() => document.getElementById('wall-drift').style.animationPlayState === 'running');
-  async function hidden(value) {
-    await page.evaluate(value => {
-      Object.defineProperty(document, 'hidden', { configurable: true, get: () => value });
-      document.dispatchEvent(new Event('visibilitychange'));
-    }, value);
-  }
-  try {
-    await page.goto(base + '/assets/home.html?hour=8');
-    await running();
-    check(await page.evaluate(() => getComputedStyle(document.getElementById('wall-drift')).animationTimingFunction === 'steps(360)'),
-      'the shared frame lost upstream’s stepped drift');
-    check(await page.evaluate(() => getComputedStyle(document.getElementById('wall-drift')).animationDelay === '-225s'),
-      'a reload did not restore the return half of the drift');
-    await page.evaluate(() => { window.savedWallpaperMotion = document.getElementById('wall-drift').getAnimations()[0]; });
-    layout.colours = { text: '#ffffff', accent: '#55bbff' };
-    layout.darkening = 25;
-    revision = 'two';
-    await page.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
-    await page.waitForFunction(() => document.getElementById('look').textContent.includes('#55bbff'));
-    await page.waitForFunction(() => [...document.querySelectorAll('#wall .layer')].some(el => el.style.backgroundImage.includes('v=two')));
-    check(await page.locator('#scrim').evaluate(el => Math.abs(Number(el.style.opacity) - 0.25) < 0.001),
-      'loading a wallpaper overwrote Darkening');
-    check(await page.evaluate(() => window.savedWallpaperMotion === document.getElementById('wall-drift').getAnimations()[0]),
-      'a colour or image update restarted the drift timeline');
-    check(await page.evaluate(() => [...document.querySelectorAll('#wall .layer')].every(el => getComputedStyle(el).animationName === 'none')),
-      'cross-fading pictures do not share one moving frame');
-    wallChoice = 'shuffle';
-    revision = 'shuffled';
-    await page.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
-    await page.waitForFunction(() => [...document.querySelectorAll('#wall .layer')].some(el =>
-      +el.style.opacity > 0 && el.style.backgroundImage.includes('slot=shuffle')));
-    check(await page.evaluate(() => window.savedWallpaperMotion === document.getElementById('wall-drift').getAnimations()[0]),
-      'switching to shuffled pictures restarted the drift timeline');
-    wallChoice = 'own';
-    layout.wallAnim = 'waves';
-    revision = 'animated';
-    await page.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
-    await page.waitForSelector('#anim.on');
-    await page.waitForFunction(() => document.getElementById('wall-drift').style.animationPlayState === 'paused');
-    await page.waitForTimeout(50);
-    const heldCrop = await page.evaluate(() => window.savedWallpaperMotion.currentTime);
-    await page.waitForTimeout(150);
-    check(await page.evaluate(time => window.savedWallpaperMotion.currentTime === time, heldCrop),
-      'picture drift continued underneath an animated background');
-    layout.wallAnim = 'off';
-    revision = 'pictures-again';
-    await page.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
-    await running();
-    await page.waitForFunction(() => [...document.querySelectorAll('#wall .layer')].some(el => el.style.backgroundImage.includes('pictures-again')));
-    check(await page.evaluate(time => window.savedWallpaperMotion === document.getElementById('wall-drift').getAnimations()[0] &&
-      window.savedWallpaperMotion.currentTime >= time && document.getElementById('anim').width === 0, heldCrop),
-      'returning to pictures reset their crop or retained the animation canvas');
-    layout.wallDrift = false;
-    layout.wallCrossfade = false;
-    revision = 'motion-off';
-    await page.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
-    await page.waitForFunction(() => document.getElementById('wall-drift').style.animationPlayState === 'paused');
-    await page.waitForTimeout(50);
-    const motionOff = await page.evaluate(() => window.savedWallpaperMotion.currentTime);
-    await page.waitForTimeout(150);
-    check(await page.evaluate(time => window.savedWallpaperMotion.currentTime === time, motionOff),
-      'the Wallpaper drift switch did not pause the shared frame');
-    check(await page.locator('#wall .layer').first().evaluate(el => getComputedStyle(el).transitionDuration === '0s'),
-      'the Wallpaper cross-fade switch left an image transition enabled');
-    layout.wallDrift = true;
-    layout.wallCrossfade = true;
-    revision = 'motion-on';
-    await page.evaluate(() => document.dispatchEvent(new Event('webOSRelaunch')));
-    await running();
-    const resumedMotion = await page.evaluate(time => ({
-      same: window.savedWallpaperMotion === document.getElementById('wall-drift').getAnimations()[0],
-      before: time, after: window.savedWallpaperMotion.currentTime
-    }), motionOff);
-    check(resumedMotion.same && resumedMotion.after >= resumedMotion.before,
-      'the drift switch restarted its crop or direction: ' + JSON.stringify(resumedMotion));
-    await hidden(true);
-    await page.waitForTimeout(50);
-    const paused = await page.evaluate(() => window.savedWallpaperMotion.currentTime);
-    await page.waitForTimeout(150);
-    check(await page.evaluate(time => window.savedWallpaperMotion.currentTime === time, paused), 'the hidden wallpaper kept moving');
-    await hidden(false);
-    await running();
-    check(await page.evaluate(() => window.savedWallpaperMotion === document.getElementById('wall-drift').getAnimations()[0]),
-      'returning from another app restarted the drift');
-    await hidden(true);
-    const saved = await page.evaluate(() => localStorage.getItem('glasshouse.home.drift'));
-    await page.reload();
-    await running();
-    check(await page.evaluate(saved => document.getElementById('wall-drift').style.animationDelay === -Number(saved) + 'ms', saved),
-      'a full page reload lost the saved position or direction');
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.waitForFunction(() => getComputedStyle(document.getElementById('wall-drift')).animationPlayState === 'paused');
-    const still = await page.locator('#wall-drift').evaluate(el => getComputedStyle(el).transform);
-    await page.waitForTimeout(100);
-    check(still === await page.locator('#wall-drift').evaluate(el => getComputedStyle(el).transform),
-      'the wallpaper moved with reduced motion enabled');
-  } finally { await page.close(); }
-}
 
 
 async function visitHomeChannelBounds(browser, base, problems) {
@@ -5107,7 +5025,7 @@ function groups(web, tv) {
     { job: 'tabs', tabs: web.map(t => ({ path: '/?tab=' + t, label: 'web ' + t })), visits: [visitHomeAnimations, visitHuesyncSettings, visitInputsAndRemote, visitAdblockCards, visitSaverEntitySlots] },
     { job: 'tabs', tabs: tv.map(t => ({ path: '/assets/dashboard.html?tab=' + t, label: 'TV ' + t })),
       visits: [visitTvDashboard, visitTvAudio, visitTvPictureWrites, visitPictureUnavailable, visitTvNonOled, visitTvHuesync] },
-    { job: 'home', tabs: [], visits: [visitHomePicture, visitHomePreview, visitHomePreviewOptions, visitHomePreviewWebos4, visitHomePreviewSize, visitHomePreviewSizeDetails, visitInputBarBehindHome, visitHomeBarPrewarm, visitHomeBarIconsReady, visitHomeBarTiles, visitHomeBarScroll, visitHomeUpDown, visitHomePointerOff, visitHomeOrder, visitHomeAvailability, visitHomeSearch, visitHomeWeather, visitHomeWeatherSetting] },
+    { job: 'home', tabs: [], visits: [visitHomePicture, visitHomePreview, visitHomePreviewOptions, visitHomePreviewWebos4, visitHomePreviewSize, visitHomePreviewSizeDetails, visitInputBarBehindHome, visitInputBarSwitchOnOk, visitHomeBarPrewarm, visitHomeBarIconsReady, visitHomeBarTiles, visitHomeBarScroll, visitHomeUpDown, visitHomePointerOff, visitHomeOrder, visitHomeAvailability, visitHomeSearch, visitHomeWeather, visitHomeWeatherSetting] },
     { job: 'home', tabs: [], visits: [visitHomeArrangement, visitHomeVisibility, visitHomeColours, visitHomeInputsEditor, visitHomeEditor,
       visitHomeRecentsHidden, visitHomeUploads, visitHomeShuffle, visitHomeLauncher, visitHomeReadiness, visitAudioOverride, visitHomeRecents, visitHomeGuide,
       visitHomeFadeAndInputs] },
@@ -5119,7 +5037,7 @@ function groups(web, tv) {
      * failed on them after the groups went side by side (#1126). On CI they
      * have a machine to themselves; run with the rest, they wait for them.
      */
-    { job: 'motion', tabs: [], visits: [visitHomeScrolling, visitHomeMotion, visitHomeWallpaperDrift, visitHomeChannelBounds, visitHomeVerticalNavigation], alone: true }
+    { job: 'motion', tabs: [], visits: [visitHomeScrolling, visitHomeMotion, visitHomeChannelBounds, visitHomeVerticalNavigation], alone: true }
   ].filter(g => !process.env.CHECK_JOB || g.job === process.env.CHECK_JOB);
 }
 
