@@ -3774,3 +3774,7 @@ which gave LG's Home its place. Checking only for a different foreground card
 does not recognise this Guide state. Recovery checks match a focused overlay
 to the foreground window list and keep checking after it closes; an unfocused
 or merely cached overlay does not exempt a stopped Home view.
+
+With the correction installed, navigating Guide for at least 30 s kept it
+open. Successive watchdog checks logged that the view was behind
+`com.webos.app.livemenu`, rather than restoring LG's Home.
