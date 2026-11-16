@@ -3758,3 +3758,19 @@ Home through `com.palm.webappmanager/killApp` with
 `{"appId":"com.webos.app.home"}`, then launching Home again, restored both the
 pointer and hover in a fresh web process. No page or setting was changed. Its
 cause and recurrence conditions remain unconfirmed.
+
+## LG Guide covering Glasshouse Home (C3, webOS 10.2.2)
+
+On 16 November 2026, LG's broadcast Guide was visible while
+`applicationManager/getForegroundAppInfo` still named `com.webos.app.home`,
+with category `home`. `surfacemanager/getForegroundWindowInfo` listed Home as
+`_WEBOS_WINDOW_TYPE_CARD`, `com.webos.app.livemenu` as
+`_WEBOS_WINDOW_TYPE_OVERLAY`, and the volume window as
+`_WEBOS_WINDOW_TYPE_VOLUME`. `getFocusedWindowInfo` named `livemenu`, with
+`type: overlaySurface`.
+
+That evening's Glasshouse log recorded three “view not answering” recoveries
+which gave LG's Home its place. Checking only for a different foreground card
+does not recognise this Guide state. Recovery checks match a focused overlay
+to the foreground window list and keep checking after it closes; an unfocused
+or merely cached overlay does not exempt a stopped Home view.

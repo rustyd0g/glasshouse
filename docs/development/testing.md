@@ -374,6 +374,8 @@ Channel bounds browser checks leave an expanded end card for another row or ente
 
 Vertical navigation browser checks move repeatedly through differently sized rows without drifting left and verify that Left/Right establishes a new horizontal anchor.
 
+The Home watchdog checks reproduce a C3's LG Guide overlay while Home remains the foreground card: multiple missed heartbeats leave Guide alone, closing it resumes hang recovery without a new heartbeat, and unfocused overlays, failed focus reads or a focus result absent from the window list do not mask a stopped view. A fresh heartbeat arriving during the focus query cancels the stale recovery attempt. The suite uses its fake clock.
+
 `test-home-refresh.js` checks shared reads, retry after failure, stale replies after saves or relaunches and completion callbacks. `test-home-return.js` checks settled scroll transforms before return replies arrive. Picture browser checks also reject stale details after returning to the same app.
 
 `test-home-cursor.js` checks the native cursor reset through both webOS bridges, unavailable methods, hidden pages and the pointer-off choice. Browser checks cover relaunch, visibility, focus and cursor events, restoring on the first pointer movement, and continued tile hovering without repeated resets. A real TV is needed to check the compositor's cursor rendering.
