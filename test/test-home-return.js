@@ -21,7 +21,8 @@ function fixture(faded, tracks) {
   });
   var sandbox = {
     tracks: tracks, state: { row: 1, col: { app: 4, dev: 2 }, bar: -1, arranging: false },
-    refreshGeneration: 0, verticalAnchor: null, faded: faded, GLIDE_OUT: 65, FADE_WAIT_MS: 500,
+    refreshGeneration: 0, faded: faded, GLIDE_OUT: 65, FADE_WAIT_MS: 500,
+    wallChoice: 'landscape', wallVideoSources: [], wallVideoInputAt: 0, scheduleWallVideoIdle: function () {},
     player: { open: false }, adder: { open: false }, guide: { open: false }, guideAsked: false,
     liveTile: null, tilePreview: { opened: 'hdmi1' }, applyPointer: function () {}, rest: function () {},
     okTimer: null, clearTimeout: function () {}, setTimeout: function () {},
