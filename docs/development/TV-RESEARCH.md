@@ -3756,3 +3756,15 @@ or merely cached overlay does not exempt a stopped Home view.
 With the correction installed, navigating Guide for at least 30 s kept it
 open. Successive watchdog checks logged that the view was behind
 `com.webos.app.livemenu`, rather than restoring LG's Home.
+
+## Home-first cold boot (C3, webOS 10.2.2)
+
+On 17 November 2026, with Quick Start+ and Home Auto Launch both on, bootd
+recorded a full boot by `remoteKey`: `com.webos.app.home` was foreground at
+14.4 s and another app at 30.7 s. The Glasshouse boot hook mounted its Home
+replacement around 30 s, then logged “Glasshouse Home not opened: the TV
+started on com.webos.app.home”. The server's Home setup finished at 42.5 s.
+
+A Home-first boot needs to be accepted by the hook's starting-app check,
+while its foreground check must still leave an app selected since boot alone.
+These logs do not establish why Quick Start+ did not preserve a warm resume.

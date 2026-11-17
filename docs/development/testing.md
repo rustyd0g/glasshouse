@@ -319,6 +319,8 @@ server stop and switch-off, including delayed power-on reason replies, and
 a wake with Quick Start+ on, where LG's own auto launch value is read and
 nothing is opened with Home already in front.
 
+`test-home-boot.js` runs the boot hook's Home launch function alone in a temporary directory, with `luna-send` replaced. It covers Home-first, Live TV and HDMI starts, apps or inputs selected since boot, unknown foreground or starting apps, auto launch off or held off, power-on reason gates, the standalone target on older webOS, and a boot marker written only after a successful launch. It runs none of the hook's mounts, process stops or service commands.
+
 ## Home Assistant
 
 [`home-assistant.yml`](https://github.com/rorygallagher2024/glasshouse/blob/main/.github/workflows/home-assistant.yml) builds every discovery config the server can publish and

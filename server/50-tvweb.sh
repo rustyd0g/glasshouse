@@ -295,8 +295,8 @@ lg_home_pids() {
 # The server switches LG's Home auto launch off, so the TV starts on its last
 # input rather than on LG's Home, and keeps the owner's value as lgAutoLaunch in
 # home.json (lib/home.js). Where it was on, Glasshouse Home opens instead, as
-# LG's would have: after a power-on LG opens Home for, and only while the input
-# the TV started on is still in front, so an input or app chosen since stays.
+# LG's would have: after a power-on LG opens Home for, and only while its
+# starting input or Home is still in front, so an input or app chosen since stays.
 # bootd logs the app it put in front as "'<id>' is foreground" (a G5, webOS
 # 10.3.1); without that line nothing is opened. With Quick Start+ on, auto
 # launch is left as the owner had it, and a C4 (webOS 10.3.1) with it on still
@@ -322,8 +322,10 @@ home_open_at_boot() {
   boot_app=$(sed -n "s/.*BootSequencer) '\([^']*\)' is foreground.*/\1/p" /var/log/bootd.log 2>/dev/null | head -n 1)
   front=$(luna-send -n 1 luna://com.webos.applicationManager/getForegroundAppInfo '{}' 2>/dev/null |
     sed -n 's/.*"appId": *"\([^"]*\)".*/\1/p')
+  # LG can draw Home before the hook mounts its replacement. If Home is still
+  # in front, launching it again draws the mounted view.
   case "$boot_app" in
-    com.webos.app.livetv|com.webos.app.hdmi[0-9]|com.webos.app.av[0-9]|com.webos.app.comp[0-9]) ;;
+    com.webos.app.home|com.webos.app.livetv|com.webos.app.hdmi[0-9]|com.webos.app.av[0-9]|com.webos.app.comp[0-9]) ;;
     *) echo "$(date): Glasshouse Home not opened: the TV started on ${boot_app:-nothing logged}"; return 0 ;;
   esac
   # On webOS 11.1 (50QNED72B6B) sam respawns com.webos.app.home once LG's Home
