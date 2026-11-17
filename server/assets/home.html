@@ -2350,7 +2350,9 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     if (dr && onSort) state.col[rowKey()] = -1;
     // A row the pointer or the wheel moved is taken up from the tiles in
     // view, not pulled back to the tile focused before.
-    var kind = rowKey(), span = state.arranging ? null : inView(kind), c = colOf(kind);
+    var kind = rowKey(), c = colOf(kind);
+    var atStart = dc < 0 && c === 0 && trackOf(kind).target === 0;
+    var span = state.arranging || atStart ? null : inView(kind);
     var outside = span && c >= 0 && (c < span[0] || c > span[1]);
     var under = dr && !onSort && !state.arranging && state.row !== fromRow && fromCol >= 0 ? columnUnder(fromKey, fromCol, kind) : -1;
     if (under >= 0) {
