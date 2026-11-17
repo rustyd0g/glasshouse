@@ -499,6 +499,8 @@ Each appears where the TV has it. A TV Glasshouse Home is not offered on, such a
 
 Opens the Home screen when the TV is switched on, rather than staying on the last input. LG calls this Home Auto Launch (`general.homeAutoLaunch`). While Glasshouse Home is on, the Home it opens is Glasshouse Home (see [Switching it on and off](#switching-it-on-and-off)).
 
+On a cold boot, LG Home may appear first. Glasshouse opens its replacement once ready if Home is still on screen; an app or input chosen meanwhile is left alone.
+
 ### Layout options
 
 The **Layout** section configures the on-screen placement of rows and status elements:
