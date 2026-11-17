@@ -713,6 +713,70 @@ async function visitHomeBarTiles(browser, base, problems) {
   }
 }
 
+/*
+ * Glasshouse Bar on a remote key beside Glasshouse Home (#1499): no LG's Home
+ * tile, which would open Glasshouse Home there, and a press over Glasshouse
+ * Home closes the page unseen; over anything else it opens.
+ */
+async function visitHomeBarBesideHome(browser, base, problems) {
+  const fail = what => problems.push('Glasshouse Bar beside Home: ' + what);
+  const catalogue = { ok: true, enabled: true, supported: { ok: true }, layout: {},
+    order: { app: ['lg-home', 'app1'], dev: [] }, apps: [{ id: 'app1', title: 'Test App' }], devices: [] };
+  const load = async (front, kept) => {
+    const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    page.on('pageerror', e => fail(e.message));
+    await page.addInitScript(([front, kept]) => {
+      window.PalmSystem = { launchParams: '{}' };
+      window.__closed = false;
+      if (kept !== null) window.localStorage.setItem('glasshouse.homebar.home', kept);
+      window.PalmServiceBridge = function () {};
+      window.PalmServiceBridge.prototype.call = function () {
+        const me = this;
+        setTimeout(() => { if (me.onservicecallback) me.onservicecallback(JSON.stringify({ returnValue: true })); }, 5);
+      };
+      window.close = function () { window.__closed = true; };
+    }, [front, kept]);
+    await page.route('http://localhost:8080/**', route => {
+      const url = new URL(route.request().url());
+      if (url.pathname === '/assets/devicons.js') return route.continue({ url: base + '/assets/devicons.js' });
+      if (url.pathname === '/api/home/now') return route.fulfill({ json: { kind: null, homeInFront: front === 'home' } });
+      if (url.pathname === '/api/home/catalogue') return route.fulfill({ json: catalogue });
+      return route.fulfill({ json: {} });
+    });
+    await page.goto(base + '/assets/homebar-app/index.html');
+    return page;
+  };
+
+  let page = await load('youtube', null);
+  try {
+    await page.waitForFunction(() => document.querySelectorAll('#row .tile').length > 0);
+    const names = await page.evaluate(() => Array.from(document.querySelectorAll('#row .tile .nm')).map(el => el.textContent));
+    if (names.indexOf('LG Home') !== -1 || names.indexOf('Test App') === -1) fail('the tiles beside Glasshouse Home: ' + JSON.stringify(names));
+    const kept = await page.evaluate(() => window.localStorage.getItem('glasshouse.homebar.home'));
+    if (kept !== '1') fail('Glasshouse Home\'s app not kept for the next press: ' + JSON.stringify(kept));
+  } finally {
+    await page.close();
+  }
+
+  page = await load('home', '1');
+  try {
+    await page.waitForFunction(() => window.__closed, null, { timeout: 3000 }).catch(() => {});
+    const seen = await page.evaluate(() => ({ closed: window.__closed, on: document.body.className === 'on' }));
+    if (!seen.closed || seen.on) fail('a press over Glasshouse Home: ' + JSON.stringify(seen));
+  } finally {
+    await page.close();
+  }
+
+  page = await load('netflix', '1');
+  try {
+    await page.waitForFunction(() => document.body.className === 'on', null, { timeout: 3000 }).catch(() => {});
+    const seen = await page.evaluate(() => ({ closed: window.__closed, on: document.body.className === 'on' }));
+    if (seen.closed || !seen.on) fail('a press over another app: ' + JSON.stringify(seen));
+  } finally {
+    await page.close();
+  }
+}
+
 async function visitHomeWeather(browser, base, problems) {
   const page = await browser.newPage();
   page.on('pageerror', e => problems.push('Home weather: ' + e.message));
@@ -777,6 +841,109 @@ async function visitHomeWeather(browser, base, problems) {
 
 // The Home tab's Weather setting: the source, and a place found by name for
 // Open-Meteo. The search is answered here, so the check never reaches Open-Meteo.
+// The remote's battery after the date: a percentage, or a step remote's word,
+// orange once low, and gone when the heartbeat brings none.
+async function visitHomeRemoteBattery(browser, base, problems) {
+  const page = await browser.newPage();
+  page.on('pageerror', e => problems.push('Home remote battery: ' + e.message));
+  const fail = what => problems.push('Home remote battery: ' + what);
+  const layout = { rows: ['app'], order: { app: [] }, hidden: { app: [] }, channels: [], hintSeen: true, searchHintSeen: true };
+  let battery = null;
+  await page.route('**/api/home/**', route => {
+    const url = new URL(route.request().url());
+    const reply = body => route.fulfill({ json: body });
+    if (url.pathname.endsWith('/catalogue')) return reply({ ok: true, layout, layoutVersion: 1,
+      apps: [{ id: 'app', title: 'App' }], devices: [], channels: [], sources: { channels: 0 }, order: { app: ['app', 'lg-home'] } });
+    if (url.pathname.endsWith('/guide')) return reply({ ok: true, guide: {} });
+    return reply({ ok: true, build: 'battery', layoutVersion: 1, remoteBattery: battery });
+  });
+  const beat = async () => {
+    const replied = page.waitForResponse(r => new URL(r.url()).pathname === '/api/home/beat');
+    await page.clock.fastForward(5000);
+    await replied;
+    await page.evaluate(() => 0);
+  };
+  const shown = () => page.evaluate(() => {
+    const b = document.getElementById('rbat');
+    if (getComputedStyle(b).display === 'none') return null;
+    return { text: document.getElementById('rbatPct').textContent, low: b.classList.contains('low'),
+      colour: getComputedStyle(b).color, label: b.getAttribute('aria-label') };
+  });
+  try {
+    await page.clock.install();
+    await page.goto(base + '/assets/home.html');
+    await page.waitForSelector('.tile');
+    if (await shown()) fail('shown before the heartbeat brought it');
+    battery = { level: 87, step: null, low: false };
+    await beat();
+    const pct = await shown();
+    if (!pct || pct.text !== '87%' || pct.low || pct.label !== 'Remote battery: 87%') fail('87% was shown as ' + JSON.stringify(pct));
+    battery = { level: null, step: 'mid', low: false };
+    await beat();
+    const mid = await shown();
+    if (!mid || mid.text !== 'Medium' || mid.low) fail('a MID step was shown as ' + JSON.stringify(mid));
+    battery = { level: null, step: 'low', low: true };
+    await beat();
+    const low = await shown();
+    if (!low || low.text !== 'Low' || !low.low || low.colour !== 'rgb(255, 138, 76)') fail('a LOW step was shown as ' + JSON.stringify(low));
+    battery = { level: 15, step: null, low: true };
+    await beat();
+    const lowPct = await shown();
+    if (!lowPct || lowPct.text !== '15%' || !lowPct.low) fail('15% was shown as ' + JSON.stringify(lowPct));
+    battery = null;
+    await beat();
+    if (await shown()) fail('still shown once the heartbeat brought none');
+  } catch (e) {
+    fail(e.message);
+  } finally { await page.close(); }
+}
+
+// The setting is offered only where the badge could ever show.
+async function visitHomeRemoteBatterySetting(browser, base, problems) {
+  const fail = what => problems.push('Home remote battery setting: ' + what);
+  for (const available of [true, false]) {
+    const page = await browser.newPage();
+    page.on('pageerror', e => problems.push('Home remote battery setting: ' + e.message));
+    const layout = { rows: ['app'], order: { app: [] }, sort: { app: 'custom' }, hidden: { app: [] }, channels: [],
+      hintSeen: true, searchHintSeen: true, remoteBattery: 'low' };
+    const saves = [];
+    await page.route('**/api/home**', async route => {
+      const url = new URL(route.request().url());
+      let body;
+      if (url.pathname === '/api/home') body = { ok: true, supported: { ok: true }, installed: true, enabled: true, active: true,
+        writable: true, layout, history: true, remoteBatteryAvailable: available };
+      else if (url.pathname.endsWith('/catalogue')) body = { ok: true, apps: [], channels: [], devices: [], layout, order: { app: ['lg-home'] } };
+      else if (url.pathname.endsWith('/layout')) {
+        const patch = route.request().postDataJSON();
+        saves.push(patch);
+        if (patch.remoteBattery) layout.remoteBattery = patch.remoteBattery;
+        body = { ok: true, layout: JSON.parse(JSON.stringify(layout)) };
+      } else body = { ok: true };
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+    });
+    try {
+      await page.goto(base + '/?tab=home');
+      // Weather's row, beside it, shows once the tab has drawn.
+      await page.waitForFunction(() => { const s = document.getElementById('home-weather-sel'); return s && s.offsetParent; });
+      const sel = page.locator('#home-remote-battery-sel');
+      if (!available) {
+        if (await sel.isVisible()) fail('offered with no battery to show');
+      } else {
+        if (!await sel.isVisible()) fail('not offered with a remote whose battery is read');
+        else {
+          if (await sel.inputValue() !== 'low') fail('read ' + await sel.inputValue() + ' for When low');
+          const saved = page.waitForResponse(r => new URL(r.url()).pathname === '/api/home/layout');
+          await sel.selectOption('always');
+          await saved;
+          if (JSON.stringify(saves) !== '[{"remoteBattery":"always"}]') fail('choosing Always saved ' + JSON.stringify(saves));
+        }
+      }
+    } catch (e) {
+      fail(e.message);
+    } finally { await page.close(); }
+  }
+}
+
 async function visitHomeWeatherSetting(browser, base, problems) {
   const page = await browser.newPage();
   page.on('pageerror', e => problems.push('Home weather setting: ' + e.message));
@@ -5020,12 +5187,146 @@ async function visitAdblockCards(browser, base, problems) {
   } finally { await page.unrouteAll({ behavior: 'wait' }); await page.close(); }
 }
 
+/*
+ * The remote on its own (?view=remote, #1586): on a phone and in a wide
+ * window, only playback, volume, the D-pad, the pointer where its
+ * experimental switch is on, the keyboard and the way back, in one column,
+ * the D-pad and keyboard open, and the full dashboard's remembered tab left
+ * alone; in the header's modal (embed=1), no masthead and no way back. The
+ * header's Remote opens the modal over any tab with the page faded, Esc and
+ * Back close it and empty its frame, and ?open= opens the keyboard.
+ */
+async function visitRemoteView(browser, base, problems) {
+  const fail = what => problems.push('Remote view: ' + what);
+  const shown = page => page.evaluate(() => {
+    const vis = el => !!el && el.getBoundingClientRect().height > 0 && getComputedStyle(el).display !== 'none';
+    return {
+      cls: document.documentElement.classList.contains('remote-view'),
+      // As they appear, top to bottom: the remote orders them with CSS.
+      sets: Array.from(document.querySelector('#tab-control .col-controls').children).filter(vis)
+        .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top).map(el => el.id || el.className),
+      vol: [document.getElementById('vol').textContent, document.getElementById('rp-vol').textContent],
+      nav: vis(document.getElementById('sidenav')) || vis(document.querySelector('.nav-bar')),
+      header: vis(document.querySelector('header')), button: vis(document.getElementById('hdr-remote')),
+      cols: document.querySelectorAll('#tab-control .lcols').length,
+      pointer: !document.getElementById('disc-pointer').hidden,
+      tab: localStorage.getItem('tab'), shownPanels: Array.from(document.querySelectorAll('#panels > section')).filter(s => !s.hidden).map(s => s.id)
+    };
+  });
+  for (const [label, path, viewport] of [['390', '/?view=remote', { width: 390, height: 844 }], ['1400', '/?view=remote', { width: 1400, height: 900 }],
+                                         ['embed', '/?view=remote&embed=1', { width: 440, height: 880 }]]) {
+    const page = await browser.newPage({ viewport });
+    page.on('pageerror', e => fail(label + ': ' + e.message));
+    try {
+      await page.addInitScript(() => { try { if (!localStorage.getItem('tab')) localStorage.setItem('tab', 'apps'); } catch (e) {} });
+      await page.goto(base + path);
+      await page.waitForFunction(() => !document.getElementById('tab-control').hidden);
+      await page.waitForTimeout(300);
+      const s = await shown(page);
+      const embed = label === 'embed';
+      const want = ['remote-pad', 'remote-modes'].concat(embed ? [] : ['remote-full']);
+      if (!s.cls) fail(label + ': no remote-view class');
+      if (JSON.stringify(s.sets) !== JSON.stringify(want)) fail(label + ': shows ' + JSON.stringify(s.sets) + ', not ' + JSON.stringify(want));
+      if (s.nav) fail(label + ': the tabs are shown');
+      if (s.header === embed) fail(label + ': masthead shown ' + s.header);
+      if (s.button) fail(label + ': the header\'s Remote shows in the remote');
+      if (s.cols) fail(label + ': in columns');
+      if (s.vol[0] !== s.vol[1]) fail(label + ': the pad\'s volume says ' + s.vol[1] + ', the Control tab\'s ' + s.vol[0]);
+      if (label === '390') {
+        // Input: the sources in place of the buttons; Keyboard: the keyboard box; back to the buttons.
+        await page.locator('#rp-input').click();
+        const inputs = await shown(page);
+        if (JSON.stringify(inputs.sets.slice(0, 2)) !== JSON.stringify(['remote-pad', 'control-source'])) fail('Input shows ' + JSON.stringify(inputs.sets));
+        if (await page.locator('.rp-body').isVisible()) fail('Input left the buttons showing');
+        await page.locator('#remote-modes [data-mode="keys"]').click();
+        const keys = await shown(page);
+        if (keys.sets.indexOf('disc-keyboard') === -1 || keys.sets.indexOf('control-source') !== -1) fail('Keyboard shows ' + JSON.stringify(keys.sets));
+        await page.locator('#remote-modes [data-mode="buttons"]').click();
+        if (!(await page.locator('.rp-ring').isVisible())) fail('Buttons left the D-pad hidden');
+        if (await page.evaluate(() => localStorage.getItem('remoteMode')) !== 'buttons') fail('the mode is not kept');
+        // The touchpad with fingers: a tap clicks, a drag moves further than a mouse would, two fingers scroll.
+        const pad = await page.evaluate(() => {
+          const sent = [], moves = [];
+          window.sendPointer = body => sent.push(body);
+          window.queuePointerMove = (dx, dy) => moves.push([dx, dy]);
+          const el = document.getElementById('pointer-pad');
+          const fire = (type, id, x, y) => el.dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', isPrimary: id === 1,
+            clientX: x, clientY: y, button: 0, buttons: type === 'pointerup' ? 0 : 1, bubbles: true, cancelable: true }));
+          fire('pointerdown', 1, 100, 100); fire('pointerup', 1, 100, 100);
+          const clicks = sent.filter(b => b.click).length;
+          fire('pointerdown', 1, 100, 100);
+          for (let i = 1; i <= 10; i++) fire('pointermove', 1, 100 + i * 10, 100);
+          fire('pointerup', 1, 200, 100);
+          const moved = moves.reduce((n, m) => n + m[0], 0);
+          sent.length = 0;
+          fire('pointerdown', 1, 100, 200); fire('pointerdown', 2, 160, 200);
+          for (let i = 1; i <= 6; i++) { fire('pointermove', 1, 100, 200 - i * 10); fire('pointermove', 2, 160, 200 - i * 10); }
+          fire('pointerup', 1, 100, 140); fire('pointerup', 2, 160, 140);
+          const scrolled = sent.filter(b => b.scroll).reduce((n, b) => n + b.scroll.dy, 0);
+          return { clicks, moved, scrolled, clicked: sent.filter(b => b.click).length };
+        });
+        if (pad.clicks !== 1) fail('a tap on the touchpad sent ' + pad.clicks + ' clicks');
+        if (pad.moved <= 150) fail('a 100 px finger drag moved the cursor only ' + pad.moved + ' px');
+        if (pad.scrolled < 2 || pad.clicked) fail('two fingers up 60 px scrolled ' + pad.scrolled + ' and clicked ' + pad.clicked);
+      }
+      if (s.tab !== 'apps') fail(label + ': the remembered tab became ' + s.tab);
+      if (JSON.stringify(s.shownPanels) !== JSON.stringify(['tab-control'])) fail(label + ': panels shown ' + JSON.stringify(s.shownPanels));
+    } finally {
+      await page.close();
+    }
+  }
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  page.on('pageerror', e => fail('dashboard: ' + e.message));
+  try {
+    // The Android app's bridge, told while the remote shows.
+    await page.addInitScript(() => { window.__app = []; window.GlasshouseApp = { remoteState: v => window.__app.push(v) }; });
+    await page.goto(base + '/?tab=metrics');
+    await page.waitForFunction(() => !document.getElementById('tab-metrics').hidden);
+    if (await page.locator('#remote-full').isVisible()) fail('the remote\'s way back shows on the full dashboard');
+    const modalState = () => page.evaluate(() => {
+      const m = document.getElementById('remote-modal'), f = document.getElementById('remote-frame');
+      let src = '';
+      try { src = f ? f.contentWindow.location.href : 'none'; } catch (e) { src = 'unreadable'; }
+      return { hidden: m.hidden, shown: m.classList.contains('shown'), src };
+    });
+    for (const how of ['Escape', 'back']) {
+      await page.locator('#hdr-remote').click();
+      await page.waitForFunction(() => document.getElementById('remote-modal').classList.contains('shown'));
+      await page.waitForFunction(() => /view=remote/.test(document.getElementById('remote-frame').contentWindow.location.href));
+      const open = await modalState();
+      if (!/\?view=remote&embed=1$/.test(open.src)) fail('the modal\'s frame opens ' + JSON.stringify(open.src));
+      await page.waitForFunction(() => {
+        const f = document.getElementById('remote-frame'), d = f && f.contentDocument;
+        return d && f.classList.contains('loaded') && d.documentElement.classList.contains('remote-embed') && !d.getElementById('tab-control').hidden;
+      }, null, { timeout: 8000 }).catch(() => fail('the remote did not load in the modal'));
+      if (how === 'Escape') {
+        await page.evaluate(() => document.getElementById('hdr-remote').focus());
+        await page.keyboard.press('Escape');
+      } else {
+        // The phone's or the browser's Back: one step through the history.
+        await page.evaluate(() => history.back());
+      }
+      await page.waitForFunction(() => document.getElementById('remote-modal').hidden, null, { timeout: 3000 }).catch(() => {});
+      const shut = await modalState();
+      if (!shut.hidden || shut.src !== 'none') fail(how + ' left the modal ' + JSON.stringify(shut));
+      if (!(await page.evaluate(() => !document.getElementById('tab-metrics').hidden))) fail(how + ' left the Metrics tab');
+    }
+    const told = await page.evaluate(() => window.__app.join(','));
+    if (told !== 'true,false,true,false') fail('the app was told ' + JSON.stringify(told));
+    await page.goto(base + '/?open=keyboard');
+    await page.waitForFunction(() => !document.getElementById('tab-control').hidden);
+    if (!(await page.evaluate(() => document.getElementById('disc-keyboard').open))) fail('?open=keyboard left the keyboard shut');
+  } finally {
+    await page.close();
+  }
+}
+
 function groups(web, tv) {
   return [
-    { job: 'tabs', tabs: web.map(t => ({ path: '/?tab=' + t, label: 'web ' + t })), visits: [visitHomeAnimations, visitHuesyncSettings, visitInputsAndRemote, visitAdblockCards, visitSaverEntitySlots] },
+    { job: 'tabs', tabs: web.map(t => ({ path: '/?tab=' + t, label: 'web ' + t })), visits: [visitHomeAnimations, visitHuesyncSettings, visitInputsAndRemote, visitAdblockCards, visitSaverEntitySlots, visitRemoteView] },
     { job: 'tabs', tabs: tv.map(t => ({ path: '/assets/dashboard.html?tab=' + t, label: 'TV ' + t })),
       visits: [visitTvDashboard, visitTvAudio, visitTvPictureWrites, visitPictureUnavailable, visitTvNonOled, visitTvHuesync] },
-    { job: 'home', tabs: [], visits: [visitHomePicture, visitHomePreview, visitHomePreviewOptions, visitHomePreviewWebos4, visitHomePreviewSize, visitHomePreviewSizeDetails, visitInputBarBehindHome, visitInputBarSwitchOnOk, visitHomeBarPrewarm, visitHomeBarIconsReady, visitHomeBarTiles, visitHomeBarScroll, visitHomeUpDown, visitHomePointerOff, visitHomeOrder, visitHomeAvailability, visitHomeSearch, visitHomeWeather, visitHomeWeatherSetting] },
+    { job: 'home', tabs: [], visits: [visitHomePicture, visitHomePreview, visitHomePreviewOptions, visitHomePreviewWebos4, visitHomePreviewSize, visitHomePreviewSizeDetails, visitInputBarBehindHome, visitInputBarSwitchOnOk, visitHomeBarPrewarm, visitHomeBarIconsReady, visitHomeBarTiles, visitHomeBarBesideHome, visitHomeBarScroll, visitHomeUpDown, visitHomePointerOff, visitHomeOrder, visitHomeAvailability, visitHomeSearch, visitHomeWeather, visitHomeWeatherSetting, visitHomeRemoteBattery, visitHomeRemoteBatterySetting] },
     { job: 'home', tabs: [], visits: [visitHomeArrangement, visitHomeVisibility, visitHomeColours, visitHomeInputsEditor, visitHomeEditor,
       visitHomeRecentsHidden, visitHomeUploads, visitHomeShuffle, visitHomeLauncher, visitHomeReadiness, visitAudioOverride, visitHomeRecents, visitHomeGuide,
       visitHomeFadeAndInputs] },
