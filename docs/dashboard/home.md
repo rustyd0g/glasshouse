@@ -141,7 +141,7 @@ The **Recommended** row surfaces content cards provided by installed streaming a
 
 Apps use a compact frame. Channel and input cards have a faint neutral background and share the apps’ translucent focus fill in the standard view. Tile highlight changes its colour while preserving that translucency.
 
-The focused channel card widens. Long channel names and programme titles loop through their full length at 45 pixels per second, with reduced motion respected. Up and Down retain the original horizontal position across rows, selecting the leftmost overlapping visible card or the nearest when none overlaps. Left, Right or selecting a card with the pointer establishes a new position.
+The focused channel card widens. Long channel names and programme titles loop through their full length at 45 pixels per second, with reduced motion respected.
 
 Each row refreshes independently, retaining unchanged tiles and animations. Overlapping catalogue, source and tuner-guide reads share a request; saves and relaunches discard stale replies. Optional refreshes pause while Home is hidden, while its health heartbeat continues.
 

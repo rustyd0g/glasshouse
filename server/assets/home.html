@@ -845,7 +845,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   }
 
   var indexedData = null, itemIndex = null;
-  var rowViews = {}, renderedView = null, focusShown = null, verticalAnchor = null;
+  var rowViews = {}, renderedView = null, focusShown = null;
   var refreshGeneration = 0, refreshVersion = null, pendingRefreshes = Object.create(null);
   var data = null;       // the catalogue: apps, devices, channels, order
   var layout = null;     // rows, order, sort, hidden, channels, hintSeen, picture, show*
@@ -968,7 +968,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   // ---------------------------------------------------------------- stage
 
   function fit() {
-    verticalAnchor = null;
     var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
     var st = $('stage');
     stageScale = s;
@@ -1162,9 +1161,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     stageClass();
     var viewMode = (layout.view || 'standard') + previewSizeClass() + (layout.showAppLabels === false ? '/icons' : '/labels'), geometryChanged = renderedView !== viewMode;
     renderedView = viewMode;
-    if (geometryChanged) verticalAnchor = null;
     var container = $('rows'), changed = geometryChanged, changedRows = [];
-    if (!shown(state.row)) { state.row = nextShown(0, 1); verticalAnchor = null; }
+    if (!shown(state.row)) state.row = nextShown(0, 1);
     layout.rows.forEach(function (kind, ri) {
       var view = rowViews[kind];
       if (!view) {
@@ -2295,39 +2293,45 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     });
   }
 
-  function columnForVerticalMove(rowIndex) {
-    var rows = document.querySelectorAll('#rows .row');
-    var sourceRow = rows[state.row], targetRow = rows[rowIndex];
-    var source = sourceRow && sourceRow.querySelector('.tile.focus');
-    var wrap = targetRow && targetRow.querySelector('.wrap');
-    if (!source || !wrap) return 0;
-    if (!verticalAnchor) {
-      var bounds = source.getBoundingClientRect();
-      verticalAnchor = { left: bounds.left, right: bounds.right };
-    }
-    var from = verticalAnchor, clip = wrap.getBoundingClientRect();
-    var tiles = targetRow.querySelectorAll('.tile');
-    var best = 0, foundOverlap = false, bestGap = Infinity, bestLeft = Infinity;
+  /*
+   * Up and down go to the tile above or below on screen (#1213), not to the
+   * tile last focused in that row, which may be across the screen: the one
+   * the focused tile overlaps most, the left one where two overlap it within
+   * OVERLAP_TIE_PX (a wide input tile under two narrower ones), else the one
+   * whose middle is nearest. Each row is placed where it is headed, as in
+   * inView, not where its glide has it this frame.
+   */
+  var OVERLAP_TIE_PX = 8;
+  function tileSpans(key) {
+    var m = measure(key), tr = trackOf(key), out = [];
+    if (!m) return out;
+    var shift = Math.max(0, Math.min(tr.max, tr.target)), tiles = m.track.querySelectorAll('.tile[data-c]');
     for (var i = 0; i < tiles.length; i++) {
-      var tileBounds = tiles[i].getBoundingClientRect();
-      var left = Math.max(tileBounds.left, clip.left), right = Math.min(tileBounds.right, clip.right);
-      if (right <= left) continue;
-      var overlaps = Math.min(from.right, right) > Math.max(from.left, left);
-      var gap = Math.max(left - from.right, from.left - right, 0);
-      if ((overlaps && (!foundOverlap || left < bestLeft)) ||
-          (!overlaps && !foundOverlap && (gap < bestGap || (gap === bestGap && left < bestLeft)))) {
-        best = i;
-        foundOverlap = overlaps;
-        bestGap = gap;
-        bestLeft = left;
-      }
+      var left = tiles[i].offsetLeft - shift;
+      out.push({ c: +tiles[i].getAttribute('data-c'), left: left, right: left + tiles[i].offsetWidth });
     }
-    return best;
+    return out;
+  }
+  function columnUnder(fromKey, fromCol, toKey) {
+    var from = null, spans = tileSpans(fromKey);
+    for (var i = 0; i < spans.length; i++) if (spans[i].c === fromCol) from = spans[i];
+    if (!from) return -1;
+    var best = -1, bestOver = 0, near = -1, nearD = Infinity, mid = (from.left + from.right) / 2;
+    var to = tileSpans(toKey);
+    for (var j = 0; j < to.length; j++) {
+      var over = Math.min(to[j].right, from.right) - Math.max(to[j].left, from.left);
+      // Tiles come left to right, so a near tie keeps the left one.
+      if (over > 0 && over > bestOver + (best < 0 ? 0 : OVERLAP_TIE_PX)) { best = to[j].c; bestOver = over; }
+      var d = Math.abs((to[j].left + to[j].right) / 2 - mid);
+      if (d < nearD) { nearD = d; near = to[j].c; }
+    }
+    var c = best >= 0 ? best : near;
+    return c >= 0 && c < items(toKey).length ? c : -1;
   }
 
   function move(dr, dc) {
-    if (dc) verticalAnchor = null;
     var onSort = colOf(rowKey()) === -1;
+    var fromKey = rowKey(), fromCol = colOf(fromKey), fromRow = state.row;
     // Left of any row's first tile is the search rail, outside arranging;
     // right goes back to the tile it came from.
     if (state.rail) {
@@ -2340,20 +2344,19 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     }
     if (dr) {
       var to = nextShown(state.row + dr, dr);
-      if (to >= 0 && to < layout.rows.length && shown(to)) {
-        if (!state.arranging) state.col[layout.rows[to]] = columnForVerticalMove(to);
-        state.row = to;
-      }
+      if (to >= 0 && to < layout.rows.length && shown(to)) state.row = to;
     }
     // Up and down from a row's Order go to the next row's.
     if (dr && onSort) state.col[rowKey()] = -1;
     // A row the pointer or the wheel moved is taken up from the tiles in
     // view, not pulled back to the tile focused before.
-    var kind = rowKey(), c = colOf(kind);
-    var atStart = dc < 0 && c === 0 && trackOf(kind).target === 0;
-    var span = state.arranging || atStart ? null : inView(kind);
+    var kind = rowKey(), span = state.arranging ? null : inView(kind), c = colOf(kind);
     var outside = span && c >= 0 && (c < span[0] || c > span[1]);
-    if (outside && dr) state.col[kind] = c < span[0] ? span[0] : span[1];
+    var under = dr && !onSort && !state.arranging && state.row !== fromRow && fromCol >= 0 ? columnUnder(fromKey, fromCol, kind) : -1;
+    if (under >= 0) {
+      state.col[kind] = under;
+      outside = false;
+    } else if (outside && dr) state.col[kind] = c < span[0] ? span[0] : span[1];
     if (dc) {
       if (outside) state.col[kind] = dc > 0 ? span[0] : span[1];
       else state.col[kind] = Math.max(state.arranging ? -1 : 0, Math.min(items(kind).length - 1, c + dc));
@@ -4429,7 +4432,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   var recents = { open: false, loading: false, revision: 0, apps: [], col: 0, onX: false, onAll: false, busy: false, stamp: 0 };
 
   function openRecents() {
-    verticalAnchor = null;
     if (recents.busy) return;
     recents.busy = true;
     recents.loading = true;
@@ -4925,7 +4927,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   }
 
   function setArranging(on) {
-    verticalAnchor = null;
     if (layoutBusy) return;
     layoutRevision++;
     // The focus stays on the same item as hidden tiles appear or go.
@@ -5255,7 +5256,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     if (!rowEl) return;
     var r = +rowEl.getAttribute('data-row'), c = +tile.getAttribute('data-c'), kind = layout.rows[r];
     if (state.row !== r || colOf(kind) !== c || state.bar >= 0 || state.rail) {
-      verticalAnchor = null;
       state.row = r; state.col[kind] = c; state.bar = -1; state.rail = false;
       applyFocus(false, true);
     }
@@ -6674,7 +6674,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   function returned() {
     rest(false);
     refreshGeneration++;
-    verticalAnchor = null;
     tilePreview.opened = null;
     applyPointer(true);
     var dark = faded;

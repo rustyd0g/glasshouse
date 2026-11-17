@@ -3716,9 +3716,9 @@ async function visitHomeChannelBounds(browser, base, problems) {
 }
 
 
-async function visitHomeVerticalNavigation(browser, base, problems) {
+async function visitHomeRowVisibility(browser, base, problems) {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-  page.on('pageerror', e => problems.push('Home vertical navigation: ' + e.message));
+  page.on('pageerror', e => problems.push('Home row visibility: ' + e.message));
   const apps = Array.from({ length: 30 }, (_, i) => ({ id: 'app' + i, title: 'App ' + i }));
   const devices = Array.from({ length: 6 }, (_, i) => ({ id: 'dev' + i, name: 'Input ' + i, port: i + 1 }));
   const channels = Array.from({ length: 12 }, (_, i) => ({ id: 'ch' + i, name: 'Channel ' + i, number: String(i + 1) }));
@@ -3735,27 +3735,10 @@ async function visitHomeVerticalNavigation(browser, base, problems) {
     return route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
   });
   await page.route('**/api/iptv/**', route => route.fulfill({ json: { ok: true, guide: {} } }));
-  async function expect(kind, column) {
-    const actual = await page.locator('#rows .row.active .tile.focus').evaluate(el => ({
-      kind: el.closest('.row').getAttribute('data-key'), column: Number(el.getAttribute('data-c'))
-    }));
-    if (actual.kind !== kind || actual.column !== column) problems.push('Home vertical navigation: expected ' + kind + ' ' + column + ', got ' + JSON.stringify(actual));
-  }
   try {
     await page.goto(base + '/assets/home.html');
     await page.waitForSelector('.tile.focus');
     for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowRight');
-    for (let i = 0; i < 3; i++) {
-      await page.keyboard.press('ArrowDown'); await expect('dev', 2);
-      await page.keyboard.press('ArrowDown'); await expect('ch', 5);
-      await page.waitForTimeout(220);
-      await page.keyboard.press('ArrowUp'); await expect('dev', 2);
-      await page.keyboard.press('ArrowUp'); await expect('app', 8);
-    }
-    await page.keyboard.press('ArrowDown');
-    await page.keyboard.press('ArrowLeft');
-    await page.keyboard.press('ArrowUp');
-    await expect('app', 3);
     for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown');
     await page.waitForTimeout(300);
     const visible = await page.evaluate(() => {
@@ -3763,11 +3746,11 @@ async function visitHomeVerticalNavigation(browser, base, problems) {
       const box = rows.getBoundingClientRect(), row = active.getBoundingClientRect();
       return active.getAttribute('data-key') === 'iptv' && row.top >= box.top - 1 && row.bottom <= box.bottom + 1;
     });
-    if (!visible) problems.push('Home vertical navigation: the overflowing Internet TV row was clipped');
+    if (!visible) problems.push('Home row visibility: the overflowing Internet TV row was clipped');
     for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowUp');
     await page.waitForTimeout(300);
     if (!await page.evaluate(() => document.getElementById('rows').scrollTop < 1))
-      problems.push('Home vertical navigation: returning to Apps left its heading scrolled off screen');
+      problems.push('Home row visibility: returning to Apps left its heading scrolled off screen');
   } finally { await page.close(); }
 }
 
@@ -5338,7 +5321,7 @@ function groups(web, tv) {
      * failed on them after the groups went side by side (#1126). On CI they
      * have a machine to themselves; run with the rest, they wait for them.
      */
-    { job: 'motion', tabs: [], visits: [visitHomeScrolling, visitHomeMotion, visitHomeChannelBounds, visitHomeVerticalNavigation], alone: true }
+    { job: 'motion', tabs: [], visits: [visitHomeScrolling, visitHomeMotion, visitHomeChannelBounds, visitHomeRowVisibility], alone: true }
   ].filter(g => !process.env.CHECK_JOB || g.job === process.env.CHECK_JOB);
 }
 
