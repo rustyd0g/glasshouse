@@ -82,6 +82,8 @@ function applyOptimistic(action, value) {
     if (q('vol-slider')) q('vol-slider').value = v;
     if (q('vol-fill')) q('vol-fill').style.width = v + '%';
     if (q('vol') && !muted) q('vol').textContent = v;
+    if (q('hdr-vol-val') && !muted) q('hdr-vol-val').textContent = v;
+    if (q('hdr-vol-fill')) q('hdr-vol-fill').style.width = v + '%';
   } else if (action === 'mute') {
     const m = !!value;
     setLease('mute', m);
@@ -90,6 +92,11 @@ function applyOptimistic(action, value) {
     if (q('vol-wrap')) q('vol-wrap').classList.toggle('muted', m);
     const curVol = q('vol-slider') ? q('vol-slider').value : '';
     if (q('vol')) q('vol').textContent = m ? t('ctl.muted', 'MUTED') : curVol;
+    if (q('hdr-vol')) {
+      q('hdr-vol').classList.toggle('muted', m);
+      q('hdr-vol').setAttribute('aria-pressed', String(m));
+    }
+    if (q('hdr-vol-val')) q('hdr-vol-val').textContent = m ? t('ctl.muted', 'MUTED') : curVol;
   } else if (action === 'sleepTimer') {
     const st = String(value);
     setLease('sleepTimer', st);
@@ -142,7 +149,12 @@ function applyOptimistic(action, value) {
     for (let b of inBtns) {
       const matches = b.id === 'in_' + inp;
       b.classList.toggle('on', matches);
-      if (matches && q('currapp-lbl')) q('currapp-lbl').textContent = b.textContent.toUpperCase();
+      if (matches && q('currapp-lbl')) q('currapp-lbl').textContent = b.textContent;
+    }
+    if (q('source-menu')) {
+      for (const b of q('source-menu').querySelectorAll('button[data-src-in]')) {
+        b.classList.toggle('on', b.getAttribute('data-src-in') === inp);
+      }
     }
   } else if (action === 'launchApp') {
     const appId = String(value);
@@ -153,7 +165,7 @@ function applyOptimistic(action, value) {
     for (let b of appBtns) {
       const matches = b.id === 'app_' + appId.replace(/[^a-zA-Z0-9_-]/g, '_') || b.id === 'app_com_webos_app_' + appId;
       b.classList.toggle('on', matches);
-      if (matches && q('currapp-lbl')) q('currapp-lbl').textContent = b.textContent.toUpperCase();
+      if (matches && q('currapp-lbl')) q('currapp-lbl').textContent = b.textContent;
     }
   } else if (action === 'quickBoot') {
     const on = value === 'on' || value === true;
@@ -540,25 +552,33 @@ function holdVolumeControls() {
   if (q('vol-slider')) q('vol-slider').disabled = true;
   if (q('vol-wrap')) q('vol-wrap').classList.add('off');
   if (q('mute')) q('mute').disabled = true;
+  if (q('hdr-vol')) q('hdr-vol').disabled = true;
   if (q('vol-steps')) q('vol-steps').querySelectorAll('button').forEach(b => { b.disabled = true; });
+}
+
+function applyLiveVolume(pct) {
+  const slider = q('vol-slider');
+  const fill = q('vol-fill');
+  if (slider) slider.value = pct;
+  if (fill) fill.style.width = pct + '%';
+  if (q('vol')) q('vol').textContent = pct;
+  if (q('vol-wrap')) q('vol-wrap').classList.remove('muted');
+  if (q('hdr-vol-fill')) q('hdr-vol-fill').style.width = pct + '%';
+  if (q('hdr-vol-val')) q('hdr-vol-val').textContent = pct;
+  if (q('hdr-vol')) {
+    q('hdr-vol').classList.remove('muted');
+    q('hdr-vol').setAttribute('aria-pressed', 'false');
+  }
+  muted = false;
+  if (q('mute')) q('mute').classList.remove('on');
+  return pct;
 }
 
 function setVolFromPointer(e) {
   const wrap = q('vol-wrap');
   if (!wrap) return 0;
   const rect = wrap.getBoundingClientRect();
-  const pct = Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
-  const slider = q('vol-slider');
-  const fill = q('vol-fill');
-  if (slider) slider.value = pct;
-  if (fill) fill.style.width = pct + '%';
-  const volEl = q('vol');
-  if (volEl) volEl.textContent = pct;
-  wrap.classList.remove('muted');
-  muted = false;
-  const muteBtn = q('mute');
-  if (muteBtn) muteBtn.classList.remove('on');
-  return pct;
+  return applyLiveVolume(Math.max(0, Math.min(100, Math.round(((e.clientX - rect.left) / rect.width) * 100))));
 }
 
 function initVolSlider() {
@@ -637,16 +657,77 @@ function initVolSlider() {
       e.preventDefault();
       const current = Number(slider.value) || 0;
       const next = Math.max(0, Math.min(100, current + step));
-      slider.value = next;
-      if (q('vol-fill')) q('vol-fill').style.width = next + '%';
-      if (q('vol')) q('vol').textContent = next;
-      wrap.classList.remove('muted');
-      muted = false;
-      if (q('mute')) q('mute').classList.remove('on');
+      applyLiveVolume(next);
       setLease('volume', next);
       await sendCommand('volume', next);
     }
   });
+
+  const hdrVol = q('hdr-vol');
+  if (hdrVol) {
+    let hdrDown = false, hdrScrubbed = false, hdrStartX = 0;
+    const hdrPct = e => {
+      const r = hdrVol.getBoundingClientRect();
+      return Math.max(0, Math.min(100, Math.round(((e.clientX - r.left) / r.width) * 100)));
+    };
+    hdrVol.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || hdrVol.disabled) return;
+      hdrDown = true;
+      hdrScrubbed = false;
+      hdrStartX = e.clientX;
+    });
+    hdrVol.addEventListener('pointermove', e => {
+      if (!hdrDown || slider.disabled) return;
+      if (!hdrScrubbed && Math.abs(e.clientX - hdrStartX) < 5) return;
+      if (!hdrScrubbed) {
+        hdrScrubbed = true;
+        volDragging = true;
+        hdrVol.classList.add('dragging');
+        try { hdrVol.setPointerCapture(e.pointerId); } catch (err) {}
+      }
+      applyLiveVolume(hdrPct(e));
+    });
+    hdrVol.addEventListener('pointerup', async e => {
+      if (!hdrDown) return;
+      hdrDown = false;
+      if (hdrScrubbed) {
+        hdrScrubbed = false;
+        hdrVol.classList.remove('dragging');
+        try { hdrVol.releasePointerCapture(e.pointerId); } catch (err) {}
+        const val = applyLiveVolume(hdrPct(e));
+        setLease('volume', val);
+        volDragging = false;
+        await sendCommand('volume', val);
+      } else {
+        await sendCommand('mute', !muted);
+      }
+    });
+    hdrVol.addEventListener('pointercancel', e => {
+      if (!hdrDown) return;
+      hdrDown = false;
+      if (hdrScrubbed) {
+        hdrScrubbed = false;
+        volDragging = false;
+        hdrVol.classList.remove('dragging');
+        try { hdrVol.releasePointerCapture(e.pointerId); } catch (err) {}
+        clearLease('volume');
+        setTimeout(tick, 0);
+      }
+    });
+    hdrVol.addEventListener('keydown', async e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (!hdrVol.disabled) await sendCommand('mute', !muted);
+      } else if (!slider.disabled && (e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'ArrowDown')) {
+        e.preventDefault();
+        const step = (e.key === 'ArrowRight' || e.key === 'ArrowUp') ? 1 : -1;
+        const next = Math.max(0, Math.min(100, (Number(slider.value) || 0) + step));
+        applyLiveVolume(next);
+        setLease('volume', next);
+        await sendCommand('volume', next);
+      }
+    });
+  }
 }
 initVolSlider();
 initBacklightSlider();
@@ -1061,23 +1142,27 @@ document.addEventListener('keydown', e => {
 /*
  * The remote's own layout (#remote-pad, the remote view only): Screen,
  * Input and Settings along the top, a ring D-pad, volume and playback
- * rockers beside Back, Home and Mute, and Buttons, Touchpad and Keyboard
+ * rockers beside Back, Home and Mute, and Buttons, Touchpad, Motion (in the
+ * Android app) and Keyboard
  * along the foot. Its volume and mute follow the Control tab's, and its
  * Screen button the header's state.
  */
 const REMOTE_MODE_KEY = 'remoteMode';
+const REMOTE_MODES = ['buttons', 'touch', 'motion', 'keys'];
 // quiet: as the page opens, where the keyboard box is not focused (a phone's keyboard would pop up).
 function remoteMode(mode, quiet) {
   if (!remoteView) return;
   const touchOk = q('disc-pointer') && !q('disc-pointer').hidden;
-  if (mode === 'touch' && !touchOk) mode = 'buttons';
-  if (['buttons', 'touch', 'keys'].indexOf(mode) === -1) mode = 'buttons';
+  // Motion kept from the app, on a page opened in a browser: the touchpad instead.
+  if (mode === 'motion' && !motionApp) mode = 'touch';
+  if ((mode === 'touch' || mode === 'motion') && !touchOk) mode = 'buttons';
+  if (REMOTE_MODES.indexOf(mode) === -1) mode = 'buttons';
   const root = document.documentElement;
-  ['buttons', 'touch', 'keys'].forEach(m => root.classList.toggle('remote-mode-' + m, m === mode));
+  REMOTE_MODES.forEach(m => root.classList.toggle('remote-mode-' + m, m === mode));
   root.classList.remove('remote-inputs');
   if (q('rp-input')) q('rp-input').setAttribute('aria-expanded', 'false');
   document.querySelectorAll('#remote-modes [data-mode]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.mode === mode)));
-  if (mode === 'touch' && q('disc-pointer')) q('disc-pointer').open = true;
+  if ((mode === 'touch' || mode === 'motion') && q('disc-pointer')) q('disc-pointer').open = true;
   if (mode === 'keys' && q('disc-keyboard')) { q('disc-keyboard').open = true; if (!quiet && q('kb-text')) q('kb-text').focus(); }
   try { localStorage.setItem(REMOTE_MODE_KEY, mode); } catch (e) {}
 }
@@ -1089,8 +1174,21 @@ function remoteInputs() {
   if (q('rp-input')) q('rp-input').setAttribute('aria-expanded', String(open));
 }
 // Screen: off while it is on, on while it is off, as the header's state has it.
+/*
+ * The TV in standby, as the header has it (or finishing panel maintenance):
+ * the TV takes nothing but Power on then. Screen off was refused ("Action
+ * failed"), and the volume keys went nowhere while answering as if they had.
+ */
+function remoteAsleep() {
+  const st = q('state');
+  return !!st && (st.classList.contains('standby') || st.classList.contains('comp'));
+}
+// Power on where the dashboard offers the power buttons (allowPower).
+function remotePowerOk() { return !(q('pwset') && q('pwset').hidden); }
+// Screen: Power on in standby, on while the screen is off, otherwise off.
 function remoteScreen() {
   const st = q('state');
+  if (remoteAsleep()) { if (remotePowerOk()) sendCommand('powerOn'); return; }
   sendCommand(st && st.classList.contains('off') ? 'screenOn' : 'screenOff');
 }
 (function initRemotePad() {
@@ -1099,15 +1197,31 @@ function remoteScreen() {
   try { mode = localStorage.getItem(REMOTE_MODE_KEY) || 'buttons'; } catch (e) {}
   const mirror = () => {
     const vol = q('vol'), mute = q('mute'), st = q('state'), touch = q('rp-mode-touch'), pointer = q('disc-pointer');
-    if (vol && q('rp-vol')) q('rp-vol').textContent = vol.textContent;
+    if (vol && q('rp-vol') && q('rp-vol').textContent !== vol.textContent) q('rp-vol').textContent = vol.textContent;
     if (mute && q('rp-mute')) q('rp-mute').classList.toggle('on', mute.classList.contains('on'));
     if (st && q('rp-screen-label')) {
-      const off = st.classList.contains('off');
-      q('rp-screen-label').textContent = off ? t('ctl.screenOn', 'Screen on') : t('ctl.screenOff', 'Screen off');
+      const off = st.classList.contains('off'), asleep = remoteAsleep();
+      const label = asleep ? t('ctl.powerOn', 'Power on') : off ? t('ctl.screenOn', 'Screen on') : t('ctl.screenOff', 'Screen off');
+      if (q('rp-screen-label').textContent !== label) q('rp-screen-label').textContent = label;
+      // In standby, everything but Power on is put aside.
+      if (document.documentElement.classList.contains('remote-asleep') !== asleep) document.documentElement.classList.toggle('remote-asleep', asleep);
+      // Written only when it changes: this runs on changes under what it writes to.
+      document.querySelectorAll('#remote-pad button').forEach(b => {
+        const want = asleep && (b.id !== 'rp-screen' || !remotePowerOk());
+        if (b.disabled !== want) b.disabled = want;
+      });
+      ['disc-pointer', 'disc-keyboard'].forEach(id => {
+        if (q(id)) q(id).querySelectorAll('button, input').forEach(el => {
+          if (asleep && !el.dataset.asleep) { el.dataset.asleep = '1'; el.disabled = true; }
+          else if (!asleep && el.dataset.asleep) { delete el.dataset.asleep; el.disabled = false; }
+        });
+      });
     }
     if (touch && pointer) {
       touch.hidden = pointer.hidden;
-      if (pointer.hidden && document.documentElement.classList.contains('remote-mode-touch')) remoteMode('buttons');
+      if (q('rp-mode-motion')) q('rp-mode-motion').hidden = pointer.hidden || !motionApp;
+      const root = document.documentElement;
+      if (pointer.hidden && (root.classList.contains('remote-mode-touch') || root.classList.contains('remote-mode-motion'))) remoteMode('buttons');
     }
   };
   const watch = new MutationObserver(mirror);

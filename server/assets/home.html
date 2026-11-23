@@ -81,7 +81,8 @@ html.resting #wall .layer{-webkit-animation-play-state:paused;animation-play-sta
 #source{-webkit-flex:1 1 auto;flex:1 1 auto;min-width:0;padding-left:24px;border-left:1px solid #2a2825;padding-bottom:2px}
 #source.none{visibility:hidden}
 #srcKind{font-size:23px;color:#e9ad55}
-#srcTitle{font-family:'Outfit',sans-serif;font-size:70px;line-height:1;font-weight:400;letter-spacing:-1px;margin:8px 0 12px;
+/* Room above and below the line for tall accents and descenders, which overflow:hidden cut at line-height 1 ("g" in "Logik"); the padding makes room while keeping the baseline unchanged. */
+#srcTitle{font-family:'Outfit',sans-serif;font-size:70px;line-height:1;font-weight:400;letter-spacing:-1px;margin:-4px 0 4px;padding:12px 0 8px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #srcVia{font-size:26px;color:#a39d93}
 
@@ -183,7 +184,57 @@ html.resting #wall .layer{-webkit-animation-play-state:paused;animation-play-sta
 #wxCredit{position:absolute;right:112px;bottom:12px;font-size:16px;font-weight:300;opacity:.45}
 .alternative #wxCredit{right:90px}
 #wxCredit:empty,.arranging #wxCredit{display:none}
+/* The news strip: one line along the bottom, running right to left. The run
+   is padded by the strip's width so it starts off the right edge, and moves
+   by its own width with that padding, so it ends off the left. */
+#news{position:absolute;left:112px;right:112px;bottom:44px;height:40px;overflow:hidden;white-space:nowrap;font-size:24px;font-weight:300;color:#ece7df}
+#news.none,.arranging #news,.playing #news{display:none}
+#newsRun{display:inline-block;box-sizing:border-box;padding-left:100%;line-height:40px;-webkit-animation:newsRun 60s linear infinite;animation:newsRun 60s linear infinite;
+  /* A layer of its own, moved by the GPU rather than repainted each frame. */
+  will-change:transform;-webkit-backface-visibility:hidden;backface-visibility:hidden}
+#newsRun .src{color:#a39d93;margin-right:.6em}
+#news.flip #newsRun{display:block;padding-left:0;width:auto;overflow:hidden;text-overflow:ellipsis;-webkit-animation:none;animation:none;-webkit-transition:opacity .4s;transition:opacity .4s}
+#newsRun .sep{color:#a39d93;margin:0 1.2em}
+@-webkit-keyframes newsRun{from{-webkit-transform:translate3d(0,0,0)}to{-webkit-transform:translate3d(-100%,0,0)}}
+@keyframes newsRun{from{transform:translate3d(0,0,0)}to{transform:translate3d(-100%,0,0)}}
+.alternative #news{left:90px;right:90px}
+/* The rows end above the strip, so the last one is not run over. */
+.has-news #rows{bottom:96px}
 .alternative #weather{-webkit-order:4;order:4;margin:0 0 0 48px}
+
+/* Lines from Home Assistant (text.lg_tv_home_info): an icon, a label and a
+   value each, after the weather, or before the clock in Alternative View.
+   Hidden until some come. */
+#info{-webkit-flex:0 0 auto;flex:0 0 auto;max-width:520px;margin-left:56px;padding-bottom:2px;white-space:nowrap}
+#info.none{display:none}
+.info-line{display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;font-size:26px;line-height:1.35}
+.info-line svg{-webkit-flex:0 0 auto;flex:0 0 auto;width:28px;height:28px;margin-right:12px}
+.info-label{color:#a39d93;margin-right:12px;overflow:hidden;text-overflow:ellipsis}
+.info-value{-webkit-flex:0 0 auto;flex:0 0 auto}
+.alternative #info{-webkit-order:2;order:2;margin:0 48px 0 0}
+/* The board (text.lg_tv_home_board): a title and four of its lines at a
+   time, turning to the next four every few seconds. */
+/* As wide as its longest line on any page, 520px at most, set when the board
+   changes (boardWidth): sized by the page on screen, a page of shorter names
+   narrowed it and the lines beside it moved. A line too long slides to show
+   its end, and back (slideLongLines). */
+#board{-webkit-flex:0 0 auto;flex:0 0 auto;min-width:0;max-width:520px;margin-left:56px;padding-bottom:2px;white-space:nowrap}
+#boardMeasure{position:absolute;visibility:hidden;left:0;top:0;white-space:nowrap}
+#board .info-line{overflow:hidden}
+#board .info-label.sliding{text-overflow:clip}
+#board .slide{display:inline-block;will-change:transform}
+#board.none{display:none}
+#boardTitle{font-size:20px;letter-spacing:.08em;text-transform:uppercase;color:#a39d93;margin-bottom:4px}
+#boardTitle:empty{display:none}
+#boardLines{-webkit-transition:opacity .3s;transition:opacity .3s}
+#boardLines.turning{opacity:0}
+#boardPage{margin-left:.6em;letter-spacing:0}
+#board .info-label{color:inherit}
+#board .info-value{color:#a39d93;margin-left:auto;padding-left:16px}
+.alternative #board{-webkit-order:2;order:2;margin:0 48px 0 0}
+.alternative #boardTitle{font-size:18px}
+.alternative .info-line{font-size:23px}
+.alternative .info-line svg{width:24px;height:24px}
 .alternative #wxIcon,.alternative #wxIcon svg{width:72px;height:72px}
 .alternative #wxTemp{font-size:100px;line-height:1;letter-spacing:-2px}
 .alternative #wxLine{margin-top:8px;font-size:23px}
@@ -281,6 +332,45 @@ html.resting #wall .layer{-webkit-animation-play-state:paused;animation-play-sta
 /* Dark monochrome icons on transparent (AirPlay on webOS 4) sit on warm white
    so a black background never swallows them. */
 .app img.dark-ico,.chip img.dark-ico{background:#ece7df}
+
+/* Apps as wide cards (layout appCards): a dark 16:9 card with the app's logo
+   from the card icon folder, or its own icon centred where it has none. The
+   ring and the lift are on the card; the name shows under the one in focus. */
+.cards .app{width:300px;padding:12px 12px 10px}
+.cards .tile.app,.cards .tile.app.focus{background:none;outline-color:transparent}
+.cards .app .card{position:relative;width:276px;height:155px;margin:0 auto;border-radius:18px;background:#000;
+  display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;-webkit-justify-content:center;justify-content:center;
+  -webkit-transition:-webkit-transform .15s;transition:transform .15s}
+/* The ring is a rounded border on a layer just outside the card, not an
+   outline: an outline's offset corner is tighter than the card's and drew
+   rough on a G3 (webOS 10.3). 24px is the card's 18px plus the 6px gap. */
+.cards .app .card:after{content:'';position:absolute;top:-6px;left:-6px;right:-6px;bottom:-6px;border:3px solid transparent;
+  border-radius:24px;pointer-events:none;-webkit-transition:border-color .12s;transition:border-color .12s}
+.cards .app .card img.logo{width:100%;height:100%;margin:0;border-radius:18px;object-fit:contain}
+.cards .app .card img,.cards .app .card .mono{width:92px;height:92px;line-height:92px;font-size:38px}
+.cards .app.focus .card{-webkit-transform:scale(1.06);transform:scale(1.06)}
+.cards .app.focus .card:after{border-color:#ece7df}
+/* Room for the focus glow above and below the cards: the row's box hides what
+   is outside it, which cut the glow off square. The negative margin keeps the
+   rows where they were. The sides stay as they are, as scrolling counts on
+   their 22px; the glow is kept within them. */
+.cards .row[data-key="app"] .wrap{padding-top:36px;padding-bottom:36px;margin-top:-30px;margin-bottom:-30px}
+/* The shading where the cards run on: a soft oval behind the arrow, clear
+   well inside every side. The row is taller than the cards, for the glow, and
+   stops short of the screen's edge, so a shade still dark at its sides showed
+   as a straight line above and below the cards. */
+.cards .row[data-key="app"] .wrap .edge{width:200px}
+.cards .row[data-key="app"] .wrap .edge.l{background:radial-gradient(ellipse 50% 40% at 50% 50%,rgba(0,0,0,.6),rgba(0,0,0,.3) 50%,rgba(0,0,0,.08) 80%,rgba(0,0,0,0))}
+.cards .row[data-key="app"] .wrap .edge.r{background:radial-gradient(ellipse 50% 40% at 50% 50%,rgba(0,0,0,.6),rgba(0,0,0,.3) 50%,rgba(0,0,0,.08) 80%,rgba(0,0,0,0))}
+.cards .row[data-key="app"] .wrap .edge.l:after{left:76px}
+.cards .row[data-key="app"] .wrap .edge.r:after{right:76px}
+.cards .app .nm{font-size:24px;margin-top:14px;opacity:0;-webkit-transition:opacity .12s;transition:opacity .12s}
+.cards .app.focus .nm,.arranging.cards .app .nm{opacity:1}
+.no-app-labels.cards .app{width:300px}
+.alternative.cards .app{width:268px}
+.alternative.cards .app .card{width:244px;height:137px}
+/* The pulse on the app in focus (layout focusPulse) and how see-through the
+   cards are (layout cardFade) follow the owner's choices: see applyCardLook. */
 
 .dev{width:470px;min-height:142px;display:-webkit-flex;display:flex;-webkit-flex-direction:column;flex-direction:column;
   -webkit-justify-content:space-between;justify-content:space-between}
@@ -515,7 +605,7 @@ html.resting #wall .layer{-webkit-animation-play-state:paused;animation-play-sta
    it and go when not in use: nothing still stays on the panel. */
 .playing #now{z-index:4}
 .playing #rows,.playing #rail,.playing #wall,.playing #wall-caption,.playing #scrim,
-.playing #when,.playing #source,.playing #plate,.playing #weather,.playing #wxCredit{visibility:hidden}
+.playing #when,.playing #source,.playing #plate,.playing #weather,.playing #info,.playing #board,.playing #wxCredit{visibility:hidden}
 #preview.full{position:absolute;left:0;top:0;width:1920px;height:1080px;margin:0;box-shadow:none;
   -webkit-transform-origin:0 0;transform-origin:0 0}
 #preview.full:after,#preview.full #pvInfo{display:none}
@@ -562,17 +652,22 @@ html.resting #wall .layer{-webkit-animation-play-state:paused;animation-play-sta
 #clGroup{font-family:'Outfit',sans-serif;font-size:44px;font-weight:300;letter-spacing:-.4px;overflow:hidden;text-overflow:ellipsis;min-width:0}
 #clCount{margin-left:22px;font-size:23px;color:#a39d93;-webkit-flex:0 0 auto;flex:0 0 auto}
 #clCount i{font-style:normal;color:#6b665e;margin:0 10px}
-#clWrap{position:absolute;left:100px;right:44px;top:170px;bottom:300px;overflow:hidden;padding:6px 12px}
+#clWrap{position:absolute;left:100px;right:44px;top:170px;bottom:70px;overflow:hidden;padding:6px 12px}
 #clItems{-webkit-transition:-webkit-transform .2s cubic-bezier(.2,.7,.2,1);transition:transform .2s cubic-bezier(.2,.7,.2,1)}
 .cl{position:relative;display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;height:112px;padding:0 20px;margin-bottom:6px;
-  border-radius:6px;outline:2px solid transparent;opacity:.72}
-.cl.focus{background:rgba(20,19,16,.86);outline-color:#ece7df;opacity:1}
-.cl .glyph{-webkit-flex:0 0 auto;flex:0 0 auto;width:96px;height:34px;display:-webkit-flex;display:flex;-webkit-align-items:flex-end;align-items:flex-end;overflow:hidden}
-.cl .glyph img{display:block;max-width:84px;max-height:34px}
+  border-radius:6px;opacity:.72}
+/* The frame is drawn apart so it can fade to the right, as the list's own background does. */
+.cl:after{content:"";position:absolute;left:0;top:0;right:0;bottom:0;border-radius:6px;outline:2px solid transparent;outline-offset:-2px;pointer-events:none;
+  -webkit-mask-image:linear-gradient(90deg,#000 0,#000 55%,transparent 100%);mask-image:linear-gradient(90deg,#000 0,#000 55%,transparent 100%);
+  -webkit-transition:outline-color .12s;transition:outline-color .12s}
+.cl.focus{opacity:1}
+.cl.focus:after{outline-color:#ece7df}
+.cl .glyph{-webkit-flex:0 0 auto;flex:0 0 auto;width:104px;height:46px;margin-right:2px;display:-webkit-flex;display:flex;-webkit-align-items:center;align-items:center;overflow:hidden}
+.cl .glyph img{display:block;max-width:92px;max-height:46px}
 .cl .n{-webkit-flex:0 0 auto;flex:0 0 auto;width:56px;font-family:'Outfit',sans-serif;font-size:30px;font-weight:300;color:#a39d93}
 .cl .c{-webkit-flex:1 1 auto;flex:1 1 auto;min-width:0}
-.cl .nm{font-size:25px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cl .pg{font-size:21px;color:#a39d93;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl .nm{font-size:25px;line-height:30px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl .pg{font-size:21px;line-height:25px;color:#a39d93;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cl .bar{height:2px;background:#2a2825;margin-top:10px}
 .cl .bar i{display:block;height:100%;background:#a39d93}
 .cl.focus .bar i{background:#ece7df}
@@ -599,11 +694,12 @@ html.resting #wall .layer{-webkit-animation-play-state:paused;animation-play-sta
 .gr.focus .gnm{color:#ece7df}
 .gr .gnm em{font-style:normal;color:#6b665e;margin-right:12px;font-variant-numeric:tabular-nums}
 .gr .lane{position:relative;-webkit-flex:1 1 auto;flex:1 1 auto;overflow:hidden}
-.gc{position:absolute;top:5px;bottom:5px;padding:9px 14px 0;background:#100f0d;border-radius:4px;overflow:hidden;outline:2px solid transparent;outline-offset:-2px;white-space:nowrap}
+.gc{position:absolute;top:5px;bottom:5px;padding:9px 14px 0;background:#100f0d;border-radius:4px;overflow:hidden;outline:2px solid transparent;outline-offset:-2px;white-space:nowrap;
+  -webkit-transition:background-color .12s,outline-color .12s;transition:background-color .12s,outline-color .12s}
 .gc.past{background:#080807}
 .gc.past b{color:#6b665e}
 .gc.live{background:#1a1814}
-.gc.focus{background:#24211b;outline-color:#ece7df}
+.gc.focus{background:rgba(20,19,16,.86);outline-color:#ece7df}
 .gc b{display:block;font-size:21px;font-weight:600;overflow:hidden;text-overflow:ellipsis}
 .gc i{display:block;font-style:normal;font-size:17px;color:#6b665e;margin-top:3px;overflow:hidden;text-overflow:ellipsis}
 .gc.none b{font-weight:400;color:#6b665e}
@@ -670,6 +766,8 @@ html.faded #stage{opacity:0}
 body.no-drift #wall .layer{-webkit-animation:none;animation:none}
 body.no-crossfade #wall .layer{-webkit-transition:none;transition:none}
 body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide #folderGrid,body.no-slide #hits{-webkit-transition:none;transition:none}
+/* Outfit lacks Vietnamese horn and stacked-tone glyphs; use Manrope for text headings in Vietnamese. */
+html[lang="vi"] #srcTitle,html[lang="vi"] #plMode,html[lang="vi"] #pvMode,html[lang="vi"] #pvNameTitle,html[lang="vi"] .dev .nm,html[lang="vi"] #recents h2,html[lang="vi"] #recents .empty b,html[lang="vi"] #folder h2,html[lang="vi"] #fault h1,html[lang="vi"] #query,html[lang="vi"] .hit .ttl,html[lang="vi"] .tv .gname,html[lang="vi"] #bdName,html[lang="vi"] #pmsg b,html[lang="vi"] #clGroup,html[lang="vi"] #adder h2,html[lang="vi"] #adQuery{font-family:'Manrope',sans-serif}
 </style>
 <style id="channel-title-scroll"></style>
 </head>
@@ -706,10 +804,13 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       </div>
       <div id="wxLine"><span id="wxCity"></span><span id="wxCond"></span></div>
     </div>
+    <div id="info" class="none"></div>
+    <div id="board" class="none"><div id="boardTitle"></div><div id="boardLines"></div></div>
   </section>
 
   <main id="rows"></main>
   <div id="wxCredit"></div>
+  <div id="news" class="none"><div id="newsRun"></div></div>
   <div id="rail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg><span class="word" data-t="home.search.rail">Search</span></div>
   <section id="finder">
     <div id="ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg><input id="query" type="text" autocomplete="off" spellcheck="false" maxlength="80" placeholder="Film or series" data-t-placeholder="home.search.placeholder"></div>
@@ -808,8 +909,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   var ADD_TILE = 'iptv-add';
   // The More apps tile, last in the Apps row while any app is in the folder.
   var FOLDER_TILE = 'more-apps';
-  // Tiles per line in the More apps grid.
-  var FOLDER_COLS = 9;
   // Held this long, OK arranges the tiles rather than opening one.
   var LONG_PRESS_MS = 800;
   var BEAT_MS = 5000;
@@ -824,6 +923,12 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   var beatTimer = null;
   var CLOSE_BEHIND_MS = 120000;
   var coveredSince = 0;
+  /*
+   * The screen saver up at the last beat. The key that ends it reaches the
+   * page too, before the next beat says it has gone: Back there opened
+   * Recents and OK the app in focus. That key only wakes the screen.
+   */
+  var saverUp = false;
   function rest(on) {
     var cl = document.documentElement.classList;
     if (on === cl.contains('resting')) return;
@@ -1291,6 +1396,12 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     return a.icon ? appImgTag(a.icon) :
       '<span class="mono">' + esc(a.lg ? 'LG' : String(a.title).charAt(0)) + '</span>';
   }
+  function cardsOn() { return !!(layout && layout.appCards === true); }
+  // As a card, its logo from the card icon folder, or its own icon on the card.
+  function appArt(a) {
+    if (!cardsOn()) return appIcon(a);
+    return '<div class="card">' + (a.card ? '<img class="logo" src="' + esc(a.card) + '" alt="">' : appIcon(a)) + '</div>';
+  }
   // The first four of the folder's icons, as the tile that opens it.
   function folderIcon(inside) {
     var html = '';
@@ -1313,10 +1424,12 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   var TILE = {
     app: function (a, i) {
       if (a.folder) {
-        return '<div class="tile app" data-c="' + i + '">' + folderIcon(a.folder) + '<div class="nm">' + esc(a.title) + '</div></div>';
+        var fold = folderIcon(a.folder);
+        return '<div class="tile app" data-c="' + i + '">' + (cardsOn() ? '<div class="card">' + fold + '</div>' : fold) +
+          '<div class="nm">' + esc(a.title) + '</div></div>';
       }
       var cls = 'tile app' + (hidden('app', a.id) ? ' hidden' : inFolder('app', a.id) ? ' folded' : '');
-      return '<div class="' + cls + '" data-c="' + i + '">' + appIcon(a) + '<div class="nm">' + esc(a.title) + '</div>' +
+      return '<div class="' + cls + '" data-c="' + i + '">' + appArt(a) + '<div class="nm">' + esc(a.title) + '</div>' +
         hiddenLabel + folderLabel + '</div>';
     },
     dev: function (d, i) {
@@ -1893,7 +2006,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   }
   function clickAsOk() {
     if (Date.now() - lastOkKeyAt < OK_CLICK_MS) return;
-    var press = { keyCode: KEY.ok, preventDefault: function () {}, stopPropagation: function () {} };
+    soundFrom = 'pointer';
+    var press = { keyCode: KEY.ok, pointer: true, preventDefault: function () {}, stopPropagation: function () {} };
     onKeyDown(press);
     onKeyUp(press);
   }
@@ -1911,15 +2025,20 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
 
   /*
    * The Magic Remote's wheel scrolls the row under the pointer, or the row in
-   * focus, a tile a notch. Older engines only fire mousewheel, whose
+   * focus, a tile a notch. In the guide and the player's channel list it moves
+   * the focus a row a notch. Older engines only fire mousewheel, whose
    * wheelDelta has the opposite sign to deltaY.
    */
   function onWheel(e) {
     e.preventDefault();
+    soundFrom = 'pointer';
     if (!data || !layout || layoutBusy || state.held || folder.open) return;
     var d = e.deltaY !== undefined ? e.deltaY : -e.wheelDelta;
     if (e.deltaX && Math.abs(e.deltaX) > Math.abs(d || 0)) d = e.deltaX;
     if (!d) return;
+    // In the guide and the player's channel list a notch is Down or Up.
+    if (guide.open) return guideKey(d > 0 ? KEY.down : KEY.up);
+    if (player.open) return player.list ? playerKey(d > 0 ? KEY.down : KEY.up) : undefined;
     var key = hoverKey || (recents.open ? 'recents' : rowKey());
     var m = measure(key), tile = m && m.track.querySelector('.tile');
     if (!tile) return;
@@ -2179,6 +2298,324 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     getJson('/api/home/weather', function (r) { renderWeather(r && r.ok ? r : null); });
   }
 
+  /*
+   * Lines from Home Assistant under the clock (lib/home.js, setHomeInfo):
+   * up to four, each an icon, a label and a value as sent. Line icons as the
+   * weather's, by Material Design Icons' names, a dot for any other.
+   */
+  var INFO_ICONS = {
+    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    chart: '<path d="M3 17l6-6 4 4 8-8M15 7h6v6"/>',
+    car: '<path d="M5 16V11l2-5h10l2 5v5M3 16h18v2H3zM7 16v2M17 16v2"/><circle cx="7.5" cy="13" r="1"/><circle cx="16.5" cy="13" r="1"/>',
+    bolt: '<path d="M13 2L5 14h6l-1 8 8-12h-6z"/>',
+    battery: '<rect x="3" y="7" width="16" height="10" rx="2"/><path d="M21 10v4M6 10v4M9 10v4"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    thermometer: '<path d="M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z"/>',
+    home: '<path d="M3 11l9-7 9 7M5 10v10h14V10"/>',
+    package: '<path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10"/>',
+    dot: '<circle cx="12" cy="12" r="2.5"/>'
+  };
+  var INFO_ALIASES = [
+    ['trash', ['trash', 'delete', 'recycle', 'bin']],
+    ['mail', ['mail', 'email', 'mailbox', 'post']],
+    ['chart', ['chart', 'trending', 'finance', 'stock', 'cash', 'currency']],
+    ['car', ['car', 'ev-station']],
+    ['bolt', ['flash', 'lightning', 'bolt', 'transmission-tower', 'power']],
+    ['battery', ['battery']],
+    ['calendar', ['calendar']],
+    ['thermometer', ['thermometer', 'temperature']],
+    ['home', ['home', 'house']],
+    ['package', ['package', 'truck', 'parcel']]
+  ];
+  function infoIcon(name) {
+    var drawn = 'dot';
+    for (var i = 0; i < INFO_ALIASES.length && drawn === 'dot'; i++) {
+      for (var j = 0; j < INFO_ALIASES[i][1].length; j++) {
+        if (name && name.indexOf(INFO_ALIASES[i][1][j]) === 0) { drawn = INFO_ALIASES[i][0]; break; }
+      }
+    }
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      INFO_ICONS[drawn] + '</svg>';
+  }
+  /*
+   * A line's value. One Home Assistant sent comes as text. One read from an
+   * entity comes as its state or attribute, formatted here in the page's
+   * language: a date as today, tomorrow, a weekday within the week or a day
+   * and month, a number with its unit and its own decimals, anything else as
+   * it is. The words set before it on the dashboard go first.
+   */
+  function infoValue(l) {
+    if (typeof l.value === 'string') return l.value;
+    var v = l.v === null || l.v === undefined ? '' : String(l.v);
+    if (!v || v === 'unknown' || v === 'unavailable') return '–';
+    var lang = (window.I18N && I18N.lang) ? I18N.lang() : 'en';
+    var loc = lang === 'en' ? 'en-GB' : lang;
+    var text = v;
+    var m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(v);
+    var num = /^-?\d+(\.\d+)?$/.exec(v);
+    if (m) {
+      // A time with its offset is a moment, read in the TV's time; a bare date is that day.
+      var d = m[4] !== undefined && /(Z|[+-]\d\d:?\d\d)$/.test(v) ? new Date(v) : new Date(+m[1], +m[2] - 1, +m[3]);
+      if (!isNaN(d.getTime())) {
+        var today = new Date();
+        today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        var days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - today) / 86400000);
+        var part = function (opts) { try { return d.toLocaleDateString(loc, opts); } catch (e) { return ''; } };
+        text = days === 0 ? t('home.info.today', 'today')
+          : days === 1 ? t('home.info.tomorrow', 'tomorrow')
+          : days > 1 && days < 7 ? t('home.info.weekday', 'on {weekday}', { weekday: part({ weekday: 'long' }) })
+          : t('home.info.date', '{day} {month}', { day: d.getDate(), month: part({ month: 'short' }) });
+      }
+    } else if (num) {
+      // Its own decimals, two at most: the API gives a computed sensor's raw
+      // value (14.583333333), not the precision Home Assistant shows.
+      var places = Math.min(num[1] ? num[1].length - 1 : 0, 2);
+      var n = parseFloat(v);
+      try { text = n.toLocaleString(loc, { minimumFractionDigits: places, maximumFractionDigits: places }); } catch (e) { text = v; }
+      if (l.unit) text += (l.unit === '%' ? ' ' : ' ') + l.unit;
+    } else if (l.unit) {
+      text += ' ' + l.unit;
+    }
+    return (l.before ? l.before + ' ' : '') + text;
+  }
+  function infoLinesHtml(lines, from, to) {
+    var html = '';
+    for (var i = from; i < to && i < lines.length; i++) {
+      var l = lines[i];
+      html += '<div class="info-line">' + (l.icon ? infoIcon(l.icon) : '') +
+        (l.label ? '<span class="info-label">' + esc(l.label) + '</span>' : '') +
+        '<span class="info-value">' + esc(infoValue(l)) + '</span></div>';
+    }
+    return html;
+  }
+  var shownInfo = null;
+  function renderInfo(lines) {
+    // The day too: a date reads differently from midnight.
+    var key = lines && lines.length ? JSON.stringify(lines) + new Date().toDateString() : '';
+    if (key === shownInfo) return;
+    shownInfo = key;
+    if (!key) { $('info').className = 'none'; $('info').innerHTML = ''; return; }
+    $('info').innerHTML = infoLinesHtml(lines, 0, lines.length);
+    $('info').className = '';
+  }
+
+  // The board: BOARD_PAGE lines at a time, the next ones every BOARD_TURN_MS.
+  var BOARD_PAGE = 4;
+  var BOARD_TURN_MS = 8000;
+  var shownBoard = null, board = null, boardPage = 0, boardTimer = null;
+
+  /*
+   * The news strip. Eight headlines a run, the next eight the run after, so
+   * the moving line stays a few thousand pixels wide: all of them at once,
+   * up to 45 across three feeds, came to 20,000 and moved in jerks on a C6.
+   * New headlines are taken at the start of a run, so none is cut off on
+   * screen, and a run's time follows its length, at newsSpeed() pixels a second.
+   */
+  var NEWS_SPEEDS = { slow: 60, normal: 100 };
+  function newsSpeed() { return NEWS_SPEEDS[layout && layout.newsSpeed] || NEWS_SPEEDS.slow; }
+  /*
+   * Flipping, the default, shows one headline at a time and fades to the next
+   * after 8 or 6 s: a C6 draws about 49 frames a second of 60 with the strip
+   * running, and each one missed jerks a running line.
+   */
+  var NEWS_FLIP_MS = { slow: 8000, normal: 6000 };
+  var NEWS_FADE_MS = 400;
+  function newsFlips() { return !layout || layout.newsStyle !== 'scroll'; }
+  function newsFlipMs() { return NEWS_FLIP_MS[layout && layout.newsSpeed] || NEWS_FLIP_MS.slow; }
+  var NEWS_BATCH = 8;
+  var newsItems = [], runBoard = [], newsWaiting = null, newsKey = '', newsAt = 0, runAt = 0, runSpeed = 0, newsShown = false;
+  var runFlips = null, flipItems = [], flipAt = 0, flipTimer = null;
+  // The board's lines, when it is put in the strip, open every run and the
+  // headlines take turns after them: a board changes, so it comes round each
+  // run rather than once in every 45 headlines.
+  var stripBoard = [], stripNews = [];
+  function updateStrip() { renderStrip(stripBoard, stripNews); }
+  function renderNews(items) { stripNews = items || []; updateStrip(); }
+  function newsHtml(items) {
+    var parts = [];
+    for (var i = 0; i < items.length; i++) {
+      parts.push('<span class="src">' + esc(items[i].source || '') + '</span>' + esc(items[i].title || ''));
+    }
+    return parts.join('<span class="sep">\u2022</span>');
+  }
+  function startNewsRun() {
+    if (newsWaiting) {
+      runBoard = newsWaiting.board; newsItems = newsWaiting.news; newsWaiting = null;
+      if (newsAt >= newsItems.length) newsAt = 0;
+    }
+    runAt = newsAt;
+    var batch = runBoard.concat(newsItems.slice(newsAt, newsAt + NEWS_BATCH));
+    newsAt = newsAt + NEWS_BATCH >= newsItems.length ? 0 : newsAt + NEWS_BATCH;
+    var run = $('newsRun');
+    clearTimeout(flipTimer); flipTimer = null;
+    runSpeed = newsSpeed();
+    runFlips = newsFlips();
+    $('news').className = runFlips ? 'flip' : '';
+    if (runFlips) {
+      run.style.width = '';
+      flipItems = batch; flipAt = 0;
+      return showFlip(true);
+    }
+    run.style.opacity = '';
+    run.innerHTML = newsHtml(batch);
+    run.style.width = '';
+    // A whole number of pixels, a multiple of 6, so the run lasts a whole
+    // number of milliseconds at 60 and 100 pixels a second and the text is not
+    // put a drifting fraction of a pixel off each frame.
+    var speed = runSpeed;
+    var px = Math.max(Math.ceil(run.getBoundingClientRect().width / 6) * 6, speed * 10);
+    run.style.width = px + 'px';
+    var ms = Math.round(px * 1000 / speed);
+    run.style.webkitAnimationDuration = ms + 'ms';
+    run.style.animationDuration = ms + 'ms';
+    // Restarted from the right edge.
+    run.style.webkitAnimationName = 'none';
+    run.style.animationName = 'none';
+    void run.offsetWidth;
+    run.style.webkitAnimationName = '';
+    run.style.animationName = '';
+  }
+  function renderStrip(boardItems, items) {
+    if (!boardItems.length && !items.length) {
+      if (!newsShown) return;
+      newsShown = false;
+      newsItems = []; runBoard = []; newsWaiting = null; newsKey = ''; newsAt = 0;
+      clearTimeout(flipTimer); flipTimer = null;
+      $('news').className = 'none';
+      $('newsRun').innerHTML = '';
+      stageClass();
+      if (!document.hidden) keepRowInView(!smoothScroll);
+      return;
+    }
+    var key = JSON.stringify([boardItems, items]);
+    if (key !== newsKey) { newsKey = key; newsWaiting = { board: boardItems, news: items }; }
+    if (newsShown) {
+      // Matches put in the strip after a run began start it again with them,
+      // from the same headlines, rather than a run later.
+      if (newsWaiting && boardItems.length && !runBoard.length) { newsAt = runAt; startNewsRun(); }
+      return;
+    }
+    newsShown = true;
+    startNewsRun();
+    stageClass();
+    if (!document.hidden) keepRowInView(!smoothScroll);
+  }
+  function newsRunEnded() {
+    if (!runFlips) startNewsRun();
+  }
+  // One headline, faded in; at the end of the run's headlines the next run.
+  function showFlip(first) {
+    var run = $('newsRun');
+    if (flipAt >= flipItems.length) return startNewsRun();
+    var item = flipItems[flipAt++];
+    function show() {
+      run.innerHTML = newsHtml([item]);
+      run.style.opacity = '1';
+      flipTimer = setTimeout(function () { showFlip(false); }, newsFlipMs());
+    }
+    if (first && !run.innerHTML) return show();
+    run.style.opacity = '0';
+    flipTimer = setTimeout(show, NEWS_FADE_MS);
+  }
+
+  function drawBoardPage() {
+    var pages = Math.ceil(board.lines.length / BOARD_PAGE);
+    if (boardPage >= pages) boardPage = 0;
+    $('boardTitle').innerHTML = esc(board.title) +
+      (pages > 1 ? '<span id="boardPage">' + (boardPage + 1) + '/' + pages + '</span>' : '');
+    $('boardLines').innerHTML = infoLinesHtml(board.lines, boardPage * BOARD_PAGE, (boardPage + 1) * BOARD_PAGE);
+    slideLongLines($('boardLines'));
+  }
+  /*
+   * A line too long for the board slides left to show its end, stays, and
+   * slides back, at 40 pixels a second, within the 8 seconds of a page. One
+   * keyframes rule per distance, made once and kept.
+   */
+  function boardWidth() {
+    var probe = document.createElement('div');
+    probe.id = 'boardMeasure';
+    probe.innerHTML = '<div id="boardTitle">' + esc(board.title) + '<span id="boardPage">0/0</span></div>' +
+      infoLinesHtml(board.lines, 0, board.lines.length);
+    $('board').appendChild(probe);
+    var w = Math.ceil(probe.offsetWidth) + 2;
+    $('board').removeChild(probe);
+    $('board').style.width = Math.min(520, w) + 'px';
+  }
+  var slideRules = {};
+  function slideLongLines(box) {
+    var labels = box.querySelectorAll('.info-label');
+    for (var i = 0; i < labels.length; i++) {
+      var label = labels[i];
+      var over = label.scrollWidth - label.clientWidth;
+      if (over < 4) continue;
+      over = Math.ceil(over / 8) * 8;
+      var name = 'boardSlide' + over;
+      if (!slideRules[name]) {
+        slideRules[name] = true;
+        var css = '{0%,20%{-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0)}' +
+          '50%,70%{-webkit-transform:translate3d(-' + over + 'px,0,0);transform:translate3d(-' + over + 'px,0,0)}' +
+          '100%{-webkit-transform:translate3d(0,0,0);transform:translate3d(0,0,0)}}';
+        var style = document.createElement('style');
+        style.textContent = '@-webkit-keyframes ' + name + css + '@keyframes ' + name + css;
+        document.head.appendChild(style);
+      }
+      // Out over 30% of the run and back over 30%, so a run is over / 12 seconds.
+      var secs = Math.max(4, Math.min(8, over / 12)).toFixed(2);
+      label.className += ' sliding';
+      label.innerHTML = '<span class="slide" style="-webkit-animation:' + name + ' ' + secs + 's linear infinite;animation:' +
+        name + ' ' + secs + 's linear infinite">' + label.innerHTML + '</span>';
+    }
+  }
+  function turnBoard() {
+    if (!board || board.lines.length <= BOARD_PAGE) return;
+    $('boardLines').className = 'turning';
+    setTimeout(function () {
+      if (!board) return;
+      boardPage++;
+      drawBoardPage();
+      $('boardLines').className = '';
+    }, 300);
+  }
+  // The board in the strip along the bottom, chosen on the Home tab.
+  function boardInStrip() { return !!layout && layout.boardStrip === true; }
+  var lastBoard = null;
+  function renderBoard(b) {
+    lastBoard = b;
+    var key = b && (b.title || (b.lines && b.lines.length)) ? (boardInStrip() ? 'strip ' : '') + JSON.stringify(b) : '';
+    if (key === shownBoard) return;
+    shownBoard = key;
+    if (!key || boardInStrip()) {
+      board = null;
+      clearInterval(boardTimer); boardTimer = null;
+      $('board').className = 'none';
+      // Each line after its league (or the board's title), as the news runs.
+      stripBoard = [];
+      if (key) {
+        for (var i = 0; i < b.lines.length; i++) {
+          var l = b.lines[i];
+          stripBoard.push({ source: b.title || '', title: (l.label || '') + (l.value ? '  ' + l.value : '') });
+        }
+      }
+      updateStrip();
+      return;
+    }
+    if (stripBoard.length) { stripBoard = []; updateStrip(); }
+    board = { title: b.title || '', lines: b.lines || [] };
+    // Shown first: a board not displayed measures nothing.
+    $('board').className = '';
+    boardWidth();
+    drawBoardPage();
+    if (!boardTimer) boardTimer = setInterval(turnBoard, BOARD_TURN_MS);
+  }
+  function refreshInfo() {
+    getJson('/api/home/info', function (r) {
+      renderInfo(r && r.ok ? r.lines : null);
+      renderBoard(r && r.ok ? r.board : null);
+      renderNews(r && r.ok ? r.news : null);
+    });
+  }
+
   // ---------------------------------------------------------------- actions
 
   var toastTimer = null;
@@ -2363,8 +2800,74 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       if (outside) state.col[kind] = dc > 0 ? span[0] : span[1];
       else state.col[kind] = Math.max(state.arranging ? -1 : 0, Math.min(items(kind).length - 1, c + dc));
     }
+    if (state.row !== fromRow || colOf(rowKey()) !== fromCol) navTick();
     applyFocus();
   }
+
+  /*
+   * The sound as focus moves (layout navSound, lib/home navSoundFile), loaded
+   * at the first move after it is chosen. The context is made then too, as
+   * that follows a key. It plays whenever focus lands on another tile, from a
+   * key or from the Magic Remote's pointer.
+   */
+  var navAudio = null, navBuffers = {};
+  // key: the sound's name, and for the own sound its revision, so one replaced is loaded again.
+  function loadNavSound(name, key) {
+    navBuffers[key] = null;
+    var x = new XMLHttpRequest();
+    x.open('GET', '/api/home/nav-sound?name=' + encodeURIComponent(name) + '&v=' + encodeURIComponent(key));
+    x.responseType = 'arraybuffer';
+    x.onload = function () {
+      if (x.status !== 200 || !navAudio) return;
+      try {
+        navAudio.decodeAudioData(x.response, function (b) { navBuffers[key] = b; }, function () {});
+      } catch (e) {}
+    };
+    x.send();
+  }
+  // The sound's decoded buffer, or null while it loads: the load starts at the first call.
+  function navSoundBuffer(name) {
+    if (name !== 'click' && name !== 'rollover' && name !== 'own') return null;
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    if (!navAudio) navAudio = new Ctx();
+    var key = name === 'own' ? 'own@' + (layout.ownSound ? layout.ownSound.rev : '') : name;
+    if (name === 'own' && !layout.ownSound) return null;
+    if (navBuffers[key] === undefined) loadNavSound(name, key);
+    return navBuffers[key] || null;
+  }
+  // Loaded when Home opens or a choice changes, so the first move already sounds.
+  function preloadNavSounds() {
+    try {
+      if (!layout) return;
+      navSoundBuffer(layout.navSound);
+      navSoundBuffer(layout.pointerSound);
+    } catch (e) {}
+  }
+  function playNavSound(name) {
+    try {
+      var buffer = navSoundBuffer(name);
+      if (!buffer) return;
+      if (navAudio.state === 'suspended' && navAudio.resume) navAudio.resume();
+      var src = navAudio.createBufferSource();
+      src.buffer = buffer;
+      // The bundled sounds at half volume (-6 dB): at full, every move cut
+      // through what was playing. An owner's own file plays as they made it.
+      if (name === 'own' || !navAudio.createGain) src.connect(navAudio.destination);
+      else {
+        var gain = navAudio.createGain();
+        gain.gain.value = 0.5;
+        src.connect(gain);
+        gain.connect(navAudio.destination);
+      }
+      src.start(0);
+    } catch (e) {}
+  }
+  // What moved focus: the keys, or the Magic Remote's pointer and wheel. Each has its own sound.
+  var soundFrom = 'key';
+  function navTick() { playNavSound(layout && (soundFrom === 'pointer' ? layout.pointerSound : layout.navSound)); }
+  // OK and Back always sound, once per press: a move may not follow.
+  var okSoundDown = false, backSoundDown = false;
 
   // Medium or Large beside the clock; in the tile, the tile sets its size.
   function previewSizeClass() {
@@ -2378,8 +2881,10 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       (folder.open ? ' folder' : '') + (document.hidden ? ' page-hidden' : '') +
       (!layout || layout.showClock === false ? ' no-clock' : '') + (layout && layout.rowsBottom === true ? ' rows-bottom' : '') +
       (layout && layout.view === 'alternative' ? ' alternative' : '') + (layout && layout.showAppLabels === false ? ' no-app-labels' : '') +
+      (cardsOn() ? ' cards' : '') + (layout && layout.focusPulse === true ? ' pulse' : '') +
       (player.open ? ' playing' : '') + (adder.open ? ' adding' : '') +
-      (adder.open && adder.typing ? ' adtyping' : '') + (guide.open ? ' guiding' : '') + previewSizeClass();
+      (adder.open && adder.typing ? ' adtyping' : '') + (guide.open ? ' guiding' : '') + previewSizeClass() +
+      (newsShown ? ' has-news' : '');
     if ($('stage').className !== value) {
       $('stage').className = value;
       queueChannelTitles(200);
@@ -3260,7 +3765,9 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
    * numbers reach the same channels however the row would reorder itself.
    */
   var player = { open: false, okDown: false, list: false, items: [], idx: 0, bandTimer: null, listTimer: null, group: 0, groups: [], lcol: 0,
-    digits: '', digitTimer: null, failed: false, askLive: false, askTimer: null, askZap: null };
+    digits: '', digitTimer: null, failed: false, askLive: false, askTimer: null, askZap: null,
+    // Opened from the guide: where it was, for Back to put it back (guideReturn).
+    fromGuide: null };
   var BAND_MS = 5000, LIST_IDLE_MS = 10000, DIGIT_MS = 2000, ZAP_DWELL_MS = 600, EXPAND_MS = 280;
   var zapTimer = null;
 
@@ -3302,6 +3809,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   function sectionOf(it) { return tvLineup && it.sid ? it.sid : it.group || ''; }
 
   function openPlayer(it) {
+    player.fromGuide = null;
     var adopt = tilePreview.target && tilePreview.target.tv && tilePreview.target.item.id === it.id && tilePreview.playing && !tilePreview.blank &&
       // An MPEG-TS preview opens again full screen when live TV may pause: from the recording, which can.
       !(data && data.iptvStatus && data.iptvStatus.timeshift && tvStream.format === 'MPEG-TS' && !tvStream.timeshift);
@@ -3419,9 +3927,11 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
 
   // Back to Home, the tile in focus. With Live preview on, the picture
   // shrinks back to the preview and goes on playing there.
-  function closePlayer() {
+  function closePlayer(toGuide) {
     if (!player.open) return;
     var it = playerChannel();
+    var back = toGuide ? player.fromGuide : null;
+    player.fromGuide = null;
     player.open = false;
     player.list = false;
     clearTimeout(player.bandTimer);
@@ -3442,7 +3952,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       }
     }
     // A paused picture is not left playing on the row.
-    var keep = layout.livePreview === true && tvStream.playing && !tvStream.paused && !document.hidden && it;
+    var keep = !back && layout.livePreview === true && tvStream.playing && !tvStream.paused && !document.hidden && it;
     if (keep) {
       tvStream.muted = previewMuted();
       $('pvVideo').muted = tvStream.muted;
@@ -3461,16 +3971,25 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     stageClass();
     render();
     renderNow();
+    if (back) guideReturn(back, it);
   }
 
   function showBand(stay) {
+    if (player.list) return;
     renderBand();
-    $('player').className = 'band' + (player.list ? ' list' : '');
+    $('player').className = 'band';
     clearTimeout(player.bandTimer);
     if (stay && (player.failed || tvStream.paused || tvStream.seekTarget !== null)) return;
     player.bandTimer = setTimeout(function () {
-      if (player.open) $('player').className = player.list ? 'list' : '';
+      if (player.open && !player.list) $('player').className = '';
     }, BAND_MS);
+  }
+
+  function toggleBand() {
+    if (/\bband\b/.test($('player').className)) {
+      clearTimeout(player.bandTimer);
+      $('player').className = '';
+    } else showBand();
   }
 
   function renderBand() {
@@ -3691,8 +4210,9 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     player.lcol = Math.max(0, indexIn(groupItems(), playerChannel().id));
     player.list = true;
     renderList();
-    $('player').className = 'list band';
-    showBand();
+    // The band and the list are not shown together.
+    clearTimeout(player.bandTimer);
+    $('player').className = 'list';
     listIdle();
   }
 
@@ -3707,8 +4227,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     player.listTimer = setTimeout(function () { if (player.open && player.list) closeList(); }, LIST_IDLE_MS);
   }
 
-  // A section can hold hundreds of channels: only those near the focus are drawn.
-  var LIST_WINDOW = 40;
+  // Seven channels are drawn, the focus on the middle one. At either end of the section the list stops and the focus moves instead.
+  var LIST_ROWS = 7, LIST_MIDDLE = 3;
   function renderList() {
     var list = groupItems(), g = player.groups[player.group];
     $('clGroup').textContent = sectionName(g);
@@ -3716,8 +4236,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       esc(list.length === 1 ? t('home.tv.oneChannel', '1 channel') : t('home.tv.channels', '{n} channels', { n: list.length })) +
       (player.groups.length > 1 ? '<i>›</i>' : '');
     var html = '', on = playerChannel();
-    var from = Math.max(0, Math.min(player.lcol - 12, list.length - LIST_WINDOW));
-    list.slice(from, from + LIST_WINDOW).forEach(function (it, n) {
+    var from = Math.max(0, Math.min(player.lcol - LIST_MIDDLE, list.length - LIST_ROWS));
+    list.slice(from, from + LIST_ROWS).forEach(function (it, n) {
       var i = from + n, now = tvNow(it.id);
       html += '<div class="cl' + (i === player.lcol ? ' focus' : '') + (on && it.id === on.id ? ' on' : '') + '" data-l="' + i + '">' +
         '<div class="glyph">' + glyphHtml(it) + '</div><div class="n">' + esc(it.number || String(indexIn(player.items, it.id) + 1)) + '</div>' +
@@ -3726,10 +4246,6 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     });
     $('clItems').innerHTML = html;
     wireGlyphs($('clItems'));
-    var row = $('clItems').children[player.lcol - from];
-    var view = $('clWrap').clientHeight - 12;
-    var y = row ? Math.max(0, row.offsetTop + row.offsetHeight - view) : 0;
-    $('clItems').style.webkitTransform = $('clItems').style.transform = 'translateY(' + (-y) + 'px)';
   }
 
   function clearDigits() {
@@ -3770,11 +4286,20 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     if (k === KEY.back) {
       if (player.digits) return clearDigits();
       if (player.list) return closeList();
+      // Back closes the band as it closes the list, and leaves for Home only with neither open.
+      if (/\bband\b/.test($('player').className)) return toggleBand();
       if (tsBehindLive()) return askLive();
-      return closePlayer();
+      return closePlayer(true);
     }
     if (k >= 48 && k <= 57) return digit(k - 48);
     if (k >= 96 && k <= 105) return digit(k - 96);
+    if ((k === KEY.chUp || k === KEY.chDown) && player.list && player.groups.length > 1) {
+      listIdle();
+      player.group = (player.group + (k === KEY.chUp ? 1 : -1) + player.groups.length) % player.groups.length;
+      player.lcol = 0;
+      navTick();
+      return renderList();
+    }
     if (k === KEY.chUp) return zapTo(player.idx + 1);
     if (k === KEY.chDown) return zapTo(player.idx - 1);
     if (k === KEY.info) return showBand();
@@ -3785,29 +4310,30 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     if (k === KEY.yellow && !player.list && tvStream.switchable && tvStream.item === playerChannel()) return switchFormat();
     if (player.list) {
       listIdle();
-      var list = groupItems();
+      var list = groupItems(), listAt = player.group + '|' + player.lcol;
       if (k === KEY.up) player.lcol = Math.max(0, player.lcol - 1);
       else if (k === KEY.down) player.lcol = Math.min(list.length - 1, player.lcol + 1);
-      else if ((k === KEY.left || k === KEY.right) && player.groups.length > 1) {
-        player.group = (player.group + (k === KEY.left ? -1 : 1) + player.groups.length) % player.groups.length;
-        player.lcol = 0;
-      } else if (k === KEY.ok) {
+      else if (k === KEY.right) { navTick(); return closeList(); }
+      else if (k === KEY.ok) {
         var pick = list[player.lcol];
         if (pick && pick.id !== playerChannel().id) { closeList(); return zapTo(indexIn(player.items, pick.id)); }
         return closeList();
       }
+      if (player.group + '|' + player.lcol !== listAt) navTick();
       return renderList();
     }
     if (k === KEY.ok) {
       if (player.failed) { showBand(); return startPlayerStream(); }
-      return openList();
+      // OK shows and hides the band. A recording keeps Left and Right for seeking, so its list is on OK.
+      if (tsCanSeek()) return openList();
+      return toggleBand();
     }
     // Up and down change channel, as channel up and down do.
     if (k === KEY.up) return zapTo(player.idx + 1);
     if (k === KEY.down) return zapTo(player.idx - 1);
     // In a recording, left and right go back and forward; OK opens the list.
     if ((k === KEY.left || k === KEY.right) && tsCanSeek()) return tsSeek(k === KEY.left ? TS_STEP_S : -TS_STEP_S);
-    if (k === KEY.left || k === KEY.right) return openList();
+    if (k === KEY.left) { navTick(); return openList(); }
   }
 
   function otherFormat() { return tvStream.format === 'MPEG-TS' ? 'HLS' : 'MPEG-TS'; }
@@ -3830,6 +4356,21 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     });
   }
 
+  // The channel list's row under the pointer is the focus.
+  function playerPointer(target) {
+    if (!player.list) return;
+    var row = target;
+    while (row && row !== document.body && !(row.className && /\bcl\b/.test(row.className))) row = row.parentNode;
+    if (!row || row === document.body || +row.getAttribute('data-l') === player.lcol) return;
+    // Only the focus mark moves: drawing the list again would scroll it from under the pointer.
+    var rows = $('clItems').children;
+    for (var i = 0; i < rows.length; i++) rows[i].className = rows[i].className.replace(/ ?\bfocus\b/, '');
+    row.className += ' focus';
+    player.lcol = +row.getAttribute('data-l');
+    navTick();
+    listIdle();
+  }
+
   function playerClick(target) {
     var row = target;
     while (row && row !== document.body && !(row.className && /\bcl\b/.test(row.className))) row = row.parentNode;
@@ -3837,9 +4378,10 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       player.lcol = +row.getAttribute('data-l');
       return playerKey(KEY.ok);
     }
-    if (player.list) return closeList();
+    // With the list open, a click off its rows is OK on the focused channel: the remote's OK arrives as a click wherever the pointer rests, after the wheel moved the focus.
+    if (player.list) return playerKey(KEY.ok);
     if (player.failed) return startPlayerStream();
-    openList();
+    playerKey(KEY.ok);
   }
 
   // ---------------------------------------------------------------- guide
@@ -3870,7 +4412,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     return all.filter(function (x) { return sectionOf(x) === key; });
   }
 
-  function openGuide(fromId) {
+  function openGuide(fromId, keepRead) {
     var all = guideAll();
     if (!all.length) return;
     stopPreview();
@@ -3886,7 +4428,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     guide.start = Math.floor(Date.now() / HALF_HOUR) * HALF_HOUR;
     guide.at = Date.now();
     // Read afresh each time it opens: the server refreshes the guide meanwhile.
-    clearGuideCache();
+    if (!keepRead) clearGuideCache();
     stageClass();
     renderGuide();
   }
@@ -3982,7 +4524,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     var tabs = $('gTabs');
     tabs.className = guide.tabs ? 'focus' : '';
     tabs.innerHTML = guide.groups.map(function (g, i) {
-      return '<span' + (i === guide.group ? ' class="on"' : '') + '>' + esc(i === 0 ? t('home.tv.guideAll', 'All') : g === '*' ? t('home.tv.guideFavourites', 'Favourites') : sectionName(g)) + '</span>';
+      return '<span data-gt="' + i + '"' + (i === guide.group ? ' class="on"' : '') + '>' + esc(i === 0 ? t('home.tv.guideAll', 'All') : g === '*' ? t('home.tv.guideFavourites', 'Favourites') : sectionName(g)) + '</span>';
     }).join('');
     // A lineup of many sections runs past the edge: the chosen tab is kept in view.
     var onTab = tabs.children[guide.group];
@@ -4053,21 +4595,40 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     guide.start = Math.max(min, Math.min(max, guide.start + ms));
   }
 
+  // The sound as the guide's focus moves: a row, a programme, a tab or the hours shown.
+  function guidePlace() { return [guide.row, guide.at, guide.group, guide.tabs, guide.start].join('|'); }
+
+  function guideSetGroup(i) {
+    guide.group = i;
+    guide.list = guideTabList(guide.groups[i]);
+    guide.row = 0;
+    guide.top = 0;
+  }
+
+  // The tab under the pointer, if it is on the tabs.
+  function guideTabAt(target) {
+    while (target && target !== document.body) {
+      if (target.getAttribute && target.getAttribute('data-gt') !== null) return +target.getAttribute('data-gt');
+      target = target.parentNode;
+    }
+    return -1;
+  }
+
   function guideKey(k) {
     if (k === KEY.back) return closeGuide();
+    var placed = guidePlace();
     if (k === KEY.chUp || k === KEY.chDown) {
       if (!guide.list.length) return;
       guidePage(k === KEY.chUp ? -1 : 1);
+      if (guidePlace() !== placed) navTick();
       return renderGuide();
     }
     var it = guide.list[guide.row];
     if (guide.tabs) {
       if (k === KEY.left || k === KEY.right) {
-        guide.group = (guide.group + (k === KEY.left ? -1 : 1) + guide.groups.length) % guide.groups.length;
-        guide.list = guideTabList(guide.groups[guide.group]);
-        guide.row = 0;
-        guide.top = 0;
+        guideSetGroup((guide.group + (k === KEY.left ? -1 : 1) + guide.groups.length) % guide.groups.length);
       } else if (k === KEY.down || k === KEY.ok) guide.tabs = false;
+      if (guidePlace() !== placed) navTick();
       return renderGuide();
     }
     if (k === KEY.up) {
@@ -4088,6 +4649,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     } else if (k === KEY.ok) return guideOpen(it);
     else if (k === KEY.info) return closeGuide();
     else return;
+    if (guidePlace() !== placed) navTick();
     renderGuide();
   }
 
@@ -4097,13 +4659,43 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     var p = guideFocus(it), now = Date.now();
     if (p && p.start > now) return toast(p.title, t('home.tv.startsAt', 'Starts at {time}', { time: hm(new Date(p.start)) }));
     if (p && p.end <= now) return toast(p.title, t('home.tv.finished', 'That has finished'));
+    var back = { group: guide.groups[guide.group], fromTop: guide.row - guide.top, start: guide.start };
     guide.open = false;
     stageClass();
     openPlayer(it);
+    player.fromGuide = back;
+  }
+
+  /*
+   * Back from a channel picked in the guide: the guide as it was left, its
+   * tab, place and hours, on the channel now playing, which may have been
+   * changed meanwhile. What it has read is kept unless it is getting old.
+   */
+  var GUIDE_KEEP_MS = 10 * 60000;
+  function guideReturn(back, it) {
+    if (!it) return;
+    openGuide(it.id, Date.now() - guide.loadedAt < GUIDE_KEEP_MS);
+    if (!guide.open) return;
+    var g = guide.groups.indexOf(back.group), list = g === -1 ? null : guideTabList(back.group);
+    var row = list ? indexIn(list, it.id) : -1;
+    if (row !== -1) {
+      guide.group = g;
+      guide.list = list;
+      guide.row = row;
+    }
+    guide.top = Math.max(0, guide.row - back.fromTop);
+    // Hours ahead stay as they were; ones gone by move on to now.
+    guide.start = Math.max(back.start, guide.start);
+    renderGuide();
   }
 
   // The row under the pointer, and the programme in it, are the focus.
   function guidePointer(target) {
+    // Over the tabs the focus is the tabs, as Up from the first row leaves it.
+    if (within(target, 'gTabs')) {
+      if (!guide.tabs) { navTick(); guide.tabs = true; renderGuide(); }
+      return;
+    }
     var at = null;
     while (target && target !== document.body && !(target.className && /\bgr\b/.test(target.className))) {
       if (target.getAttribute && target.getAttribute('data-s')) at = Math.max(+target.getAttribute('data-s'), guide.start);
@@ -4112,6 +4704,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     if (!target || target === document.body) return;
     var r = +target.getAttribute('data-g');
     if (r !== guide.row || guide.tabs || (at !== null && at !== guide.at)) {
+      navTick();
       guide.row = r;
       guide.tabs = false;
       if (at !== null) guide.at = at;
@@ -4121,6 +4714,13 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
 
   function guideClick(target) {
     if (!within(target, 'guide')) return closeGuide();
+    var tab = guideTabAt(target);
+    if (tab !== -1) {
+      if (tab !== guide.group) { navTick(); guideSetGroup(tab); }
+      guide.tabs = true;
+      return renderGuide();
+    }
+    if (within(target, 'gTabs')) return;
     guidePointer(target);
     guideKey(KEY.ok);
   }
@@ -4410,16 +5010,28 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     });
   }
 
+  /*
+   * Tiles per line in the More apps grid, as laid out: 9 small tiles fit, but
+   * only 5 cards, and the keys must follow the lines the grid shows.
+   */
+  function folderCols() {
+    var tiles = $('folderGrid').querySelectorAll('.tile'), cols = 0;
+    while (cols < tiles.length && tiles[cols].offsetTop === tiles[0].offsetTop) cols++;
+    return cols || 1;
+  }
+
   function folderKey(k) {
     var n = folder.apps.length, c = folder.col;
     if (k === KEY.back) return closeFolder();
     if (!n) return;
     if (k === KEY.ok) return openFromFolder(folder.apps[c]);
-    if (k === KEY.left && c % FOLDER_COLS > 0) c--;
-    else if (k === KEY.right && c % FOLDER_COLS < FOLDER_COLS - 1 && c + 1 < n) c++;
-    else if (k === KEY.up && c - FOLDER_COLS >= 0) c -= FOLDER_COLS;
+    var cols = folderCols();
+    if (k === KEY.left && c % cols > 0) c--;
+    else if (k === KEY.right && c % cols < cols - 1 && c + 1 < n) c++;
+    else if (k === KEY.up && c - cols >= 0) c -= cols;
     // Down from above a short last line goes to its last tile.
-    else if (k === KEY.down && Math.floor(c / FOLDER_COLS) < Math.floor((n - 1) / FOLDER_COLS)) c = Math.min(n - 1, c + FOLDER_COLS);
+    else if (k === KEY.down && Math.floor(c / cols) < Math.floor((n - 1) / cols)) c = Math.min(n - 1, c + cols);
+    if (c !== folder.col) navTick();
     folder.col = c;
     focusFolder();
   }
@@ -5100,9 +5712,21 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   // ---------------------------------------------------------------- input
 
   function onKeyDown(e) {
+    if (saverUp) {
+      e.preventDefault();
+      saverUp = false;
+      if (e.keyCode === KEY.back) backDown = true;
+      // Heard now rather than at the next beat, so Home's background comes back at once.
+      scheduleBeat(0);
+      return;
+    }
+    if (!e.pointer) soundFrom = 'key';
     stopPointing();
     landAll();
     if (!data || !layout) return;
+    // OK or Back held repeats on webOS: the sound is made once, at the first press.
+    if (e.keyCode === KEY.ok && !okSoundDown && !finder.typing && !adder.typing) { okSoundDown = true; navTick(); }
+    if (e.keyCode === KEY.back && !backSoundDown) { backSoundDown = true; navTick(); }
     if (player.open) {
       e.preventDefault();
       // OK held repeats on webOS: acted on once, at its first press.
@@ -5164,7 +5788,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       if (recents.open || recents.loading) return closeRecents();
       if (state.arranging && state.held) { state.held = false; return toggleHidden(); }
       if (state.arranging) return setArranging(false);
-      if (data && data.supported && data.supported.standalone) {
+      if (data && data.supported && data.supported.standalone && !data.supported.lgHomeOnClose) {
         return window.close();
       }
       return openRecents();
@@ -5181,8 +5805,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   }
 
   function onKeyUp(e) {
-    if (e.keyCode === KEY.back) { backDown = false; return; }
-    if (e.keyCode === KEY.ok) { finder.okDown = false; player.okDown = false; adder.okDown = false; guide.okDown = false; }
+    if (e.keyCode === KEY.back) { backDown = false; backSoundDown = false; return; }
+    if (e.keyCode === KEY.ok) { okSoundDown = false; finder.okDown = false; player.okDown = false; adder.okDown = false; guide.okDown = false; }
     if (player.open || adder.open || guide.open) return;
     if (e.keyCode !== KEY.ok || !okDownAt) return;
     e.preventDefault();
@@ -5207,6 +5831,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   function onPointer(e) {
     if (pointerOff()) return;
     if (!pointing) restorePointerCursor();
+    soundFrom = 'pointer';
     pointerX = e.clientX;
     pointerY = e.clientY;
     pointing = true;
@@ -5220,7 +5845,8 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   }
   // Focuses the tile under the pointer, without moving its row.
   function hoverTile(target) {
-    if (layoutBusy || !data || !layout || player.open) return;
+    if (layoutBusy || !data || !layout) return;
+    if (player.open) return playerPointer(target);
     if (guide.open) return guidePointer(target);
     if (adder.open) {
       var adRow = target;
@@ -5236,18 +5862,20 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       var inFolder = tileAt(target);
       if (inFolder && inFolder.hasAttribute('data-f') && +inFolder.getAttribute('data-f') !== folder.col) {
         folder.col = +inFolder.getAttribute('data-f');
+        navTick();
         focusFolder();
       }
       return;
     }
     if (!state.arranging && searchOn() && within(target, 'rail')) {
-      if (!state.rail) { state.rail = true; state.bar = -1; applyFocus(false, true); }
+      if (!state.rail) { state.rail = true; state.bar = -1; navTick(); applyFocus(false, true); }
       return;
     }
     var tile = tileAt(target);
     if (recents.open) {
       if (tile && /\brc\b/.test(tile.className) && (+tile.getAttribute('data-c') !== recents.col || recents.onAll)) {
         recents.col = +tile.getAttribute('data-c'); recents.onAll = false; recents.onX = false;
+        navTick();
         focusRecents(false, true);
       }
       return;
@@ -5259,6 +5887,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     var r = +rowEl.getAttribute('data-row'), c = +tile.getAttribute('data-c'), kind = layout.rows[r];
     if (state.row !== r || colOf(kind) !== c || state.bar >= 0 || state.rail) {
       state.row = r; state.col[kind] = c; state.bar = -1; state.rail = false;
+      navTick();
       applyFocus(false, true);
     }
   }
@@ -5428,7 +6057,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       var r = m && window.getComputedStyle(m).visibility !== 'hidden' && m.getBoundingClientRect();
       return r && r.width && r.height && r.bottom > 0 && r.top < height ? r : null;
     };
-    var now = [$('when'), $('weather'), $('source'), $('plate'), $('preview')];
+    var now = [$('when'), $('weather'), $('info'), $('board'), $('source'), $('plate'), $('preview')];
     // Where the text starts in the marks on the caption's half of the screen.
     for (var n = 0; n < now.length; n++) {
       var nr = shown(now[n]), cs = nr && window.getComputedStyle(now[n]), inset = null;
@@ -5648,13 +6277,32 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
    * LG's screen saver never comes over a playing video: while the wallpaper
    * plays, a B8 (webOS 4.4) and a C2 (webOS 9.2) refused turnOnScreenSaver
    * and asked for no idle screen saver in over 6 minutes, leaving Home's
-   * clock and tiles on an OLED panel. So after this long without a key or
-   * the pointer, the video fades out and lets the decoder go, and the TV's
-   * own screen saver comes as it does over a still background. A key, the
-   * pointer or Home coming back plays it again.
+   * clock and tiles on an OLED panel. Where the TV's screen saver time is
+   * known (the heartbeat's saverIdleMs, LG's setting), the video fades out
+   * as it runs out, lets the decoder go and asks the server to start the
+   * screen saver: the TV's own timer does not run while a video plays, so it
+   * would only start then. Where it is not known, the video fades out after 2
+   * minutes without a key or the pointer, and the TV's own screen saver comes
+   * as it does over a still background. A key, the pointer or Home coming
+   * back plays it again.
    */
   var WALL_VIDEO_IDLE_MS = 120000;
-  function wallVideoIdle() { return Date.now() - wallVideoInputAt >= WALL_VIDEO_IDLE_MS; }
+  // The fade (WALL_VIDEO_FADE_S), so the screen saver starts at the TV's time.
+  var WALL_VIDEO_SAVER_LEAD_MS = 3000;
+  var saverIdleMs = null;
+  function wallVideoIdleMs() {
+    return saverIdleMs ? Math.max(WALL_VIDEO_IDLE_MS, saverIdleMs - WALL_VIDEO_SAVER_LEAD_MS) : WALL_VIDEO_IDLE_MS;
+  }
+  function noteSaverIdleMs(ms) {
+    var next = typeof ms === 'number' && ms > 0 ? ms : null;
+    if (next === saverIdleMs) return;
+    var wasIdle = wallVideoIdle();
+    saverIdleMs = next;
+    scheduleWallVideoIdle();
+    // A longer time can bring back a video already let go.
+    if (wasIdle && !wallVideoIdle() && wallChoice === 'video') updateWall();
+  }
+  function wallVideoIdle() { return Date.now() - wallVideoInputAt >= wallVideoIdleMs(); }
   function scheduleWallVideoIdle() {
     clearTimeout(wallVideoIdleTimer);
     wallVideoIdleTimer = null;
@@ -5666,8 +6314,12 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       // Faded out first, as at a clip's end, rather than cut to black.
       wallVideoShow(0);
       if ($('wall-caption')) $('wall-caption').textContent = '';
-      setTimeout(function () { if (wallVideoIdle()) updateWall(); }, WALL_VIDEO_FADE_S * 1000);
-    }, Math.max(0, WALL_VIDEO_IDLE_MS - (Date.now() - wallVideoInputAt)) + 50);
+      setTimeout(function () {
+        if (!wallVideoIdle()) return;
+        updateWall();
+        if (saverIdleMs) postJson('/api/home/idle-saver', {}, function () {});
+      }, WALL_VIDEO_FADE_S * 1000);
+    }, Math.max(0, wallVideoIdleMs() - (Date.now() - wallVideoInputAt)) + 50);
   }
   function noteWallVideoInput() {
     var wasIdle = wallVideoIdle();
@@ -6414,6 +7066,40 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     $('scrim').style.opacity = String(n / 100 * (anim.style === 'off' ? 1 : ANIM_SCRIM));
   }
 
+  /*
+   * The cards' fade and the pulse, in the accent colour: the ring itself
+   * breathes between the accent and a dimmer one, with a glow around it.
+   */
+  var cardLookShown = null;
+  function applyCardLook(l) {
+    var accent = (l.colours && l.colours.accent) || '#ece7df';
+    var fade = typeof l.cardFade === 'number' ? l.cardFade : 20;
+    var key = accent + '|' + fade;
+    if (key === cardLookShown) return;
+    cardLookShown = key;
+    var rgb = hexRgb(accent), shown = (100 - fade) / 100;
+    // The card's ring is a border (see .card:after), a square tile's an outline.
+    function frames(prop) {
+      return '{0%,100%{' + prop + ':' + rgbaStr(rgb, 1, '.55') + ';box-shadow:0 0 6px 0 ' + rgbaStr(rgb, 1, '.15') + '}' +
+        '50%{' + prop + ':' + accent + ';box-shadow:0 0 12px 1px ' + rgbaStr(rgb, 1, '.35') + '}}';
+    }
+    var cardFrames = frames('border-color'), tileFrames = frames('outline-color');
+    var breathe = ' 1.8s ease-in-out infinite;';
+    var el = $('card-look');
+    if (!el) {
+      el = document.createElement('style');
+      el.id = 'card-look';
+      document.head.appendChild(el);
+    }
+    el.textContent = '.cards .tile.app,.cards .row:not(.active) .tile.app{opacity:' + shown + '}' +
+      '.cards .tile.app.focus{opacity:1}' +
+      '.cards .app.focus .card:after{border-color:' + accent + '}' +
+      '@-webkit-keyframes cardPulse' + cardFrames + '@keyframes cardPulse' + cardFrames +
+      '@-webkit-keyframes tilePulse' + tileFrames + '@keyframes tilePulse' + tileFrames +
+      '.pulse.cards .app.focus .card:after{-webkit-animation:cardPulse' + breathe + 'animation:cardPulse' + breathe + '}' +
+      '.pulse:not(.cards) .tile.app.focus,.pulse .cl.focus:after,.pulse .gc.focus{-webkit-animation:tilePulse' + breathe + 'animation:tilePulse' + breathe + '}';
+  }
+
   function applyColours(c, highlight) {
     var key = (c ? c.text + c.accent : '') + '|' + (highlight || '');
     if (key === lookShown) return;
@@ -6468,10 +7154,16 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
       data = r;
       loadLineup();
       layout = r.layout;
+      // The board and the headlines may have come before the layout that says
+      // where the board goes and how fast the strip runs.
+      if (lastBoard) renderBoard(lastBoard);
+      if (newsShown && (runSpeed !== newsSpeed() || runFlips !== newsFlips())) { newsAt = runAt; startNewsRun(); }
+      preloadNavSounds();
       if (!searchOn()) { closeSearch(); state.rail = false; }
       setFadeOn(layout.fade === true);
       applyMotion(layout);
       applyColours(layout.colours, layout.tileHighlight);
+      applyCardLook(layout);
       applyDarkening(layout.darkening);
       stageClass();
       renderNow();
@@ -6628,8 +7320,12 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
         // webOS 4: switched off, the standalone view closes itself, as Back does.
         if (r.enabled === false && standalone) return window.close();
         rest(!!r.covered);
+        saverUp = !!(r.covered && r.saver);
         if (r.saver) scheduleBeat(SAVER_BEAT_MS);
         renderWeather(r.weather || null);
+        renderInfo(r.info || null);
+        renderBoard(r.board || null);
+        renderNews(r.news || null);
         renderRemoteBattery(r.remoteBattery || null);
         // webOS 4: two minutes behind another app, not the screen saver, the
         // view closes itself to give its memory back; Home opens it afresh.
@@ -6638,6 +7334,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
         readWallpapers(r.wallpapers);
         renderPicture();
         noteWallVideoOutput(r.wallVideoOnScreen);
+        noteSaverIdleMs(r.saverIdleMs);
         updateWall();
         $('fault').className = '';
         // The TV's setting can change while the view is open, so the heartbeat
@@ -6683,6 +7380,7 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
     initialEscape = false;
     clearTimeout(okTimer);
     okDownAt = 0; backDown = false;
+    saverUp = false;
     closeRecents();
     closeFolder();
     if (adder.open) closeAdder();
@@ -6781,6 +7479,9 @@ body.no-slide #recents,body.no-slide #finder,body.no-slide #folder,body.no-slide
   guideLaunch(true);
   load();
   refreshWeather();
+  refreshInfo();
+  $('newsRun').addEventListener('webkitAnimationIteration', newsRunEnded);
+  $('newsRun').addEventListener('animationiteration', newsRunEnded);
   setInterval(function () {
     if (document.hidden) return;
     renderNow(); updateWall(); updateChannelProgress(); refreshPicture();

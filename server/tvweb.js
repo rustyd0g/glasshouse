@@ -19,7 +19,7 @@
  * first 4096 bytes of a downloaded tvweb.js for this line (up to 0.82.2), and
  * refuses a release where it is further down (#586).
  */
-var TVWEB_VERSION = '0.156.0';
+var TVWEB_VERSION = '0.159.0';
 
 var http = require('http');
 var fs = require('fs');
@@ -50,6 +50,7 @@ var privacy = require('./lib/privacy');
 var devtools = require('./lib/devtools');
 var oled = require('./lib/oled');
 var screensavers = require('./lib/screensavers');
+var audioLevels = require('./lib/audiolevels');
 var haEntity = require('./lib/haentity');
 var idlesaver = require('./lib/idlesaver');
 var nosignal = require('./lib/nosignal');
@@ -64,6 +65,7 @@ var doh = require('./lib/doh');
 var quickAccess = require('./lib/quickaccess');
 var remoteKeys = require('./lib/remotekeys');
 var inputBar = require('./lib/inputbar');
+var askQuestion = require('./lib/ask');
 var compat = require('./lib/compat');
 
 /*
@@ -133,6 +135,10 @@ var logsModule = require('./lib/logs');
 var syslogForwarder = require('./lib/syslog');
 var ntpClient = require('./lib/ntp');
 var history = require('./lib/history');
+var perfHistory = require('./lib/perfhistory');
+var storageScan = require('./lib/storagescan');
+var sysinfo = require('./lib/sysinfo');
+var screenColour = require('./lib/screencolour');
 var sshKeys = require('./lib/sshkeys');
 var screentime = require('./lib/screentime');
 var saverPowerOff = require('./lib/saverpoweroff');
@@ -336,6 +342,15 @@ var CONFIG = {
    */
   history: {
     enabled: false
+  },
+
+  /*
+   * The dashboard's screen glow: whether a dashboard may read the colours on
+   * screen (lib/screencolour.js) to light its page. Each browser switches the
+   * glow on for itself; off here, none can.
+   */
+  screenGlow: {
+    allowed: true
   },
 
   /*
@@ -581,6 +596,9 @@ game.init({ lunaCached: lunaCached, inputKey: telemetry.inputKey });
 appHosts.init({});
 privacy.init({ luna: luna, lunaCached: lunaCached, config: CONFIG, lgSettings: lgSettings, services: servicesModule, appHosts: CLI_MODE ? null : appHosts });
 oled.init({ luna: luna, config: CONFIG });
+screenColour.init({ luna: luna });
+// Which capture service the TV has, asked once, a little after start-up.
+if (!CLI_MODE) setTimeout(function () { screenColour.probe(); }, 15000);
 samrescan.init({ luna: luna });
 appsModule.init({ luna: luna, config: CONFIG });
 iconServer.init({ config: CONFIG, apps: appsModule, iptv: iptv });
@@ -616,6 +634,8 @@ quickAccess.init({ luna: luna, inputNames: telemetry.inputNameMap });
 remoteKeys.init({ luna: luna, subscription: lunaTransport.Subscription, services: servicesModule, inputNames: telemetry.inputNameMap, stateDir: __dirname,
   // The Guide key can open Glasshouse Home's Internet TV guide.
   homeGuide: function () { return !!(glasshouseHome && iptv && glasshouseHome.enabled() && iptv.hasPlaylists()); },
+  // The compositor restarts for a change to LG's key handler: Glasshouse Home's view is opened afresh.
+  compositorRestarted: function () { if (glasshouseHome) glasshouseHome.reopenAfterCompositor(); },
   homeAssistant: function () { return !!(CONFIG.mqtt && CONFIG.mqtt.enabled && CONFIG.mqtt.host); },
   // The input bar: offered where lib/inputbar.js allows it, its app installed
   // when a key is set to it, and preloaded from then on.
@@ -628,10 +648,23 @@ remoteKeys.init({ luna: luna, subscription: lunaTransport.Subscription, services
   homeBarApp: function (action, cb) { tvApp(action, cb, 'homebar-app'); },
   homeBarLauncher: function () { return homebar.enabled(); },
   onHomeBarKey: function () { homebar.keySet(); } });
+// A question on the screen from Home Assistant; the answer goes back to MQTT
+// once the bridge is up (onAskAnswer is set in setupHomeAssistant).
+var onAskAnswer = null;
+askQuestion.init({
+  luna: luna,
+  tvApp: function (action, cb) { tvApp(action, cb, 'ask-app'); },
+  publish: function (ev) {
+    console.log('ask: ' + ev.id + ' ' + ev.event_type + (ev.choice ? ' ' + ev.choice : ''));
+    if (onAskAnswer) onAskAnswer(ev);
+  }
+});
+
 inputBar.init({
   luna: luna,
   webosVersion: telemetry.detectWebosVersion(),
   wanted: remoteKeys.opensInputBar,
+  native: remoteKeys.nativeInputBar,
   tvInfo: compatTv,
   // liveState is set up further on; the bar only asks once started.
   on: function () { return !liveState || (liveState.state.snapshot().power || {}).systemOn !== false; }
@@ -642,6 +675,9 @@ homebar.init({
   app: function (action, cb) { tvApp(action, cb, 'homebar-app'); },
   setHomeKey: remoteKeys.setHome,
   allowed: function () { return inputBar.allowed(); },
+  native: remoteKeys.nativeHomeBar,
+  nativeOn: remoteKeys.nativeHomeBarOn,
+  applyKeys: remoteKeys.ensure,
   standing: function () { return inputBar.standing(); },
   compat: function () { return compat.info('inputBar', compatTv(), 'Glasshouse Bar'); },
   on: function () { return !liveState || (liveState.state.snapshot().power || {}).systemOn !== false; },
@@ -664,6 +700,7 @@ haEntity.init({ config: CONFIG });
 screensavers.init({
   luna: luna,
   hour12: clockFormat.hour12,
+  qtLocale: clockFormat.qtLocale,
   webosVersion: telemetry.detectWebosVersion(),
   config: CONFIG,
   injectKey: controls.injectKey,
@@ -673,13 +710,20 @@ screensavers.init({
   watchPointer: function (on) { if (!on || remotebuttons.isSupported()) remotebuttons.want('saverPointer', on); },
   mediaState: telemetry.readMediaState,
   homeVideoBackground: function () { return !!(glasshouseHome && glasshouseHome.videoBackgroundActive()); },
-  haEntity: haEntity
+  haEntity: haEntity,
+  // The News saver's feeds are those on the Home tab.
+  newsFeeds: glasshouseHome ? function () { return glasshouseHome.newsFeeds(); } : undefined
 });
 idlesaver.init({ luna: luna, mediaState: telemetry.readMediaState,
   homeVideoBackground: function () { return !!(glasshouseHome && glasshouseHome.videoBackgroundActive()); },
   watching: function () { return !!(iptv && iptv.watching()); } });
+// The Art screen saver's settings and the paintings it fetched ahead.
+require('./lib/art').init({
+  // The remote's left and right step the pictures on the No Signal screen.
+  watchKeys: function (on) { if (!on || remotebuttons.isSupported()) remotebuttons.want('art', on); }
+});
 // A mount does not outlive a reboot: the plain No Signal screen is mounted again.
-nosignal.init({ luna: luna });
+nosignal.init({ luna: luna, config: CONFIG });
 nosignal.apply();
 telemetry.init({
   luna: luna,
@@ -778,6 +822,7 @@ remotebuttons.init({
   },
   onAnyKey: function (code) {
     screensavers.keyPressed(code);
+    require('./lib/art').keyPressed(code);
   },
   onPointer: function () {
     screensavers.pointerUsed();
@@ -1071,11 +1116,15 @@ pointer.init({ luna: luna, hasService: lunaTransport.hasService, config: CONFIG,
   authed: function (req) { return routes.authed(url.parse(req.url || '/', true).query, req); } });
 routes.init({
   config: CONFIG,
+  audioLevels: audioLevels,
   pointer: pointer,
   inputBar: inputBar,
+  ask: askQuestion,
   audio: audioCapabilities,
   btAudio: btAudio,
   clock: clockFormat,
+  // The News screen saver's reads; given their fetch with Home's, below.
+  news: require('./lib/news'),
   piccapStatus: piccap.status,
   huesyncStatus: huesync.status,
   keyboardUp: function () {
@@ -1088,6 +1137,11 @@ routes.init({
   syslog: syslogForwarder,
   ntp: ntpClient,
   history: history,
+  perfHistory: perfHistory,
+  storageScan: storageScan,
+  sysinfo: sysinfo,
+  screenColour: screenColour,
+  power: power,
   sshKeys: sshKeys,
   screentime: screentime,
   backup: backup,
@@ -1254,6 +1308,11 @@ if (CLI_MODE) {
         // A reinstall closes the copy kept loaded, so it is loaded again now
         // rather than at the first press.
         homebar.poke();
+        // The question app, installed at the first question.
+        tvApp('refresh', function (r3) {
+          if (r3 && r3.refreshed && r3.ok) console.log('ask: app refreshed to current release');
+          if (r3 && r3.refreshed) askQuestion.forgetInstalled();
+        }, 'ask-app');
       }, 'homebar-app');
     }, 'inputbar-app');
   });
@@ -1357,6 +1416,10 @@ function setupHomeAssistant() {
       button: button
     });
     mqttClient.publish(mqttTopics.eventsButton, payload, false);
+  };
+  onAskAnswer = function (ev) {
+    if (!mqttClient || !mqttClient.connected) return;
+    mqttClient.publish(mqttTopics.eventsAsk, JSON.stringify(ev), false);
   };
   if (remotebuttons.isSupported()) {
     remotebuttons.want('mqtt', true);
@@ -2028,8 +2091,33 @@ function setupHomeAssistant() {
       return;
     }
 
+    // Lines under Glasshouse Home's clock, kept like the weather.
+    if (action === 'homeInfo') {
+      if (glasshouseHome) glasshouseHome.setHomeInfo(val);
+      return;
+    }
+    if (action === 'homeBoard') {
+      if (glasshouseHome) glasshouseHome.setHomeBoard(val);
+      return;
+    }
+
     if (action === 'toast') {
       doControl('toast', val, function() {});
+      return;
+    }
+
+    // A question with buttons (lib/ask.js), answered on events/ask.
+    // Refused with controls off, as doControl refuses the other commands: it
+    // installs and opens an app.
+    if (action === 'ask') {
+      if (!CONFIG.allowControl) return console.error('mqtt: ask failed: ' + msg('srv.controlsOff', 'controls disabled in config'));
+      askQuestion.ask(val, function (r) {
+        if (!r || !r.ok) console.error('mqtt: ask failed: ' + ((r && r.error) || 'unknown error'));
+      });
+      return;
+    }
+    if (action === 'askClose') {
+      askQuestion.close(val);
       return;
     }
 
@@ -2202,9 +2290,17 @@ function startGlasshouseHome() {
   });
   var weather = require('./lib/weather');
   weather.init({ getJson: fetchLib.getJson });
+  var news = require('./lib/news');
+  // A feed is stopped at its size limit as it downloads, not after (lib/fetch).
+  news.init({ fetchFile: function (url, file, cb) { return fetchLib.fetchLimited(url, file, news.FEED_MAX_BYTES, cb); } });
   glasshouseHome.init({
+    // webOS 11 with the Home key changed: LG's Home stays drawn under Glasshouse Bar unless it is closed.
+    lgHomeUnderBar: remoteKeys.nativeHomeBarOn,
     screensavers: screensavers,
     weather: weather,
+    news: news,
+    haEntity: haEntity,
+    mqttOn: function () { return !!(CONFIG.mqtt && CONFIG.mqtt.enabled && CONFIG.mqtt.host); },
     // What the dashboard's Remote section shows: the level, the step it stands
     // in for, and whether it can be read at all. null with no remote paired.
     remoteBattery: function () {
@@ -2279,7 +2375,8 @@ if (!CLI_MODE) {
   // config it sends nothing until it has the device name to send as.
   syslogForwarder.init({ config: CONFIG });
   syslogForwarder.start();
-  power.init({ luna: luna, syslog: syslogForwarder });
+  power.init({ luna: luna, syslog: syslogForwarder, historyFile: '/var/lib/tvweb/power-ons.json',
+    seedFrom: ['/var/lib/tvweb/tvweb.log.1', '/var/lib/tvweb/tvweb.log'] });
   power.start();
   liveState.state.onChange(function (ev) {
     if (ev.group === 'power' && ev.key === 'state') {
@@ -2287,7 +2384,12 @@ if (!CLI_MODE) {
       resettime.apply();
     }
   });
-  liveState.groups.power.onReply = idlesaver.powerReply;
+  liveState.groups.power.onReply = function (response) {
+    try { idlesaver.powerReply(response); } catch (e) { console.error('idlesaver: ' + e.message); }
+    if (glasshouseHome) {
+      try { glasshouseHome.powerReply(response); } catch (e) { console.error('home: ' + e.message); }
+    }
+  };
   // Its own start, as the MQTT bridge starts every group only with a broker.
   liveState.startGroup('power');
   liveState.state.onChange(function (ev) {
@@ -2303,9 +2405,20 @@ if (!CLI_MODE) {
 
   history.init({ config: CONFIG, luna: luna, liveState: liveState, appTitle: telemetry.appTitle });
   history.start();
+  perfHistory.init({ liveState: liveState, presentCpus: telemetry.presentCpus, socTemp: telemetry.socTemp, socMhz: telemetry.socMhz });
+  perfHistory.start();
+  // The HDMI view's link error counts, kept from when a link comes up.
+  require('./lib/hdmilink').startTally(telemetry.readHdmiReceiverStatus);
+  storageScan.init({
+    listApps: function (cb) {
+      luna('com.webos.applicationManager/listApps', {}, function (res) { cb((res && res.apps) || []); });
+    }
+  });
   screentime.init({ config: CONFIG, liveState: liveState, control: controls.doControl, injectKey: controls.injectKey, keyBack: controls.KEY_BACK });
   screentime.start();
-  saverPowerOff.init({ config: CONFIG, liveState: liveState, control: controls.doControl });
+  saverPowerOff.init({ config: CONFIG, liveState: liveState, control: controls.doControl,
+    launchedShowing: screensavers.launchedShowing, launchedRunning: screensavers.launchedRunning });
+  screensavers.onLaunchedChange(saverPowerOff.launchedChanged);
   saverPowerOff.start();
 
   if (glasshouseHome && homePicture) startGlasshouseHome();

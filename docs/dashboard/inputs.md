@@ -31,7 +31,7 @@ Each tile shows its name, subtitle (such as HDMI port or source type), and an au
 
 ### Supported TVs & background preloading
 
-* **Supported versions:** Offered without any experimental switch on **webOS 4 to 10**, where the compositor filter can hand further **Input** presses to the bar. Not offered on webOS 11 (whose remote keys are compiled inside LG's compositor) or before webOS 4.
+* **Supported versions:** Offered without any experimental switch on **webOS 4 to 10**, where the compositor filter can hand further **Input** presses to the bar. Not offered before webOS 4. On webOS 11, whose remote keys are compiled inside LG's compositor, it is offered only on a TV whose key handler Glasshouse knows how to change (an OLED48C31LA on firmware 44.00.92 so far): choosing the bar changes a few bytes of LG's `libappLaunch.so.1` in a copy mounted over it and restarts the TV's screen once, which takes about 35 s, and again each time the TV starts, and choosing **LG's list** puts it back with another restart.
 * **Fast opening:** Choosing the bar installs a hidden companion app (`com.tvweb.inputbar`) with no Home tile and keeps it preloaded in the background while the TV is on so it appears in roughly 0.4 s. Setting the last key that used it back to LG's (or uninstalling Glasshouse) removes the app.
 
 ## Your inputs
@@ -53,16 +53,17 @@ Offered on TVs whose No Signal overlay Glasshouse knows how to replace (tried on
 * **LG's screen:** LG's default No Signal graphic, text, and help banner.
 * **Just “No Signal”:** Strips out the animated picture and help text so only the words “No Signal” drift quietly across a black screen.
 * **Disconnected cable:** Hides the “No Signal” text as well and shows a subtle disconnected HDMI cable icon instead.
+* **Picture frame:** Shows the [Picture frame screen saver](screen-savers.md#picture-frame)'s pictures, your own and the collections picked there, each fading into the next. Each picture's label starts with LG's own “No Signal”, and shows as the picture frame's does: for a moment after each change, always, or never. Until the first picture is in, or with nothing picked, LG's “No Signal” stays on screen. Pictures are asked for only while the screen shows. With it chosen, **Now showing**, with **Previous** and **Next**, is under the cards, and **Picture frame settings** opens the dialog where its pictures are picked, the same one the Screensaver tab opens. The remote's left and right step back and forward through them too, where Glasshouse can read the remote's keys. Tried on a B8 running webOS 4.4.3.
 
 Switching modes takes effect immediately when an idle input is already on screen, and otherwise the next time no HDMI input is active (such as at Home), so restarting the input app never interrupts what you are watching. LG's other messages, such as a scrambled channel notice, remain untouched. The chosen mode is preserved across restarts and is also available in the TV app under **Screen saver**.
 
 ## webOS versions
 
-**Glasshouse Input bar** is offered on webOS 4 to 10; [why not elsewhere](../tested-tvs.md#why-some-versions-are-not-offered). Where no one has yet reported it working on the TV's version, a note above the choice says so, with links to report a problem or that it works; see [Launchers and overlays by webOS version](../tested-tvs.md#launchers-and-overlays-by-webos-version).
+**Glasshouse Input bar** is offered on webOS 4 to 10, and on webOS 11 for the TVs described above; [why not elsewhere](../tested-tvs.md#why-some-versions-are-not-offered). Where no one has yet reported it working on the TV's version, a note above the choice says so, with links to report a problem or that it works; see [Launchers and overlays by webOS version](../tested-tvs.md#launchers-and-overlays-by-webos-version).
 
 ## TVs without the Input bar
 
-On TVs where **Glasshouse Input bar** cannot be offered (for example, **webOS 11** and **webOS 3**):
+On TVs where **Glasshouse Input bar** cannot be offered (for example, **webOS 3**, or a **webOS 11** TV whose key handler Glasshouse does not know):
 
 * **When you press Input on the remote** is hidden automatically.
 * **Your inputs** still appears if you have enabled [Glasshouse Home](home.md), [Glasshouse Minimal](home.md#glasshouse-minimal), or a [Custom](home.md#custom-launcher) launcher on the **Home** tab, so you can rename, reorder, and hide inputs there.

@@ -239,7 +239,6 @@ function status() {
     revision.push(st ? String(Number(st.mtime)) + '-' + st.size : '0');
   });
   if (choice === 'shuffle') revision.push(pictures.length + '-' + (pictures[pictures.length - 1] || ''));
-  revision.push(JSON.stringify([videoItems, videoShuffle]));
   return { available: choice === 'video' ? videoUrls.length > 0 : choice === 'shuffle' ? pictures.length > 0 : SLOTS.some(function (key) { return slots[key]; }),
     choice: choice, choices: CHOICES, fetching: fetching,
     uploading: uploading || !!fetching, slots: slots, pictures: pictures, maxPictures: MAX_SHUFFLE,
@@ -549,4 +548,4 @@ function removeSet(name) {
 
 module.exports = { init: init, status: status, image: image, upload: upload, removeUploads: removeUploads,
   removePictures: removePictures, choose: choose, setVideoSources: setVideoSources, setVideoOptions: setVideoOptions, videoSources: videoSources,
-  parseVideoEntries: parseVideoEntries, receiveJpeg: receiveJpeg, SETS: SETS, MAX_SHUFFLE: MAX_SHUFFLE, MAX_VIDEO_SOURCES: MAX_VIDEO_SOURCES };
+  parseVideoEntries: parseVideoEntries, receiveJpeg: receiveJpeg, validJpeg: validJpeg, SETS: SETS, MAX_SHUFFLE: MAX_SHUFFLE, MAX_VIDEO_SOURCES: MAX_VIDEO_SOURCES };

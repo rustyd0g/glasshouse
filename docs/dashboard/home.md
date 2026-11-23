@@ -11,7 +11,7 @@ Preview cards at the top of the **Home** tab switch between five launcher option
 | **LG Home** | Restores LG's built-in Home screen (`com.webos.app.home`) and hands the Home key back to it. | Every TV |
 | **[Glasshouse Home](#what-is-on-screen)** | Full-screen replacement with live preview, wallpapers, clock, weather, and customisable rows for Apps, Recommended, Inputs, Channels, and Internet TV. | Every webOS version; [untried versions](../tested-tvs.md#launchers-and-overlays-by-webos-version) show a warning |
 | **[Glasshouse Minimal](#glasshouse-minimal)** | Distraction-free two-column text list of your apps and inputs plus a pixel-shifting clock on pure black. | Same as Glasshouse Home |
-| **[Glasshouse Bar](#glasshouse-bar)** | An overlay row along the bottom of the screen over whatever is playing, keeping LG's Home in place underneath. | webOS 4–10 |
+| **[Glasshouse Bar](#glasshouse-bar)** | An overlay row along the bottom of the screen over whatever is playing, keeping LG's Home in place underneath. | webOS 4–10, and 11 on a TV Glasshouse lists |
 | **[Custom](#custom-launcher)** | Replaces LG's Home with an uploaded `.ipk`/`.zip`/`.html` app or a full-screen web URL (such as Home Assistant). | Same as Glasshouse Home |
 
 > [!NOTE]
@@ -67,7 +67,7 @@ Preview cards at the top of the **Home** tab switch between five launcher option
 
     ---
 
-    Pressing **Back** on Glasshouse Home opens a strip of recently used apps with live snapshots. Press **OK** to switch to an app, **Down** to close a single app, or **Up** for **Close all**.
+    Pressing **Back** on Glasshouse Home opens a strip of recently used apps with live snapshots. Press **OK** to switch to an app, **Down** to close a single app, or **Up** for **Close all**. The key that ends the screen saver over Home only wakes the screen, so **Back** there leaves the strip closed and **OK** opens nothing.
 
 -   **Picture details plate**
 
@@ -86,6 +86,18 @@ Preview cards at the top of the **Home** tab switch between five launcher option
     ---
 
     Displays current temperature, condition icon, and location level with the clock, sourced from Home Assistant or Open-Meteo. See [Weather badge](#weather-badge).
+
+-   **Home Assistant: board**
+
+    ---
+
+    A short list beside the clock that Home Assistant sends, such as today's matches from a sports integration, a few lines at a time. See [Home Assistant: board](#home-assistant-board).
+
+-   **Home Assistant: values at a glance**
+
+    ---
+
+    Up to four short lines from Home Assistant beside the clock: the next bin collection, a parcel on its way, a share price. Each reads an entity picked on the dashboard, or an automation sends them. See [Home Assistant: values at a glance](#home-assistant-values-at-a-glance).
 
 -   **Badges & labels**
 
@@ -156,7 +168,7 @@ LG's search needs the TV online and LG's search server (`gb.nextlgsdp.com` on a 
 
 ## Internet TV
 
-Internet TV places channels from your IPTV provider into a dedicated row on Glasshouse Home, positioned below Channels. Glasshouse does not bundle playlists or channels; you provide your own **M3U playlist link** or **Xtream Codes login** in the **Internet TV** section of the **Home** tab, along with an optional XMLTV guide link (Xtream logins include their own guide automatically).
+Internet TV places channels from your IPTV provider into a dedicated row on Glasshouse Home, positioned below Channels. Glasshouse does not bundle playlists or channels; you provide your own **M3U playlist link** or **Xtream Codes login** in the **Internet TV** section of the **Home** tab, along with an optional XMLTV guide link (Xtream logins include their own guide automatically). A guide link that needs a login takes it the way a playlist link does, as `http://user:password@host/...`.
 
 * **Background sync:** The playlist is parsed locally on the TV upon entry and refreshed automatically every night; the TV guide (XMLTV) is updated every six hours.
 * **Account status:** Each configured playlist displays its live channel count, last sync timestamp, subscription expiry date, and maximum simultaneous streams allowed.
@@ -165,6 +177,7 @@ Internet TV places channels from your IPTV provider into a dedicated row on Glas
     * **Edit:** Updates credentials or URLs (leaving the password blank preserves the existing password).
     * **Remove:** Deletes the playlist, cached guide, and associated channels from the TV.
 * **Satellite tuner (Enigma2):** **Add a satellite tuner** takes the address of an Enigma2 receiver (for example `192.168.1.10`) and, only if its web interface asks for one, a user name and password. Glasshouse reads the tuner's OpenWebif: every TV bouquet becomes a group, channels keep their bouquet order as numbers, logos are the tuner's picons, and the guide covers a week, read from the tuner every six hours. Several tuners can be added, each as its own playlist. The picture streams straight from the tuner's stream port, the one its own bouquets name (usually 8001). **Stream port** overrides it, for a tuner whose channels are to come from a different port instead, such as a transcoding profile on 8002. For a tuner that asks for a login there, turn on **The tuner asks for a login to play a channel**: the TV then passes the stream on with the same login, and a channel played that way cannot be paused. With the **When every tuner is busy, switch a tuner to the requested channel** switch on (off by default), a channel that finds every tuner busy moves the tuner showing live TV to it. A free tuner is used as it is, and a tuner recording or streaming for someone else is never touched. The tuner is asked one request at a time, and the guide is only read for bouquets that have a channel in the lineup.
+* **Channel logos:** Displays the playlist's logo on each Internet TV tile. Switched off, channels show their names instead. The switch is in the Internet TV section, below the channel list.
 * **Failure handling:** If a playlist is temporarily unreachable, the previous channel list is retained. If login authentication is refused, automatic retries pause until edited or refreshed manually, preventing account lockouts from repeated failed attempts.
 
 ### Choosing channels
@@ -240,12 +253,13 @@ Multiple channels and groups can be selected across searches and filters:
 When opening a channel from the Internet TV row or live preview, playback opens full screen:
 
 * **Remote navigation:**
-    * **OK:** Opens the channel list one section at a time. Use **Left** / **Right** to switch sections, **OK** to tune a channel, and **Back** to close the list.
-    * **Up / Down / CH+ / CH−:** Steps through channels across the entire lineup.
+    * **OK:** Shows the programme band at the bottom, and hides it again.
+    * **Left:** Opens the channel list, seven channels of one section running down the left side of the screen with the focus on the middle one. The programme band is hidden while the list is open. **Up** / **Down** scroll the list under the focus, which moves only when the list reaches the first or last channel. **OK** tunes the focused channel, **Right** or **Back** closes the list, and **CH+** / **CH−** switch sections.
+    * **Up / Down / CH+ / CH−:** Steps through channels across the entire lineup (with the channel list open, CH+ and CH− switch sections).
     * **Number keys:** Directly jumps to a channel by its lineup number.
     * **Info:** Displays the programme banner showing what is on now and next (also appears automatically for 5 seconds on each channel change).
     * **Yellow button:** Switches between **HLS** and **MPEG-TS** stream formats for provider accounts. The TV remembers the selected stream format for each channel.
-    * **Back or Home:** Returns to Glasshouse Home. If [Live preview](#live-preview) is enabled, the channel continues playing in the preview, silently unless **Preview sound** is on.
+    * **Back or Home:** With the band or the channel list open, **Back** closes it first. With neither open, Back or Home returns to Glasshouse Home. If [Live preview](#live-preview) is enabled, the channel continues playing in the preview, silently unless **Preview sound** is on.
 * **Preview in the tile:** With **Preview in the tile** enabled under Live preview settings, channels play directly inside their Home tile. Pressing **OK** smoothly expands the video to full screen, and pressing **Back** returns it to the tile without opening a new stream.
 
 ![An IPTV channel previewing in its tile on a G3](../screenshots/iptv-preview-in-tile.jpg)
@@ -258,14 +272,14 @@ Whenever the lineup contains channels, an **IPTV Guide** tile remains accessible
 
 * **EPG grid view:** Selecting **IPTV Guide** (or pressing **Info** while on the Internet TV row) displays a 2.5-hour programme timeline starting 30 minutes before the current time, marked with an amber vertical line at the current time.
 * **Navigation:**
-    * **Up / Down:** Moves through channels at the current time slot.
+    * **Up / Down:** Moves through channels at the current time slot. The Magic Remote's wheel does the same, a row a notch.
     * **Left / Right:** Scrolls horizontally through time (from 2 hours in the past up to 24 hours ahead).
     * **Channel Up / Channel Down:** Pages through channels a full screen at a time.
-    * **Top section tabs:** Moving **Up** from the first channel highlights section and favourites tabs; use **Left** and **Right** to switch sections.
+    * **Top section tabs:** Moving **Up** from the first channel highlights section and favourites tabs; use **Left** and **Right** to switch sections, or point at a tab with the Magic Remote and click it.
     * **Programme details:** The top banner displays the title, start/end times, and synopsis of the focused programme, accompanied by a live preview of the channel.
-    * **Tune / Scheduled:** Pressing **OK** on an active programme tunes to the channel; pressing **OK** on an upcoming programme shows its scheduled start time.
+    * **Tune / Scheduled:** Pressing **OK** on an active programme tunes to the channel; pressing **OK** on an upcoming programme shows its scheduled start time. **Back** from a channel tuned this way returns to the guide as it was left, in the same tab and place, on the channel playing.
 * **Sync schedule:** Guide data is parsed from the playlist's XMLTV URL or Xtream account. The full guide updates every 6 hours, while starred channels on Home's row refresh every 30 minutes. Channels lacking EPG data indicate none is available.
-* **Remote Guide button mapping:** LG remotes route the physical **Guide** button to LG's broadcast tuner guide by default. In the **Internet TV** section on the Home tab, the **The remote's Guide button** setting can be switched to **Glasshouse Home's guide**, opening the Glasshouse IPTV guide from anywhere on the TV (apps, HDMI inputs, or Home). If Glasshouse Home is disabled or has no playlist, the button automatically reverts to LG's tuner guide. *(Note: Physical Guide button remapping is not available on webOS 11).*
+* **Remote Guide button mapping:** LG remotes route the physical **Guide** button to LG's broadcast tuner guide by default. In the **Internet TV** section on the Home tab, the **The remote's Guide button** setting can be switched to **Glasshouse Home's guide**, opening the Glasshouse IPTV guide from anywhere on the TV (apps, HDMI inputs, or Home). If Glasshouse Home is disabled or has no playlist, the button automatically reverts to LG's tuner guide. *(Note: on webOS 11 the setting is offered only on a TV whose key handler Glasshouse knows how to change, see the [Remote tab](remote.md). It then restarts the TV's screen once, and again each time the TV starts).*
 
 ### Stream handling and reliability
 
@@ -275,7 +289,7 @@ Whenever the lineup contains channels, an **IPTV Guide** tile remains accessible
 * **Screen saver protection:** Screen savers stay suppressed while watching full screen.
 * **Pause live Internet TV:** With the switch of that name on in the **Internet TV** section of the Home tab (off by default) and a USB stick in the TV, **Pause** on the remote pauses a channel played full screen, and **Play** or Pause again goes on from the same picture. The stick must be formatted FAT32 or exFAT, with at least 512 MB free. Only MPEG-TS channels can pause (**Yellow** switches a provider's channel to MPEG-TS); previews on the row and HLS channels are never recorded.
     * **Recording:** While a channel plays full screen, the TV records it to the stick, up to 2 GB (about half an hour of an HD channel), and deletes the recording when the channel stops, changes or the TV goes to standby. The stick is written for as long as a channel plays, about 3 GB an hour, which wears a cheap stick sooner.
-    * **Left / Right:** Go 30 seconds back or forward in what was recorded, back as far as the stick holds and forward as far as live, with a moment's reconnect at each jump. The channel list is on **OK** for such a channel.
+    * **Left / Right:** Go 30 seconds back or forward in what was recorded, back as far as the stick holds and forward as far as live, with a moment's reconnect at each jump. The channel list is on **OK** for such a channel, and **Right** closes it.
     * **Back:** Behind live, asks "Back to live?": **OK** goes to the live point and Back again stays. At the live point Back closes the player as ever. A remote's **Stop** asks the same, and changing channel from behind live asks "Change channel?" the same way, as the recording goes with the channel.
     * **Band:** Shows how long the pause can last and how far behind live the channel is. A pause that reaches the start of what the stick holds plays on by itself.
 * **Security & privacy:** Playlist URLs and Xtream login credentials remain stored strictly on the TV (`/var/lib/tvweb`). They are never displayed on the dashboard again, never transmitted to Home Assistant, and never written to debug logs. See [Security](../SECURITY.md#internet-tv).
@@ -339,7 +353,7 @@ Plays videos behind Glasshouse Home, and in the **Video** screen saver. Enter li
 
 While an Internet TV channel, a TV channel or an input plays in a tile or full screen, the video wallpaper stops and gives the TV's video decoder to it, and starts again when it ends.
 
-After two minutes without a key or the pointer, the video fades out and stops, so the TV's own screen saver can come on: LG's screen saver never starts over a playing video, which would leave Home's clock and tiles on screen for as long as the TV stays on. On a B8 (webOS 4.4) and a C2 (webOS 9.2) the screen saver followed about two minutes later. Any key, the pointer, or coming back to Home plays the video again. With **Keep the preview on**, the preview still plays on a focused input or channel tile, but is not kept over the video elsewhere, as both cannot have the decoder.
+When the TV's screen saver is due, the video fades out and stops, so the screen saver can come on: LG's screen saver never starts over a playing video, which would leave Home's clock and tiles on screen for as long as the TV stays on. Where the TV keeps its screen saver time in LG's settings, as webOS 10 does, the video plays until that time and Home then starts the screen saver itself, since the TV's own timer does not run while a video plays. Elsewhere the video stops after two minutes without a key or the pointer, and on a B8 (webOS 4.4) and a C2 (webOS 9.2) the screen saver followed about two minutes later. Any key, the pointer, or coming back to Home plays the video again. With **Keep the preview on**, the preview still plays on a focused input or channel tile, but is not kept over the video elsewhere, as both cannot have the decoder.
 
 #### Which video links work
 
@@ -392,15 +406,16 @@ Links with a user name or password in them are refused, and so is anything other
 
 ## Switching it on and off
 
-Under **Choose your launcher** on the web dashboard's **Home** tab, preview cards offer **LG Home**, **Glasshouse Home**, [Glasshouse Minimal](#glasshouse-minimal), [Glasshouse Bar](#glasshouse-bar) and [Custom](#custom-launcher); click one to switch, or switch it on in the TV app's **Home** section. Glasshouse Home is mounted over LG's launcher without modifying the root filesystem (on webOS 3 to 6 it runs as a standalone app, `com.tvweb.home`, beside LG's, with the remote's Home key pointed at it by the compositor filter, as taking LG's launcher's place there restarts LG's app manager, which stopped protected video and HDMI audio on webOS 5 and 6). On webOS 5 and 6, where closing an app opens LG's full-screen Home, Glasshouse Home is opened over it, unless LG's Home was asked for, from the **LG Home** tile or a held **Home**. Choosing **LG Home** (or running `tvwebctl restore-glasshouse-home` over SSH) restores LG's launcher within a few seconds.
+Under **Choose your launcher** on the web dashboard's **Home** tab, preview cards offer **LG Home**, **Glasshouse Home**, [Glasshouse Minimal](#glasshouse-minimal), [Glasshouse Bar](#glasshouse-bar) and [Custom](#custom-launcher); click one to switch, or switch it on in the TV app's **Home** section. Glasshouse Home is mounted over LG's launcher without modifying the root filesystem (on webOS 3 to 6 it runs as a standalone app, `com.tvweb.home`, beside LG's, with the remote's Home key pointed at it by the compositor filter, as taking LG's launcher's place there restarts LG's app manager, which stopped protected video and HDMI audio on webOS 5 and 6). On webOS 5 and 6, where closing an app opens LG's full-screen Home, Glasshouse Home opens as the app closes, so LG's Home does not open at all, unless LG's Home was asked for, from the **LG Home** tile or a held **Home**. **Back** on Glasshouse Home there opens the recent apps strip, as on webOS 7 and later, since closing it would open LG's Home. Choosing **LG Home** (or running `tvwebctl restore-glasshouse-home` over SSH) restores LG's launcher within a few seconds.
 
-* **webOS versions:** Glasshouse Home, Glasshouse Minimal and Custom are offered on every webOS version, and Glasshouse Bar on webOS 4 to 10 ([why not elsewhere](../tested-tvs.md#why-some-versions-are-not-offered)). Where no one has yet reported one working on the TV's version, a note under the cards says so, with links to report a problem or that it works; choosing **LG Home** puts everything back. See [Launchers and overlays by webOS version](../tested-tvs.md#launchers-and-overlays-by-webos-version). On webOS 5 and 6 the app manager has no way to read an appinfo.json again without a restart, so each switch restarts it and the app in front comes back a moment later.
+* **webOS versions:** Glasshouse Home, Glasshouse Minimal and Custom are offered on every webOS version, and Glasshouse Bar on webOS 4 to 10, and on webOS 11 on a TV whose key handler Glasshouse knows how to change (an OLED48C31LA on firmware 44.00.92 so far) ([why not elsewhere](../tested-tvs.md#why-some-versions-are-not-offered)). Where no one has yet reported one working on the TV's version, a note under the cards says so, with links to report a problem or that it works. Choosing **LG Home** puts everything back. See [Launchers and overlays by webOS version](../tested-tvs.md#launchers-and-overlays-by-webos-version). On webOS 5 and 6 the app manager has no way to read an appinfo.json again without a restart, so each switch restarts it and the app in front comes back a moment later.
 * **Reaching LG's Home without turning Glasshouse Home off:**
   * Select the **LG Home** tile at the end of the Apps row, unless it has been hidden.
   * Hold the remote's **Home** button for 1 second (a short press on LG's Home returns to Glasshouse Home).
   * Stop the Glasshouse server: if Glasshouse Home stops answering or the server is stopped/uninstalled, LG's Home automatically takes its place back.
   * Glasshouse Home not opening: if a short press of **Home** brings nothing from Glasshouse Home, LG's Home opens instead. Where the TV's web app manager, which runs Glasshouse Home, has stopped, this is decided after five seconds, and the web app manager is started again first and Glasshouse Home given one more try. Where it is running, Glasshouse Home may only be slow to load, as on the first press after a reboot, so it is given 20 seconds. An app opened from Glasshouse Home is given 30 seconds to show its window before Glasshouse Home counts as not answering, as some, such as Nuvio, show LG's loading screen for several seconds first. A press of **Home** that only ends the screen saver opens nothing, as on LG's own Home, and is not taken for one that should open Glasshouse Home.
 * **Cold boot & standby:** [Open Home at power-on](#open-home-at-power-on) controls whether the TV opens the Home screen when switched on or stays on the last input (LG's Home Auto Launch). With Quick Start+ (Active Standby) on, Glasshouse Home opens immediately on wake (and on TVs like the C4 on webOS 10.3.1 that start on their last input anyway, Glasshouse Home is opened over it when Open Home at power-on is on). On a cold boot (Quick Start+ off), Glasshouse Home takes over about 25–40 seconds after power-on; pressing Home during startup keeps the TV on the current input with a brief notice until ready.
+* **Reopen Home after a wake (webOS 11):** On by default. A few seconds after the TV wakes, Glasshouse Home is closed and opened again, which brought back the remote on a C5 where it stopped answering after a wake. It shows as Home going away and coming back. Switched off, Home is left as it is: use that on a TV whose remote answers after a wake without it.
 * **Hide LG's Home while the TV starts (webOS 9 optional setting):** Replaces LG's Home layout with a blank screen during the first seconds of a cold boot so LG's launcher never flashes on screen.
 
 > [!WARNING]
@@ -419,7 +434,7 @@ Under **Choose your launcher** on the web dashboard's **Home** tab, preview card
 
 **Glasshouse Bar**, under **Choose your launcher**, is a launcher that leaves the picture on screen. The remote's **Home** button brings up a row along the bottom, over whatever is playing: the apps of Glasshouse Home's Apps row, in the order and with the hiding set on this tab (apps in **More apps** and saved web pages are left out), the **LG Home** tile where that row has it, and the inputs and Live TV as the Inputs row has them, the input on screen marked. **Left** and **Right** move along it, **OK** opens, and **Back** or **Home** closes it. With the Magic Remote, pointing at a tile picks it and clicking opens it.
 
-LG's Home keeps its place, so the TV shows LG's Home when an app closes and at power-on, as it does without Glasshouse Home; choosing Glasshouse Bar switches Glasshouse Home off. It is an overlay window opened by the remote's Home key, as the [input bar](inputs.md#glasshouse-input-bar) is, so it is offered on webOS 4 to 10; webOS 3 and 11 do not offer it.
+LG's Home keeps its place, so the TV shows LG's Home when an app closes. The TV starts in LG's Home. Pressing **Home** there covers LG's Home with black and shows the bar on it, as webOS 5 leaves it, and over an app or an input the bar shows over the picture. Choosing Glasshouse Bar switches Glasshouse Home off. It is an overlay window opened by the remote's Home key, as the [input bar](inputs.md#glasshouse-input-bar) is, so it is offered on webOS 4 to 10, and webOS 3 does not offer it. On webOS 11 LG's Home key cannot be pointed at an app, so Glasshouse changes a few bytes of LG's `libsystemUI.so` in a copy mounted over it, where it knows the TV's build, and the Home key then opens the bar. Choosing the bar, or another launcher after it, restarts the TV's screen once, which takes about 35 s, and the change is made again each time the TV starts. A TV whose build is not known is not offered the bar.
 
 Its app, `com.tvweb.homebar`, has no tile of its own. It is kept loaded in the background while chosen, so a press shows it at once. Choosing any other launcher gives the Home button back and removes the app.
 
@@ -480,14 +495,14 @@ rows are labelled **Hidden**.
 
 ## Home customisation
 
-The Home tab's **Home customisation** section holds what applies to whichever Home is the TV's, grouped under headings:
+The Home tab's **Home customisation** section holds what applies to whichever Home is the TV's, grouped under headings. While Glasshouse Home is active, a bar underneath switches between **Rows & tiles**, **Appearance & wallpaper**, **Behavior & startup** and **Internet TV**:
 
 ![Home customisation on a C2, grouped under Starting up, Layout, Shown on Home, Live preview, Search and Animations](../screenshots/home-customisation.png)
 
 * While Glasshouse Home is on:
-    * **Starting up:** Open Home at power-on, Hide LG's Home while the TV starts.
+    * **Starting up:** Open Home at power-on, Reopen Home after a wake, Hide LG's Home while the TV starts.
     * **Layout:** Alternative View, Rows along the bottom.
-    * **Shown on Home:** Clock and date, Last watched, App count, App labels, CEC addresses, Channel logos, Weather, Remote battery, Picture details.
+    * **Shown on Home:** Clock and date, Last watched, App count, App labels, Apps as cards, Card transparency, Pulse on the app in focus, Sound when moving with the buttons, Sound when moving with the pointer, Weather, Remote battery, Picture details, CEC addresses.
     * **Live preview:** Live preview, with Preview sound, Keep the preview on, Preview in the tile and Preview size once it is on.
     * **Search.**
     * **Animations:** Fade in and out, Wallpaper drift, Wallpaper cross-fade, Smooth scrolling, Sliding panels.
@@ -500,6 +515,8 @@ Each appears where the TV has it. A TV Glasshouse Home is not offered on, such a
 Opens the Home screen when the TV is switched on, rather than staying on the last input. LG calls this Home Auto Launch (`general.homeAutoLaunch`). While Glasshouse Home is on, the Home it opens is Glasshouse Home (see [Switching it on and off](#switching-it-on-and-off)).
 
 On a cold boot, LG Home may appear first. Glasshouse opens its replacement once ready if Home is still on screen; an app or input chosen meanwhile is left alone.
+
+While Glasshouse Home is on with this set, a TV switched on with Wake-on-LAN, from Home Assistant say, opens Home as the remote's power button does. LG's software otherwise starts the last input under it, and a console or set-top box on that input can wake with the TV over HDMI-CEC. This applies from the TV's next start.
 
 ### Layout options
 
@@ -526,10 +543,26 @@ Individual toggles in the **Shown on Home** section control informative badges a
 * **App count:** Displays the count of visible vs total apps (e.g. *"4 of 18 shown"*) next to the Apps row header. (Hidden in Alternative View).
 * **Input count** and **Channel count:** Independently hide the notes beside Inputs and Channels. Both start on and are disabled in Alternative View. Both dashboards offer the switches in the corresponding row’s settings.
 * **App labels:** Shows or hides app names beneath app icons on Glasshouse Home and Glasshouse Bar. Switched off, only the icons appear. Individual apps can also be renamed inline under **Rows and tiles** → **Apps** on the web dashboard, applying across Glasshouse Home, Glasshouse Minimal, and Glasshouse Bar (clearing a custom name restores the TV's own title).
-* **CEC addresses:** Displays physical HDMI-CEC port addresses (such as `1.0.0.0` or `2.1.0.0`) on each input tile.
-* **Channel logos:** Displays graphical channel logos on Internet TV tiles; when disabled, channels display plain text names instead.
+* **Apps as cards:** Off by default. Switched on, apps show as wide dark cards rather than square icons, with a logo of your own on each where you add one (see [Card icons](#card-icons)); the name shows under the card in focus. An app with no card icon shows its own icon on the card.
+* **Card transparency:** With apps as cards, how see-through the cards not in focus are, from Solid to 90% (20% by default). The card in focus is always solid.
+* **Pulse on the app in focus:** Off by default. The ring around the app in focus breathes, with a soft glow around it, as a card or a square tile. Both the ring and the glow take the accent of Home's colours. The frame of the channel in focus in the TV guide and in the player's channel list breathes too.
+* **Sound when moving with the buttons:** Off by default. A sound plays through the TV each time an arrow key moves focus to another tile, and each time OK or Back is pressed (once, however long it is held), or Left or Right opens or closes the channel list while playing, in Home's rows, the TV guide and the channel list while playing: **Click** or **Rollover**, from Kenney's UI Audio (CC0), at half their recorded volume, or **Your own**. The play button beside the choice plays it in the browser. With **Your own** chosen, **Upload a sound** takes an OGG, WAV or MP3 file of up to 512 KB, played as it is, and **Remove** deletes it; Home uses a new one within a few seconds. It is kept on the TV as `/var/lib/tvweb/home-sounds/nav.ogg` (or `nav.wav`, `nav.mp3`), so it can also be copied there over SSH.
+* **Sound when moving with the pointer:** The same choices for focus moved by the Magic Remote's pointer or wheel, and for a click. It is unavailable while Magic Remote pointer is off, and not shown with no Magic Remote paired. Until Home's settings are first saved after updating, it takes the buttons' sound; **Your own** is the file uploaded above.
 * **Picture details:** Displays the active picture preset, OLED light / backlight level, and signal format in the top-right corner.
+* **CEC addresses:** Displays physical HDMI-CEC port addresses (such as `1.0.0.0` or `2.1.0.0`) on each input tile.
 * **Magic Remote pointer:** On by default. Switched off, the remote's pointer is hidden on Glasshouse Home and moving the remote no longer moves the focus, so only the arrow keys move around Home; OK opens the tile in focus. The wheel still scrolls the rows. Apps, inputs and LG's menus keep the pointer.
+
+### Card icons
+
+With **Apps as cards** on, each card can show a wide logo of your own. Glasshouse comes with none: you add the ones you want.
+
+* **Adding one:** under **Rows and tiles** → **Apps**, each app shows its card in place of its icon; clicking it opens a dialog with the card as Home draws it, the sizes below, **Upload** (or **Replace**) and **Remove**. A PNG, JPEG, WebP or SVG image, picked or dropped on the card, is drawn whole on a clear 640 × 360 PNG, the card's shape, before it is sent, and saved under the app's title as below, or the name chosen for it, replacing one of that name. **Remove** deletes the one the app shows. Home updates within a few seconds. The icons can take up to 64 MB together; a pack of a thousand takes about 16.
+* **Where:** PNG files in `/var/lib/tvweb/home-icons` on the TV. They can also be copied there over SSH (for example `scp youtube.png root@<tv>:/var/lib/tvweb/home-icons/`), and Home shows those the next time it opens.
+* **Size:** 16:9, at most 1280 × 720 and 1 MB. 640 × 360 suits the card; another shape is scaled to fit inside it without cropping.
+* **Look:** the card is black, so a light or full-colour logo on a transparent background works best. A logo with its own background fills the card.
+* **Name:** lower case letters, digits and underscores only, at most 80 characters, then `.png`. Other files in the folder are ignored.
+
+Each app takes the file named for its title, as renamed on the dashboard or its own: spaces and punctuation become underscores, `&` becomes `and` and `+` becomes `plus`, so "YouTube Music" takes `youtube_music.png` and "Disney+" takes `disney_plus.png`. Failing that, it takes one named for a part of its app id that is also a word of its title ("MBC Shahid", `net.mbc.shahid-lgapp`, takes `shahid.png`), then for the title's first word of four letters or more ("Spotify - Music and Podcasts" takes `spotify.png`). In an app's card icon dialog, **Or use an icon already on the TV** picks any of the files by name instead, and **Match by name** goes back to matching by title.
 
 ### Weather badge
 
@@ -540,6 +573,49 @@ The weather badge displays the current temperature and an icon level with the cl
 * **Off:** Disables the badge completely.
 
 The badge appears once data is received, is kept when the TV restarts, and is hidden once 3 hours pass without an update (or when an empty value is sent from Home Assistant).
+
+### Home Assistant: values at a glance
+
+Up to four lines of your own after the weather, or before the clock in the Alternative View, each an icon, a name and a value: *Bin 1 · collected on Wednesday*, *PostNord · arrives tomorrow*, *Viscaria · 14.58 SEK*. For Home Assistant users. The setting chooses where they come from, and offers only what is set up: **Entities you pick** needs the [Home Assistant API](../HOME-ASSISTANT.md#reading-home-assistant-entities) on the HA & MQTT tab, and **Sent by an automation** needs MQTT. With neither, the setting is not shown.
+
+* **Entities you pick (default):** each line reads a Home Assistant entity, every 30 seconds while Home is on screen. **Add a line** uses the Home Assistant entity picker (search by name, entity ID or unit, filter by entity type such as `Sensors` or `Weather`, and load more results on scroll), up to four, and says what it added, or why it could not. Each line can be moved or removed, and **Customise** gives it, all optional:
+  * **Name:** shown in place of the entity's own name.
+  * **Attribute:** one of its attributes in place of its state, such as `next_date` for a bin collection whose state is text.
+  * **Text before:** a few words put in front of the value, such as *collected* or *arrives*, so a date reads *collected tomorrow*.
+
+  Under each line, **Shows as** gives how it reads beside the clock.
+
+  A date shows as today, tomorrow, a weekday within the week, or a day and month after that, in the page's language. A number shows with its own decimals, two at most, and its unit. Anything else shows as Home Assistant has it. The icon is the entity's own, or one for what it measures.
+
+  Some examples, with entity names as the integrations usually make them:
+
+  | Entity | Attribute | Name | Text before | Shows |
+  |---|---|---|---|---|
+  | `sensor.bin_collection` (a bin's next collection) | `next_date` | Bin 1 | collected | *Bin 1 · collected on Wednesday* |
+  | `sensor.postnord_delivery_12345` (PostNord) | `next_delivery` | PostNord | arrives | *PostNord · arrives tomorrow* |
+  | `sensor.yahoofinance_visc_st` (Yahoo Finance) | | Viscaria | | *Viscaria · 14.58 SEK* |
+  | `sensor.outdoor_temperature` | | Outside | | *Outside · 3.4 °C* |
+
+  To find an attribute, open the entity in Home Assistant's **Developer tools → States**: its attributes are listed beside its state. An attribute shows without the entity's unit, which belongs to its state.
+* **Sent by an automation:** whatever was last written to the `text.lg_tv_home_info` entity, a JSON list such as `[{"icon":"trash-can","label":"Bin 1","value":"in 4 days"}]` ([entities](../HOME-ASSISTANT-ENTITIES.md)), kept across a restart until the next one. An empty value or `[]` takes them away ([example automation](../HOME-ASSISTANT.md#7-your-own-lines-on-glasshouse-home)).
+* **Off.**
+
+Icons are [Material Design Icons](https://pictogrammers.com/library/mdi/) names, with or without `mdi:`. Glasshouse Home draws its own outline for names starting with trash, delete, recycle, mail, email, post, chart, trending, finance, cash, car, flash, lightning, power, battery, calendar, thermometer, home, package and truck, and a dot for any other.
+
+### Home Assistant: board
+
+Beside the lines, a board of up to twenty lines that Home Assistant sends, shown four at a time, turning to the next four every 8 seconds, with a page count by its title. It keeps one width as the pages turn, that of its longest line, and a line too long for it slides to show its end and back. For Home Assistant users, and offered only with MQTT set up, as Home Assistant sends the board over it. The setting chooses whether it shows:
+
+* **Sent by an automation:** whatever was last written to the `text.lg_tv_home_board` entity, `{"title":"Football today","minutes":10,"lines":[{"label":"Arsenal 2–1 Chelsea","value":"67'"}]}`. It is not kept across a restart, and with `minutes` it goes that long after the last push. An empty value takes it away at once. Glasshouse fetches nothing for it: the matches, or anything else, come from an integration of the owner's choice, such as a sports one, through an automation that writes the entity. [Home Assistant](../HOME-ASSISTANT.md#9-a-board-on-glasshouse-home) has an example.
+
+  **Shown** puts the board **Beside the lines** (default) or **Running along the bottom**: there its lines open every run of the strip the news uses, with the next headlines after them, so a changed line comes round within a run. The strip shows even with the news off.
+* **Off (default).**
+
+### News strip
+
+Along the bottom, below the rows: the headlines of up to three news feeds, each after its source, on one line, eight headlines a run and the next eight the run after. The **News strip** setting turns it on. **Add a feed** takes a feed's address (RSS 2.0, RSS 1.0 or Atom, such as `https://www.svt.se/rss.xml`), up to three, and each feed's card then says whether it was read and how many headlines it gave, or why not: it could not be read, it is not a feed, or it is over 2 MB, which stops its download there. Feeds can be moved or removed, and **Customise** gives one a name to show in place of its own. The feeds take turns, up to fifteen headlines from each. Each feed is read every 10 minutes at most while the strip is on screen, and new headlines join at the end of a run, so none is cut off. The [News screen saver](screen-savers.md#news) reads the same feeds. **Headlines** shows them **One at a time** (default), each for a few seconds and fading to the next, or **Running** right to left. **Speed** is **Slow** (default) or **Normal**: 8 or 6 seconds a headline, or 60 or 100 pixels a second. Both apply to the board's matches when they are in the strip, and to the News screen saver. Running is less smooth on TVs whose browser cannot draw every frame, such as a C6.
+
+The focused row stays in view when the strip appears or disappears.
 
 ### Remote battery
 

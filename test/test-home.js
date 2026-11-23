@@ -516,6 +516,35 @@ step('the saved layout keeps its order, drops what has gone and appends what is 
   });
 });
 
+step('the heartbeat brings the TV\'s screen saver time, and the view at its end starts the screen saver', function (done) {
+  var triggers = 0;
+  start(null, { screensavers: { launchedShowing: function () { return false; }, trigger: function (cb) { triggers++; cb({ ok: true }); } } });
+  tv.settings.screenSaverTimer = '10';
+  assert.strictEqual(home.beat().saverIdleMs, null, 'not known until read');
+  wait(10, function () {
+    assert.strictEqual(home.beat().saverIdleMs, 600000, 'LG\'s minutes, in ms');
+    home.startIdleSaver(function (r) {
+      assert.strictEqual(r.ok, false, 'not while the view is not in front');
+      assert.strictEqual(triggers, 0);
+      home.enable(function (e) {
+        assert.ok(e.ok, e.error);
+        foreground('com.webos.app.home');
+        powerState('Screen Saver');
+        home.startIdleSaver(function (r2) {
+          assert.strictEqual(r2.ok, false, 'not over a screen saver already up, which the trigger would close');
+          powerState('Active');
+          home.startIdleSaver(function (r3) {
+            assert.strictEqual(r3.ok, true);
+            assert.strictEqual(triggers, 1, 'started as Start screen saver does');
+            delete tv.settings.screenSaverTimer;
+            home.disable(function () { done(); });
+          });
+        });
+      });
+    });
+  });
+});
+
 step('the heartbeat says when the view is covered: by the screen saver, or on webOS 4 by what is in front', function (done) {
   start(null, { webosVersion: '4.4.3' });
   foreground(OLD_APP);
@@ -1624,6 +1653,8 @@ step('webOS 5 and 6 are offered, experimental, standalone, without restarting sa
       assert.strictEqual(st6.supported.standalone, true);
       assert.strictEqual(st6.supported.previewOptions, undefined, 'webOS 6 keeps live preview options');
       assert.strictEqual(st6.supported.restartsApps, undefined);
+      assert.strictEqual(st6.supported.lgHomeOnClose, true, 'closing the view opens LG\'s Home, so Back keeps it open');
+      assert.strictEqual(st5.supported.lgHomeOnClose, true);
       start(null, { webosVersion: '9.2.2' });
       home.status(function (st9) {
         assert.strictEqual(st9.supported.restartsApps, undefined, 'not where sam reads the files without a restart');
@@ -1637,6 +1668,7 @@ step('webOS 5 and 6 are offered, experimental, standalone, without restarting sa
             assert.strictEqual(st4.supported.standalone, true);
             assert.strictEqual(st4.supported.previewOptions, false, 'webOS 4 omits live preview options');
             assert.strictEqual(st4.supported.restartsApps, undefined);
+            assert.strictEqual(st4.supported.lgHomeOnClose, undefined, 'webOS 4 shows the input behind, so Back closes the view');
             start(null, { webosVersion: '3.9.3' });
             home.status(function (st3on) {
               assert.strictEqual(st3on.supported.ok, true, 'offered on webOS 3, reported working (#1573)');
@@ -1742,6 +1774,7 @@ step('on webOS 5 and 6, LG\'s Home opened by the TV is covered by Glasshouse Hom
   var homeKey = '';
   start(null, {
     webosVersion: '6.5.3',
+    lgHomeSettleMs: 20,
     allowExperimental: function () { return true; },
     installApp: function (action, cb) { tv.oldAppInstalled = true; cb({ ok: true }); },
     setHomeKey: function (id, cb) { homeKey = id; cb({ ok: true }); },
@@ -1753,12 +1786,14 @@ step('on webOS 5 and 6, LG\'s Home opened by the TV is covered by Glasshouse Hom
     tv.launched = [];
     // The app closes, and the TV opens LG's Home.
     foreground(LG_HOME);
+    wait(60, function () {
     assert.deepEqual(tv.launched, [OLD_APP], 'Glasshouse Home opened over it');
     foreground(OLD_APP);
     // The LG Home tile: LG's Home asked for, and left.
     home.open({ kind: 'lg' }, function () {
       tv.launched = [];
       foreground(LG_HOME);
+      wait(60, function () {
       assert.deepEqual(tv.launched, [], 'not covered when asked for');
       assert.strictEqual(homeKey, '', 'and the Home key is LG\'s while it is open');
       // An app opened from it: the Home key is Glasshouse Home's again, and
@@ -1766,6 +1801,7 @@ step('on webOS 5 and 6, LG\'s Home opened by the TV is covered by Glasshouse Hom
       foreground('netflix');
       assert.strictEqual(homeKey, OLD_APP);
       foreground(LG_HOME);
+      wait(60, function () {
       assert.deepEqual(tv.launched, [OLD_APP]);
       home.disable(function () {
         // webOS 4 shows LG's ribbon over the input: nothing to cover.
@@ -1784,7 +1820,182 @@ step('on webOS 5 and 6, LG\'s Home opened by the TV is covered by Glasshouse Hom
           home.disable(function () { done(); });
         });
       });
+      });
+      });
     });
+    });
+  });
+});
+
+/*
+ * A C1 (webOS 6.5.3) brought LG's Home back over Glasshouse Home within about
+ * 0.5 s of each launch while LG's Home was still starting, and each launch in
+ * answer drew another: up to seven swaps after one app closed (#1454).
+ */
+step('on webOS 5 and 6, LG\'s Home is covered once it has stayed in front, so its own returns draw no more launches', function (done) {
+  start(null, {
+    webosVersion: '6.5.3',
+    lgHomeSettleMs: 40,
+    allowExperimental: function () { return true; },
+    installApp: function (action, cb) { tv.oldAppInstalled = true; cb({ ok: true }); },
+    setHomeKey: function (id, cb) { cb({ ok: true }); },
+    injectKey: function (code, cb) { if (cb) cb(true); }
+  });
+  home.enable(function (r) {
+    assert.ok(r.ok, r.error);
+    foreground('netflix');
+    tv.launched = [];
+    foreground(LG_HOME);
+    assert.deepEqual(tv.launched, [], 'not launched while LG\'s Home may still take the screen back');
+    wait(80, function () {
+      assert.deepEqual(tv.launched, [OLD_APP], 'launched once LG\'s Home stayed in front');
+      foreground(OLD_APP);
+      // LG's Home back, then gone again before the wait ends: nothing launched.
+      tv.launched = [];
+      foreground(LG_HOME);
+      foreground(OLD_APP);
+      wait(80, function () {
+        assert.deepEqual(tv.launched, [], 'no launch for LG\'s Home that left on its own');
+        // An app opened while LG's Home waits: left in front.
+        foreground('netflix');
+        foreground(LG_HOME);
+        foreground('com.webos.app.hdmi1');
+        wait(80, function () {
+          assert.deepEqual(tv.launched, [], 'the input opened from LG\'s Home is not covered');
+          home.disable(function () { done(); });
+        });
+      });
+    });
+  });
+});
+
+/*
+ * sam opens LG's Home about 1 s after the app in front closes, and skips it
+ * when another full-screen app is starting by then. On a C1 (webOS 6.5.3)
+ * Glasshouse Home opened on the close event was in front 0.12 s later, and LG's
+ * Home did not start in 5 of 5 (#1454).
+ */
+step('on webOS 5 and 6, Glasshouse Home opens when the app in front closes, before LG\'s Home can', function (done) {
+  var subs = [];
+  function FakeSub(uri, payload, appId, handlers) { this.uri = uri; this.handlers = handlers || {}; subs.push(this); }
+  FakeSub.prototype.start = function () { this.started = true; };
+  FakeSub.prototype.stop = function () { this.started = false; };
+  function life(id, ev) {
+    subs.filter(function (s) { return s.started && /getAppLifeEvents/.test(s.uri); })
+      .forEach(function (s) { s.handlers.message({ appId: id, event: ev }); });
+  }
+  start(null, {
+    webosVersion: '6.5.3',
+    lgHomeSettleMs: 40,
+    Subscription: FakeSub,
+    allowExperimental: function () { return true; },
+    installApp: function (action, cb) { tv.oldAppInstalled = true; cb({ ok: true }); },
+    setHomeKey: function (id, cb) { cb({ ok: true }); },
+    injectKey: function (code, cb) { if (cb) cb(true); }
+  });
+  home.enable(function (r) {
+    assert.ok(r.ok, r.error);
+    foreground('netflix');
+    tv.launched = [];
+    life('netflix', 'close');
+    assert.deepEqual(tv.launched, [OLD_APP], 'opened on the close of the app in front');
+    // An app in the background closing, and one left for another: nothing opened.
+    foreground(OLD_APP);
+    foreground('npo');
+    tv.launched = [];
+    life('netflix', 'close');
+    life('npo', 'background');
+    assert.deepEqual(tv.launched, [], 'not for an app that is not in front, nor for one sent to the background');
+    // Switched off: nothing opened.
+    power(false);
+    life('npo', 'close');
+    assert.deepEqual(tv.launched, [], 'not while the screen is off');
+    power(true);
+    home.disable(function () {
+      foreground('npo');
+      life('npo', 'close');
+      assert.deepEqual(tv.launched, [], 'not while Glasshouse Home is off');
+      done();
+    });
+  });
+});
+
+/*
+ * A C1 (webOS 6.5.3): an app opening another and closing sent "launch" for
+ * the new one before its own "close"; switching off, tvpower's "Request Power
+ * Off" came 0.2 s before the first close, with state still Active.
+ */
+step('on webOS 5 and 6, a close while another app starts, the TV switches off or the screen saver ends opens nothing', function (done) {
+  var subs = [];
+  var now = 1000;
+  function FakeSub(uri, payload, appId, handlers) { this.uri = uri; this.handlers = handlers || {}; subs.push(this); }
+  FakeSub.prototype.start = function () { this.started = true; };
+  FakeSub.prototype.stop = function () { this.started = false; };
+  function life(id, ev, reason) {
+    subs.filter(function (s) { return s.started && /getAppLifeEvents/.test(s.uri); })
+      .forEach(function (s) { s.handlers.message({ appId: id, event: ev, reason: reason }); });
+  }
+  function front(id) { foreground(id); life(id, 'foreground'); }
+  function closeOpens(id, reason) {
+    tv.launched = [];
+    life(id, 'close', reason);
+    var opened = tv.launched.length > 0;
+    if (opened) front(OLD_APP);
+    return opened;
+  }
+  start(null, {
+    webosVersion: '6.5.3',
+    lgHomeSettleMs: 40,
+    Subscription: FakeSub,
+    now: function () { return now; },
+    allowExperimental: function () { return true; },
+    installApp: function (action, cb) { tv.oldAppInstalled = true; cb({ ok: true }); },
+    setHomeKey: function (id, cb) { cb({ ok: true }); },
+    injectKey: function (code, cb) { if (cb) cb(true); }
+  });
+  home.enable(function (r) {
+    assert.ok(r.ok, r.error);
+    front('youtube.leanback.v4');
+    life('netflix', 'launch');
+    assert.ok(!closeOpens('youtube.leanback.v4'), 'not while another app starts');
+    // In front by sam's events before getForegroundAppInfo says so.
+    life('netflix', 'foreground');
+    assert.ok(!closeOpens('youtube.leanback.v4'), 'not for the app before the one sam put in front');
+    front('netflix');
+    life('npo', 'launch');
+    life('npo', 'stop');
+    life('ui30', 'splash');
+    life('ui30', 'background');
+    life('airplay', 'preload');
+    life('airplay', 'background');
+    assert.ok(closeOpens('netflix'), 'an app that stopped, went to the background or preloaded does not hold it');
+    front('netflix');
+    life('npo', 'launch');
+    now += 6000;
+    assert.ok(closeOpens('netflix'), 'a start never seen to end holds it for 5 s');
+
+    front('netflix');
+    home.powerReply({ state: 'Active', processing: 'Request Power Off', onOff: 'off', reason: 'remoteKey' });
+    assert.ok(!closeOpens('netflix'), 'not while the TV switches off');
+    home.powerReply({ state: 'Suspend' });
+    home.powerReply({ state: 'Suspend', processing: 'Screen On', onOff: 'on' });
+    home.powerReply({ state: 'Active' });
+    assert.ok(closeOpens('netflix'), 'again once Active');
+    front('netflix');
+    home.powerReply({ state: 'Active', processing: 'Prepare Suspend' });
+    assert.ok(!closeOpens('netflix'), 'a switch-off step without onOff, as webOS 5 may send');
+    now += 11000;
+    assert.ok(closeOpens('netflix'), 'a switch-off that never went on is let go after 10 s');
+    front('netflix');
+    assert.ok(!closeOpens('netflix', 'powerOff'), 'not for a close sam gives for switching off');
+
+    front('com.webos.app.screensaver');
+    assert.ok(!closeOpens('com.webos.app.screensaver'), 'not for the screen saver ending');
+    front('netflix');
+    powerState('Screen Saver');
+    assert.ok(!closeOpens('netflix'), 'not while the screen saver is up');
+    powerState('Active');
+    home.disable(function () { done(); });
   });
 });
 
@@ -3285,6 +3496,22 @@ step('on webOS 11, Glasshouse Home is closed and opened again once after a wake,
   });
 });
 
+step('the Reopen Home after a wake switch off skips the reopening', function (done) {
+  start(null, webos11());
+  home.enable(function () {
+    home.setLayout({ reopenAfterWake: false }, function (r) {
+      assert.strictEqual(r.layout.reopenAfterWake, false, 'the switch is saved');
+      foreground(LG_HOME);
+      power(false);
+      power(true);
+      wait(4500, function () {
+        assert.strictEqual(tv.events.indexOf('close ' + LG_HOME), -1, 'skipped when switched off');
+        home.disable(function () { done(); });
+      });
+    });
+  });
+});
+
 step('on webOS 11, an app opened after the wake, or a switch-off, cancels it; other webOS never does it', function (done) {
   start(null, webos11());
   home.enable(function () {
@@ -3397,6 +3624,31 @@ step('the end of the screen saver gives the view a first beat\'s wait, and a rea
   });
 });
 
+// A C2 (webOS 10.3.1): the view sent no beats under the screen saver, and
+// LG's Home, opened as if it had hung, ended the screen saver (#1605).
+step('a view silent under the screen saver is not a hang, and one still silent after it is', function (done) {
+  start(null, { beatGraceMs: 100, firstBeatGraceMs: 300 });
+  home.enable(function () {
+    foreground(LG_HOME);
+    powerState('Active');
+    home.beat();
+    tv.launched = [];
+    powerState('Screen Saver');
+    wait(350, function () {
+      assert.deepEqual(tv.launched, [], 'no beats under the screen saver is not a hang');
+      assert.ok(taken(), 'Glasshouse Home keeps its place');
+      powerState('Active');
+      wait(200, function () {
+        assert.deepEqual(tv.launched, [], 'the end of the screen saver gives a first beat\'s wait');
+        wait(250, function () {
+          assert.deepEqual(tv.launched, [LG_HOME], 'with no beat after the saver, it is one');
+          done();
+        });
+      });
+    });
+  });
+});
+
 step('switching the screen off ends the heartbeat check', function (done) {
   start(null, { beatGraceMs: 100, firstBeatGraceMs: 200 });
   home.enable(function () {
@@ -3446,6 +3698,155 @@ step('the weather Home Assistant pushes is kept across a restart, capped, hidden
       home.init(lastInit);
       assert.strictEqual(home.layout().weather, 'off', 'and saved');
       done();
+    });
+  });
+});
+
+step('the info lines Home Assistant pushes are capped, kept across a restart and cleared by an empty push', function (done) {
+  start({ enabled: false, info: 'ha' }, { mqttOn: function () { return true; } });
+  home.setHomeInfo('not json');
+  home.setHomeInfo('{"label":"one"}');
+  assert.deepEqual(home.beat().info, [], 'nothing shown from a push that is not a list');
+  var long = new Array(60).join('x');
+  home.setHomeInfo(JSON.stringify([
+    { icon: 'mdi:trash-can', label: '  Bin   1 ', value: 'in 4 days' },
+    { icon: 'mail', label: long, value: 2 },
+    { label: '', value: '' },
+    { label: 'c' }, { label: 'd' }, { label: 'e' }
+  ]));
+  var lines = home.beat().info;
+  assert.strictEqual(lines.length, 4, 'four at most, empty ones left out');
+  assert.deepEqual(lines[0], { icon: 'trash-can', label: 'Bin 1', value: 'in 4 days' }, 'mdi: dropped, spaces folded');
+  assert.strictEqual(lines[1].label.length, 32, 'labels capped');
+  assert.strictEqual(lines[1].value, '2', 'a number shown as text');
+  home.init(lastInit);
+  home.info(function (r) {
+    assert.strictEqual(r.lines.length, 4, 'kept across a restart');
+    home.setHomeInfo('{"items":[{"label":"Post","value":"Friday"}]}');
+    assert.deepEqual(home.beat().info, [{ icon: '', label: 'Post', value: 'Friday' }], 'a list under items is read too');
+    home.setHomeInfo('');
+    assert.deepEqual(home.beat().info, [], 'an empty push clears them');
+    home.init(lastInit);
+    assert.deepEqual(home.beat().info, [], 'and they stay cleared after a restart');
+    done();
+  });
+});
+
+step('lines from entities chosen on the dashboard are read through Home Assistant, at most every 30 seconds, and kept when a read fails', function (done) {
+  var clock = Date.now();
+  var reads = [];
+  var answer = {
+    'sensor.bin_1': { state: 'on 25-Nov-2026', attributes: { friendly_name: 'Bin 1', next_date: '2026-11-25T00:00:00+01:00', icon: 'mdi:trash-can' } },
+    'sensor.visc': { state: '14.58', attributes: { friendly_name: 'Viscaria', unit_of_measurement: 'SEK', device_class: 'monetary' } }
+  };
+  var ha = {
+    configured: function () { return true; },
+    readMany: function (ids, cb) {
+      reads.push(ids.slice());
+      var out = {};
+      ids.forEach(function (id) { if (answer[id]) out[id] = answer[id]; });
+      cb({ ok: true, entities: out, errors: {} });
+    }
+  };
+  var mqtt = true;
+  start(null, { now: function () { return clock; }, haEntity: ha, mqttOn: function () { return mqtt; } });
+  assert.strictEqual(home.layout().info, 'entities', 'entities unless chosen otherwise');
+  home.setLayout({ infoLines: [
+    { entity: 'sensor.bin_1', attribute: 'next_date', label: 'Bin 1', before: 'collected' },
+    { entity: 'SENSOR.VISC' },
+    { entity: 'not an entity' },
+    { entity: 'sensor.a' }, { entity: 'sensor.b' }, { entity: 'sensor.c' }
+  ] }, function (r) {
+    assert.strictEqual(r.layout.infoLines.length, 4, 'four at most, a malformed one left out');
+    assert.strictEqual(r.layout.infoLines[1].entity, 'sensor.visc', 'lower-cased');
+    home.info(function (i1) {
+      assert.deepEqual(reads, [['sensor.bin_1', 'sensor.visc', 'sensor.a', 'sensor.b']]);
+      var lines = i1.lines.length ? i1.lines : home.beat().info;
+      assert.deepEqual(lines[0], { icon: 'trash-can', label: 'Bin 1', before: 'collected', v: '2026-11-25T00:00:00+01:00', unit: '' }, 'the attribute, without a unit');
+      assert.deepEqual(lines[1], { icon: 'cash', label: 'Viscaria', before: '', v: '14.58', unit: 'SEK' }, 'its name and unit, an icon from its class');
+      assert.strictEqual(lines[2].v, '', 'an entity Home Assistant does not have reads empty');
+      home.info(function () {});
+      assert.strictEqual(reads.length, 1, 'not read again within 30 seconds');
+      clock += 31000;
+      answer = {};
+      home.info(function () {});
+      assert.strictEqual(reads.length, 2, 'read again after 30 seconds');
+      assert.strictEqual(home.beat().info[1].v, '14.58', 'a failed read keeps the line as it was');
+      home.setLayout({ info: 'off' }, function () {
+        assert.deepEqual(home.beat().info, [], 'off shows none');
+        home.setLayout({ info: 'ha' }, function () {
+          home.setHomeInfo(JSON.stringify([{ label: 'Pushed', value: 'x' }]));
+          assert.strictEqual(home.beat().info[0].label, 'Pushed', 'Home Assistant\'s pushes shown while chosen');
+          mqtt = false;
+          assert.deepEqual(home.beat().info, [], 'not once MQTT is no longer set up');
+          home.status(function (st) {
+            assert.deepEqual(st.haLines, { api: true, mqtt: false }, 'the dashboard is told which sources can work');
+            done();
+          });
+        });
+      });
+    });
+  });
+});
+
+step('the board: off unless chosen, or a board Home Assistant pushes while MQTT is set up', function (done) {
+  var clock = Date.now();
+  var mqtt = true;
+  start(null, { now: function () { return clock; }, mqttOn: function () { return mqtt; } });
+  assert.strictEqual(home.layout().board, 'off', 'off unless chosen');
+  assert.strictEqual(home.normalise({ board: 'scores' }).board, 'off', 'no other source');
+  assert.strictEqual(home.layout().news, false, 'the news strip is off unless chosen');
+  assert.deepEqual(home.normalise({ news: true, newsFeeds: [{ url: 'https://svt.example/rss', name: 'SVT' }, { url: 'nope' }] }).newsFeeds,
+    [{ url: 'https://svt.example/rss', name: 'SVT' }], 'only http and https feeds');
+  assert.strictEqual(home.beat().news, null, 'no headlines with the strip off');
+  assert.strictEqual(home.layout().boardStrip, false, 'the board stays beside the lines unless chosen');
+  assert.strictEqual(home.normalise({ boardStrip: 'yes' }).boardStrip, false);
+  assert.strictEqual(home.normalise({ boardStrip: true }).boardStrip, true);
+  assert.strictEqual(home.layout().newsSpeed, 'slow', 'slow unless chosen');
+  assert.strictEqual(home.normalise({ newsSpeed: 'warp' }).newsSpeed, 'slow');
+  assert.strictEqual(home.normalise({ newsSpeed: 'fast' }).newsSpeed, 'normal', 'fast is no longer offered');
+  assert.strictEqual(home.layout().newsStyle, 'flip', 'one headline at a time unless chosen');
+  assert.strictEqual(home.normalise({ newsStyle: 'scroll' }).newsStyle, 'scroll');
+  assert.strictEqual(home.newsFlipMs(), 8000, 'each headline for 8 s at the slow speed');
+  assert.strictEqual(home.newsSpeed(), 60, 'pixels a second for the News screen saver');
+  home.setLayout({ board: 'ha' }, function () {
+    var lines = [];
+    for (var i = 0; i < 25; i++) lines.push({ label: 'Team ' + i, value: "67'" });
+    home.setHomeBoard(JSON.stringify({ title: 'Football today', minutes: 10, lines: lines }));
+    var pushed = home.beat().board;
+    assert.strictEqual(pushed.title, 'Football today');
+    assert.strictEqual(pushed.lines.length, 20, 'twenty at most');
+    mqtt = false;
+    assert.strictEqual(home.beat().board, null, 'not shown once MQTT is not set up');
+    mqtt = true;
+    clock += 10 * 60000 + 1000;
+    assert.strictEqual(home.beat().board, null, 'a pushed board goes once its minutes are up');
+    home.setHomeBoard(JSON.stringify({ title: 'x', lines: [] }));
+    home.setHomeBoard('');
+    assert.strictEqual(home.beat().board, null, 'an empty push takes it away');
+    done();
+  });
+});
+
+step('the news strip: the headlines as last read, with the strip on and feeds given', function (done) {
+  var refreshed = [];
+  var newsFake = {
+    refresh: function (feeds) { refreshed.push(feeds.length); },
+    cached: function (feeds) { return { ok: true, items: [{ source: 'SVT', title: 'Rubrik' }], feeds: feeds }; }
+  };
+  start(null, { news: newsFake });
+  assert.strictEqual(home.beat().news, null, 'off');
+  home.setLayout({ news: true }, function () {
+    assert.strictEqual(home.beat().news, null, 'on, but no feeds');
+    home.setLayout({ newsFeeds: [{ url: 'https://svt.example/rss', name: '' }] }, function (r) {
+      assert.deepEqual(r.layout.newsFeeds, [{ url: 'https://svt.example/rss', name: '' }]);
+      assert.deepEqual(home.beat().news, [{ source: 'SVT', title: 'Rubrik' }]);
+      assert.deepEqual(home.newsFeeds(), [{ url: 'https://svt.example/rss', name: '' }], 'shared with the News screen saver');
+      home.info(function (i) {
+        assert.deepEqual(i.news, [{ source: 'SVT', title: 'Rubrik' }]);
+        assert.ok(refreshed.length >= 1, 'feeds due a read are fetched');
+        done();
+      });
     });
   });
 });
@@ -3828,6 +4229,119 @@ step('the input bar\'s Switch only on OK is off until switched on, and kept (#15
       });
     });
   })();
+});
+
+step('apps take card icons from the folder by title, or the one chosen, and the switches are kept', function (done) {
+  start(null);
+  var icons = path.join(dir, 'home-icons');
+  fs.mkdirSync(icons);
+  ['netflix', 'plex', 'youtube_music', 'shahid', 'lgapp'].forEach(function (n) { fs.writeFileSync(path.join(icons, n + '.png'), 'png'); });
+  fs.writeFileSync(path.join(icons, 'Not An Icon.png'), 'png');
+  assert.deepEqual(home.cardIconNames(), ['lgapp', 'netflix', 'plex', 'shahid', 'youtube_music'], 'only names an app title can match');
+  assert.strictEqual(home.cardIconFor('net.mbc.shahid-lgapp', ['MBC Shahid']), 'shahid', 'a part of its id its title has');
+  assert.strictEqual(home.cardIconFor('com.example.lgapp', ['Other']), null, 'not a part of its id its title lacks');
+  assert.strictEqual(home.cardIconPath('plex'), path.join(icons, 'plex.png'));
+  assert.strictEqual(home.cardIconPath('../plex'), null, 'nothing outside the folder');
+  assert.strictEqual(home.cardIconPath('youtube'), null);
+  function cards(c) {
+    var out = {};
+    c.apps.forEach(function (a) {
+      if (a.card) assert.ok(/&v=\d+-\d+$/.test(a.card), 'a replaced icon is fetched again: ' + a.card);
+      out[a.id] = a.card ? a.card.replace(/&v=.*$/, '') : null;
+    });
+    return out;
+  }
+  home.catalogue(function (c) {
+    var by = cards(c);
+    assert.strictEqual(by.netflix, '/api/home/card-icon?name=netflix', 'by its title');
+    assert.strictEqual(by['cdp-30'], '/api/home/card-icon?name=plex', 'by its title, not its id');
+    assert.strictEqual(by['youtube.leanback.v4'], null, 'none where no name fits');
+    home.setLayout({ appCards: true, focusPulse: true, navSound: 'yes', appIcons: { 'youtube.leanback.v4': 'youtube_music', netflix: 'Bad Name' } }, function (r) {
+      assert.ok(r.ok, r.error);
+      assert.strictEqual(r.layout.appCards, true);
+      assert.strictEqual(r.layout.focusPulse, true);
+      assert.strictEqual(r.layout.navSound, 'off', 'only a sound Home has');
+      assert.strictEqual(r.layout.pointerSound, 'off', 'the pointer follows the keys until chosen');
+      assert.strictEqual(fs.existsSync(home.navSoundFile('click').path), true, 'the click ships with Glasshouse');
+      assert.strictEqual(fs.existsSync(home.navSoundFile('rollover').path), true);
+      assert.strictEqual(home.navSoundFile('own'), null, 'no own sound until one is put on the TV');
+      assert.strictEqual(home.navSoundFile('../click'), null);
+      assert.strictEqual(r.layout.cardFade, 20, 'the cards fade a fifth by default');
+      assert.deepEqual(r.layout.appIcons, { 'youtube.leanback.v4': 'youtube_music' }, 'a name no pack uses is dropped');
+      home.catalogue(function (c2) {
+        assert.strictEqual(cards(c2)['youtube.leanback.v4'], '/api/home/card-icon?name=youtube_music', 'the one chosen');
+        home.setLayout({ appIcons: { 'youtube.leanback.v4': '' }, cardFade: 0 }, function (r2) {
+          assert.deepEqual(r2.layout.appIcons, {}, 'an empty choice goes back to matching by name');
+          assert.strictEqual(r2.layout.cardFade, 0, 'solid');
+          fs.readdirSync(icons).forEach(function (f) { fs.unlinkSync(path.join(icons, f)); });
+          fs.rmdirSync(icons);
+          done();
+        });
+      });
+    });
+  });
+});
+
+step('card icons and the own sound are uploaded and removed from a dashboard', function (done) {
+  start(null);
+  var EventEmitter = require('events').EventEmitter;
+  function bytes(list) { return Buffer.from ? Buffer.from(list) : new Buffer(list); }
+  function upload(body, length) {
+    var req = new EventEmitter();
+    req.headers = { 'content-length': String(length === undefined ? body.length : length) };
+    setTimeout(function () { req.emit('data', body); req.emit('end'); }, 0);
+    return req;
+  }
+  // A PNG's signature and IHDR: enough for the header check, which is all the server reads.
+  function png(w, h) {
+    var b = bytes([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 0, 0, 0, 0, 0, 0, 0]);
+    b.writeUInt32BE(w, 16);
+    b.writeUInt32BE(h, 20);
+    return b;
+  }
+  var wav = Buffer.concat([bytes([82, 73, 70, 70, 36, 0, 0, 0, 87, 65, 86, 69]), bytes([0, 0, 0, 0])]);
+  var ogg = Buffer.concat([bytes([79, 103, 103, 83]), bytes([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])]);
+  var before = home.layoutVersion();
+  home.uploadCardIcon('../evil', upload(png(640, 360)), function (bad) {
+    assert.strictEqual(bad.ok, false, 'only a card icon name');
+    home.uploadCardIcon('netflix', upload(png(4000, 360)), function (big) {
+      assert.strictEqual(big.ok, false, 'held to 1280 x 720');
+      home.uploadCardIcon('netflix', upload(bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33])), function (notPng) {
+        assert.strictEqual(notPng.ok, false, 'only a PNG');
+        home.uploadCardIcon('netflix', upload(png(640, 360)), function (r) {
+          assert.ok(r.ok, r.error);
+          assert.deepEqual(r.names, ['netflix']);
+          assert.notStrictEqual(home.layoutVersion(), before, 'Home loads again with it');
+          home.setLayout({ appIcons: { youtube: 'netflix' } }, function () {
+            home.removeCardIcon('netflix', function (gone) {
+              assert.ok(gone.ok, gone.error);
+              assert.deepEqual(gone.names, []);
+              assert.deepEqual(home.layout().appIcons, {}, 'an app that chose it goes back to matching by name');
+              home.uploadNavSound(upload(bytes([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])), function (noSound) {
+                assert.strictEqual(noSound.ok, false, 'only OGG, WAV or MP3');
+                home.uploadNavSound(upload(wav), function (w) {
+                  assert.ok(w.ok, w.error);
+                  assert.strictEqual(w.ownSound.type, 'audio/wav');
+                  assert.strictEqual(home.navSoundFile('own').type, 'audio/wav');
+                  home.uploadNavSound(upload(ogg), function (o) {
+                    assert.strictEqual(o.ownSound.type, 'audio/ogg', 'a new one replaces the last whatever its kind');
+                    assert.strictEqual(fs.existsSync(path.join(dir, 'home-sounds', 'nav.wav')), false);
+                    assert.strictEqual(home.layout().ownSound.type, 'audio/ogg', 'Home and the dashboard see it');
+                    home.removeNavSound(function (rm) {
+                      assert.ok(rm.ok);
+                      assert.strictEqual(home.navSoundFile('own'), null);
+                      assert.strictEqual(home.layout().ownSound, null);
+                      done();
+                    });
+                  });
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
 });
 
 step('custom appNames rename apps in the catalogue and last opened, and clear back to default', function (done) {

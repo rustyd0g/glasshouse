@@ -14,6 +14,7 @@ var listenDualStack = require('./util').listenDualStack;
 var allocBuffer = require('./util').allocBuffer;
 var hostPort = require('./util').hostPort;
 var sendIconFile = require('./iconserver').sendIconFile;
+var artModule = require('./art');
 var writeJsonAtomic = require('./util').writeJsonAtomic;
 var unlinkQuiet = require('./util').unlinkQuiet;
 var existsQuiet = require('./util').existsQuiet;
@@ -88,6 +89,8 @@ var remoteKeysModule = null;
 var homeScreenModule = null;
 /** @type {typeof import('./home')} */
 var homeModule = null;
+/** @type {typeof import('./news')} */
+var newsModule = null;
 /** @type {typeof import('./clock')} */
 var clockModule = null;
 /** @type {typeof import('./home-picture')} */
@@ -100,10 +103,14 @@ var homebarModule = null;
 var iptvModule = null;
 /** @type {typeof import('./screensavers')} */
 var screensaversModule = null;
+/** @type {typeof import('./audiolevels')} */
+var audioLevelsModule = null;
 /** @type {typeof import('./haentity')} */
 var haEntityModule = null;
 /** @type {typeof import('./inputbar')} */
 var inputBarModule = null;
+/** @type {typeof import('./ask')} */
+var askModule = null;
 /** @type {typeof import('./updater')} */
 var updaterModule = null;
 /** @type {typeof import('./logs')} */
@@ -122,6 +129,27 @@ var syslogModule = null;
 var ntpModule = null;
 /** @type {typeof import('./history')} */
 var historyModule = null;
+var perfHistoryModule = null;
+var storageScanModule = null;
+/** @type {typeof import('./sysinfo')} */
+var sysinfoModule = null;
+/** @type {typeof import('./screencolour')} */
+var screenColourModule = null;
+/** @type {typeof import('./power')} */
+var powerModule = null;
+
+// HDMI inputs the TV's input service calls plugged in, with no powered source
+// on the cable and no picture, as the HDMI view sees them (telemetry).
+function markNoSignal(c, done) {
+  if (!c || !Array.isArray(c.devices) || !telemetryModule || typeof telemetryModule.hdmiSignalByInput !== 'function') return done();
+  telemetryModule.hdmiSignalByInput(function (byInput) {
+    c.devices.forEach(function (d) {
+      var sig = d && !d.unused && !d.kind && d.port ? byInput[d.port] : null;
+      if (sig && !sig.powered && !sig.locked) d.noSignal = true;
+    });
+    done();
+  });
+}
 /** @type {typeof import('./sshkeys')} */
 var sshKeysModule = null;
 /** @type {typeof import('./screentime')} */
@@ -402,6 +430,11 @@ function lanOrigin() {
   return ip4 ? 'http://' + hostPort(ip4, config.port) : null;
 }
 
+// Off only where switched off on the Server tab.
+function screenGlowAllowed() {
+  return !(config.screenGlow && config.screenGlow.allowed === false);
+}
+
 function prometheusEnabled() {
   return !!(config.prometheus && config.prometheus.enabled === true);
 }
@@ -628,12 +661,35 @@ function missingAssetsPage() {
 }
 
 /*
+ * The apps LG keeps ready, each marked noIcon where it has none to show, such
+ * as Yandex Alice on a C2, so the page does not ask for one and get a 404.
+ */
+function preloadWithIcons(cb) {
+  preloadModule.getPreload(function (pRes) {
+    var apps = (pRes && pRes.apps) || [];
+    var left = apps.length;
+    if (!left) return cb(pRes);
+    apps.forEach(function (a) {
+      appsModule.getIconPath(a.id, function (p) {
+        if (!p) a.noIcon = true;
+        if (--left === 0) cb(pRes);
+      });
+    });
+  });
+}
+
+/*
  * ui.html names its stylesheet and scripts under assets/ui/, and they are put
  * back inline here, so the browser still gets one page in one gzipped response
  * that is never cached apart from it. The scripts become a single <script> in
  * the order listed, so they behave as one script: a function declared in any
  * of them can be called from the others. Returns the page, or null with
  * UI_MISSING set to the part that could not be read.
+ *
+ * A line may end in CR LF: Git for Windows checks ui.html out that way, and
+ * deploy.sh copies it as it is. Matched on LF alone, the page went out with
+ * its scripts left as files, which a browser keeps from before an update, so
+ * the dashboard showed new controls driven by old script.
  */
 function inlineUI(html) {
   var missing = null;
@@ -645,10 +701,10 @@ function inlineUI(html) {
     if (!missing) missing = rel;
     return '';
   }
-  html = html.replace(/<link rel="stylesheet" href="\/assets\/(ui\/[\w-]+\.css)">\n/g, function (m, rel) {
+  html = html.replace(/<link rel="stylesheet" href="\/assets\/(ui\/[\w-]+\.css)">\r?\n/g, function (m, rel) {
     return '<style>\n' + part(rel) + '</style>\n';
   });
-  html = html.replace(/(?:<script src="\/assets\/ui\/[\w-]+\.js"><\/script>\n)+/g, function (run) {
+  html = html.replace(/(?:<script src="\/assets\/ui\/[\w-]+\.js"><\/script>\r?\n)+/g, function (run) {
     var scripts = run.match(/ui\/[\w-]+\.js/g);
     return '<script>\n' + scripts.map(part).join('') + '</script>\n';
   });
@@ -716,6 +772,9 @@ function updateSummary() {
   s.isWebos10 = !!(screensaversModule && screensaversModule.experimental && screensaversModule.experimental());
   s.homeLayout = homeScreenModule ? homeScreenModule.experimental() : null;
   s.prometheusEnabled = prometheusEnabled();
+  s.screenGlowAllowed = screenGlowAllowed();
+  // Where the TV has no capture service, the glow is not offered; null while unknown.
+  s.screenGlowSupported = screenColourModule ? screenColourModule.supported() : false;
   s.clockHour12 = clockHour12();
   s.watchHistory = historyModule ? historyModule.status() : null;
   s.backupDaily = backupModule ? backupModule.dailyStatus() : null;
@@ -787,6 +846,16 @@ function authed(q, req) {
   // token (there is no login prompt on a TV remote).  A process on the TV
   // already has root, so the token adds nothing for local requests.
   return !!(req && fromTV(req));
+}
+
+// The TV's menu language as a language file names it (sv, pt-br), or null
+// with no file for it or before the TV has said.
+function tvLang() {
+  var locale = clockModule && clockModule.qtLocale ? String(clockModule.qtLocale() || '') : '';
+  if (!locale) return null;
+  var parts = locale.toLowerCase().split(/[_-]/);
+  var ask = function (code) { return say.langOf({ headers: { 'x-glasshouse-lang': code } }); };
+  return (parts[1] && ask(parts[0] + '-' + parts[1])) || ask(parts[0]);
 }
 
 // A request made on the TV itself - the on-TV app, or anything else running
@@ -1249,14 +1318,19 @@ function handleHomeRoute(req, res, u, pathname) {
     }
     if (pathname === '/api/home/catalogue') {
       return homeModule.catalogue(function (c) {
-        var st = homeModule.viewStatus();
-        c.ok = true;
-        c.layout = st.layout;
-        c.enabled = st.enabled;
-        c.supported = st.supported;
-        c.wallpapers = st.wallpapers;
-        c.layoutVersion = homeModule.layoutVersion();
-        reply(c);
+        // The Inputs tab's state for each HDMI input agrees with the HDMI
+        // view: plugged in by the TV's input service, but with no powered
+        // source on the cable and no picture, it is no signal, not connected.
+        markNoSignal(c, function () {
+          var st = homeModule.viewStatus();
+          c.ok = true;
+          c.layout = st.layout;
+          c.enabled = st.enabled;
+          c.supported = st.supported;
+          c.wallpapers = st.wallpapers;
+          c.layoutVersion = homeModule.layoutVersion();
+          reply(c);
+        });
       });
     }
     if (pathname === '/api/home/channels') {
@@ -1272,7 +1346,10 @@ function handleHomeRoute(req, res, u, pathname) {
         reply(r);
       });
     }
+    // Glasshouse Bar's page, as it opens: whether LG's Home is drawn under it, to be covered.
+    if (pathname === '/api/home/bar-open') return reply({ ok: true, lgHomeUnder: homeModule.barOpened() });
     if (pathname === '/api/home/weather') return homeModule.weather(reply);
+    if (pathname === '/api/home/info') return homeModule.info(reply);
     if (pathname === '/api/home/weather/places') {
       return homeModule.weatherPlaces(String(u.query && u.query.q || ''), String(u.query && u.query.lang || ''), reply);
     }
@@ -1296,6 +1373,23 @@ function handleHomeRoute(req, res, u, pathname) {
         send(res, status, JSON.stringify({ ok: false, error: error }));
       }, /\.png$/i.test(snapshot) ? 'image/png' : 'image/jpeg', 'private, no-cache');
     }
+    if (pathname === '/api/home/card-icon') {
+      var cardPath = homeModule.cardIconPath(u.query && u.query.name);
+      if (!cardPath) return send(res, 404, JSON.stringify({ ok: false, error: 'icon not found' }));
+      return sendIconFile(req, res, cardPath, function (status, error) {
+        send(res, status, JSON.stringify({ ok: false, error: error }));
+      }, 'image/png');
+    }
+    if (pathname === '/api/home/nav-sound') {
+      var navSound = homeModule.navSoundFile(u.query && u.query.name);
+      if (!navSound) return send(res, 404, JSON.stringify({ ok: false, error: 'no sound' }));
+      return sendIconFile(req, res, navSound.path, function (status, error) {
+        send(res, status, JSON.stringify({ ok: false, error: error }));
+      }, navSound.type, 'no-cache');
+    }
+    if (pathname === '/api/home/card-icons') {
+      return reply({ ok: true, names: homeModule.cardIconNames() });
+    }
     if (pathname === '/api/home/icon') {
       return homeModule.iconPath(u.query && u.query.id, function (iconPath) {
         if (!iconPath) return send(res, 404, JSON.stringify({ ok: false, error: 'icon not found' }));
@@ -1315,6 +1409,28 @@ function handleHomeRoute(req, res, u, pathname) {
         if (!r.ok) return refuseUpload(req, res, r.error, r.status || 400);
         reply(r);
       });
+    }
+    if (pathname === '/api/home/card-icons/upload') {
+      if (!postGuard(req, res, 'image/png', true)) return;
+      return homeModule.uploadCardIcon(String(u.query && u.query.name || ''), req, function (r) {
+        if (!r.ok) return refuseUpload(req, res, r.error, r.status || 400);
+        reply(r);
+      });
+    }
+    if (pathname === '/api/home/card-icons/remove') {
+      return readJsonBody(req, res, function (body) {
+        homeModule.removeCardIcon(String(body && body.name || ''), function (r) { send(res, r.ok ? 200 : 400, JSON.stringify(r)); });
+      }, 1024);
+    }
+    if (pathname === '/api/home/nav-sound/upload') {
+      if (!postGuard(req, res, 'application/octet-stream', true)) return;
+      return homeModule.uploadNavSound(req, function (r) {
+        if (!r.ok) return refuseUpload(req, res, r.error, r.status || 400);
+        reply(r);
+      });
+    }
+    if (pathname === '/api/home/nav-sound/remove') {
+      return readJsonBody(req, res, function () { homeModule.removeNavSound(reply); }, 1024);
     }
     if (pathname === '/api/home/launcher/upload' && homeLauncherModule) {
       // It runs as the TV's Home app, so it is held to what a sideloaded package is.
@@ -1356,6 +1472,7 @@ function handleHomeRoute(req, res, u, pathname) {
       }
       if (pathname === '/api/home/disable') return homeModule.disable(reply);
       if (pathname === '/api/home/open') return homeModule.open(body, reply);
+      if (pathname === '/api/home/idle-saver') return homeModule.startIdleSaver(reply);
       if (pathname === '/api/home/launcher' && homeLauncherModule) {
         if (typeof body.address === 'string') return homeLauncherModule.setAddress(body.address, reply);
         if (typeof body.remove === 'string') return homeLauncherModule.remove(body.remove, reply);
@@ -1741,6 +1858,100 @@ function handleRequest(req, res) {
       noSignal: nosignal.status(),
       inputBar: inputBarModule ? inputBarModule.summary() : null
     }));
+  }
+
+  /* The News screen saver's headlines, from the feeds on the Home tab, with
+     its note worded in the TV's menu language. */
+  if (pathname === '/api/news' && req.method === 'GET') {
+    if (!authed(u.query, req)) return send(res, 401, JSON.stringify({ ok: false, error: 'unauthorised' }));
+    if (!newsModule || !homeModule) return send(res, 503, JSON.stringify({ ok: false, error: 'news is not available' }));
+    var newsLocale = clockModule && clockModule.qtLocale ? clockModule.qtLocale() : '';
+    var newsLang = newsLocale ? say.langOfLocale(newsLocale) : res.glasshouseLang;
+    var newsFeedList = homeModule.newsFeeds();
+    return newsModule.headlines(newsFeedList, function (r) {
+      /** @type {any} */ (r).speed = homeModule.newsSpeed();
+      /** @type {any} */ (r).flipMs = homeModule.newsFlipMs();
+      /** @type {any} */ (r).note = r.items.length ? ''
+        : !newsFeedList.length ? msg('home.news.noFeeds', 'Add news feeds on the Screensaver tab')
+        : msg('home.news.none', 'No headlines yet');
+      /** @type {any} */ (res).glasshouseLang = newsLang;
+      send(res, 200, JSON.stringify(r));
+    });
+  }
+
+  // Each news feed's state for the dashboard: read now if it is due.
+  if (pathname === '/api/news/status' && req.method === 'GET') {
+    if (!authed(u.query, req)) return send(res, 401, JSON.stringify({ ok: false, error: 'unauthorised' }));
+    if (!newsModule || !homeModule) return send(res, 503, JSON.stringify({ ok: false, error: 'news is not available' }));
+    return newsModule.status(homeModule.newsFeeds(), function (list) {
+      send(res, 200, JSON.stringify({ ok: true, feeds: list }));
+    });
+  }
+
+  // For a screen saver that plays video: whether an app holds the decoder (#1599).
+  if (pathname === '/api/screensaver/video-busy' && req.method === 'GET') {
+    if (!authed(u.query, req)) return send(res, 401, JSON.stringify({ ok: false, error: 'unauthorised' }));
+    return screensaversModule.videoBusy(function (r) { send(res, 200, JSON.stringify(r)); });
+  }
+
+  /* The Art screen saver's pictures (lib/art). next is what the screen saver
+     asks for each picture; image serves one, the owner's or one fetched. */
+  // Whether Next or Previous was asked for, polled by the views on screen.
+  if (pathname === '/api/art/command' && req.method === 'GET') {
+    return send(res, 200, JSON.stringify(artModule.poll(String(u.query && u.query.view || ''))));
+  }
+  if (pathname === '/api/art/next' && req.method === 'GET') {
+    var artDir = String(u.query && u.query.dir || '');
+    return artModule.next(function (r) {
+      if (r.ok) {
+        r.image = '/api/art/image?id=' + encodeURIComponent(r.id) + (config.token ? '&k=' + encodeURIComponent(config.token) : '');
+      }
+      send(res, 200, JSON.stringify(r));
+    }, artDir === 'prev' ? 'prev' : 'next');
+  }
+  if (pathname === '/api/art/image' && req.method === 'GET') {
+    var artFile = artModule.image(String(u.query && u.query.id || ''));
+    if (!artFile) return send(res, 404, JSON.stringify({ ok: false, error: 'no such picture' }));
+    return sendIconFile(req, res, artFile, function (status, error) {
+      send(res, status, JSON.stringify({ ok: false, error: error }));
+    }, 'image/jpeg');
+  }
+  // Media servers on the network, and one's folders, to add one to Art.
+  if (pathname === '/api/art/servers' && req.method === 'GET') {
+    return artModule.findServers(function (r) { send(res, 200, JSON.stringify(r)); });
+  }
+  if (pathname === '/api/art/browse' && req.method === 'GET') {
+    return artModule.browseFolder(String(u.query && u.query.udn || ''), String(u.query && u.query.id || '0'), function (r) {
+      send(res, r.ok ? 200 : 400, JSON.stringify(r));
+    });
+  }
+  if (pathname === '/api/art' && req.method === 'GET') {
+    var artStatus = artModule.status();
+    artStatus.writable = !!config.allowControl || fromTV(req);
+    return send(res, 200, JSON.stringify(artStatus));
+  }
+  if ((pathname === '/api/art' || pathname === '/api/art/upload') && req.method === 'POST') {
+    if (!config.allowControl && !fromTV(req)) {
+      return send(res, 403, JSON.stringify({ ok: false, error: msg('srv.controlsOff', 'controls disabled in config') }));
+    }
+    if (pathname === '/api/art/upload') {
+      if (!postGuard(req, res, 'image/jpeg', true)) return;
+      return artModule.upload(req, function (r) {
+        if (!r.ok) return refuseUpload(req, res, r.error, r.status || 400);
+        send(res, 200, JSON.stringify(r));
+      });
+    }
+    return readJsonBody(req, res, function (body) {
+      function done(r) { send(res, r && r.ok === false ? 400 : 200, JSON.stringify(r)); }
+      if (body && body.removeAll === true) return artModule.remove(undefined, done);
+      if (body && body.addFolder && typeof body.addFolder === 'object') {
+        return artModule.addFolder(String(body.addFolder.udn || ''), String(body.addFolder.id || ''), String(body.addFolder.title || ''), done);
+      }
+      if (body && typeof body.removeFolder === 'string') return artModule.removeFolder(body.removeFolder, done);
+      if (body && typeof body.go === 'string') return artModule.go(body.go, done);
+      if (body && typeof body.remove === 'string') return artModule.remove(body.remove, done);
+      artModule.save(body && body.settings, done);
+    }, 4096);
   }
 
   if (pathname === '/api/screensaver') {
@@ -2136,6 +2347,42 @@ function handleRequest(req, res) {
     });
   }
 
+  // The Performance view's charts: the processor, memory, network and
+  // temperature over the last 5 minutes, hour or day.
+  // The System info view's fixed facts, and how the TV has been powered on.
+  if (pathname === '/api/sysinfo' && sysinfoModule) {
+    var si = {};
+    var facts = sysinfoModule.read();
+    for (var sk in facts) si[sk] = facts[sk];
+    si.ok = true;
+    si.powerOns = powerModule && typeof powerModule.powerOns === 'function' ? powerModule.powerOns() : null;
+    return send(res, 200, JSON.stringify(si));
+  }
+  // The colours on screen, for the dashboard's glow: colours only, no picture.
+  if (pathname === '/api/screen-colour' && screenColourModule) {
+    if (!screenGlowAllowed()) return send(res, 200, JSON.stringify({ ok: false, off: true }));
+    /*
+     * PicCap and Hue Sync stream from the TV's capture hardware themselves, and
+     * a capture of ours beside theirs could stall their stream. While either is
+     * capturing, the glow waits. Their status is asked as the stats ask it for
+     * the Ambient Light tab, from the same caches.
+     */
+    return piccapStatusFn(function (pc) {
+      huesyncStatusFn(function (hs) {
+        var busy = pc && pc.running ? 'piccap' : hs && hs.streaming ? 'huesync' : null;
+        if (busy) return send(res, 200, JSON.stringify({ ok: false, busy: busy }));
+        screenColourModule.read(function (c) { send(res, 200, JSON.stringify(c)); });
+      });
+    });
+  }
+  if (pathname === '/api/storage' && storageScanModule) {
+    // A rescan only by POST, so a page load never forces one.
+    return storageScanModule.query(req.method === 'POST', function (d) { send(res, 200, JSON.stringify(d)); });
+  }
+  if (pathname === '/api/perf' && perfHistoryModule) {
+    return send(res, 200, JSON.stringify(perfHistoryModule.query(String(u.query.range || '5m'))));
+  }
+
   if (pathname === '/api/cpu') {
     return telemetryModule.collectCpuProcesses(function (r) { send(res, 200, JSON.stringify(r)); });
   }
@@ -2247,7 +2494,7 @@ function handleRequest(req, res) {
       servicesModule.getServices(function (sRes) {
         if (sRes && sRes.services) d.services = sRes.services;
         if (!preloadModule) return send(res, 200, JSON.stringify(d));
-        preloadModule.getPreload(function (pRes) {
+        preloadWithIcons(function (pRes) {
           d.preload = (pRes && pRes.apps) || [];
           if (!quickAccessModule) return send(res, 200, JSON.stringify(d));
           quickAccessModule.getQuickAccess(function (qa) {
@@ -2306,6 +2553,14 @@ function handleRequest(req, res) {
     return readJsonBody(req, res, function (body) {
       appsModule.uninstallApp(body.id, function (r) {
         if (r && r.ok) appsChangedFn();
+        send(res, r && r.ok ? 200 : 400, JSON.stringify(r));
+      });
+    });
+  }
+
+  if (pathname === '/api/apps/close' && req.method === 'POST') {
+    return readJsonBody(req, res, function (body) {
+      appsModule.closeRunningApp(body || {}, function (r) {
         send(res, r && r.ok ? 200 : 400, JSON.stringify(r));
       });
     });
@@ -2397,6 +2652,23 @@ function handleRequest(req, res) {
     });
   }
 
+  // The question app (lib/ask.js), only from the TV and only with the
+  // question's token. The card is worded in the TV's language: it shows over
+  // the picture, not on a dashboard that says which it wants.
+  if ((pathname === '/api/ask/current' || pathname === '/api/ask/answer') && askModule) {
+    if (!fromTV(req)) return send(res, 403, JSON.stringify({ ok: false, error: 'only from the TV' }));
+    if (pathname === '/api/ask/current') {
+      var askLang = tvLang();
+      if (askLang) /** @type {any} */ (res).glasshouseLang = askLang;
+      return send(res, 200, JSON.stringify({ ok: true, question: askModule.current(String((u.query || {}).token || '')) }));
+    }
+    if (req.method !== 'POST') return send(res, 405, JSON.stringify({ ok: false, error: 'POST only' }));
+    return readJsonBody(req, res, function (body) {
+      var taken = askModule.answer(String(body.token || ''), String(body.choice || ''), String(body.how || ''));
+      send(res, 200, JSON.stringify({ ok: true, taken: taken }));
+    });
+  }
+
   if (pathname.indexOf('/api/home/') === 0 || pathname === '/api/home') {
     if (homeModule) return handleHomeRoute(req, res, u, pathname);
   }
@@ -2436,12 +2708,27 @@ function handleRequest(req, res) {
     if (!remoteKeysModule) return send(res, 200, JSON.stringify({ ok: true, supported: false }));
     return remoteKeysModule.getRemoteKeys(function (rk) { send(res, 200, JSON.stringify(rk || { ok: true, supported: false })); });
   }
+  // The bar's page asks for it while a Brightness key is held.
+  if (pathname === '/api/remotekeys/brightness' && req.method === 'GET') {
+    if (!remoteKeysModule) return send(res, 200, JSON.stringify({ ok: false }));
+    return remoteKeysModule.getBrightness(function (r) { send(res, 200, JSON.stringify(r)); });
+  }
   if (pathname === '/api/remotekeys' && req.method === 'POST') {
     if (!config.allowControl) {
       return send(res, 403, JSON.stringify({ ok: false, error: msg('srv.controlsOff', 'controls disabled in config') }));
     }
     return readJsonBody(req, res, function (body) {
       if (!remoteKeysModule) return send(res, 503, JSON.stringify({ ok: false, error: 'remote keys module unavailable' }));
+      if (body && body.brightnessStep !== undefined) {
+        return remoteKeysModule.setBrightnessStep(body.brightnessStep, function (r) {
+          send(res, r && r.ok ? 200 : 400, JSON.stringify(r));
+        });
+      }
+      if (body && body.brightnessBarStyle !== undefined) {
+        return remoteKeysModule.setBrightnessBarStyle(body.brightnessBarStyle, function (r) {
+          send(res, r && r.ok ? 200 : 400, JSON.stringify(r));
+        });
+      }
       remoteKeysModule.setRemoteKey(body && body.key, body && body.action, body && body.id, function (r) {
         send(res, r && r.ok ? 200 : 400, JSON.stringify(r));
       });
@@ -2480,6 +2767,14 @@ function handleRequest(req, res) {
       var watched = historyModule && historyModule.status().running ? historyModule.totals() : null;
       send(res, 200, prometheusModule.render(s, versionStr, forwarded, clock, watched), 'text/plain; version=0.0.4; charset=utf-8');
     });
+  }
+
+  // The sound output's levels, for the Music Highway screen saver, which
+  // asks several times a second while it shows.
+  if (pathname === '/api/audio/levels' && req.method === 'GET') {
+    if (!authed(u.query, req)) return send(res, 401, JSON.stringify({ ok: false, error: 'unauthorised' }));
+    if (!audioLevelsModule) return send(res, 503, JSON.stringify({ ok: false, error: 'audio levels not available' }));
+    return send(res, 200, JSON.stringify(audioLevelsModule.read()));
   }
 
   if (pathname === '/api/stats') {
@@ -2680,14 +2975,17 @@ function init(opts) {
   if (opts.remoteKeys) remoteKeysModule = opts.remoteKeys;
   if (opts.homeScreen) homeScreenModule = opts.homeScreen;
   if (opts.home) homeModule = opts.home;
+  if (opts.news) newsModule = opts.news;
   if (opts.clock) clockModule = opts.clock;
   if (opts.homePicture) homePictureModule = opts.homePicture;
   if (opts.homeLauncher) homeLauncherModule = opts.homeLauncher;
   if (opts.homebar) homebarModule = opts.homebar;
   if (opts.iptv) iptvModule = opts.iptv;
   if (opts.screensavers) screensaversModule = opts.screensavers;
+  if (opts.audioLevels) audioLevelsModule = opts.audioLevels;
   if (opts.haEntity) haEntityModule = opts.haEntity;
   if (opts.inputBar) inputBarModule = opts.inputBar;
+  if (opts.ask) askModule = opts.ask;
   if (opts.updater) updaterModule = opts.updater;
   if (opts.logs) logsModule = opts.logs;
   if (opts.tvApp) tvAppFn = opts.tvApp;
@@ -2701,6 +2999,11 @@ function init(opts) {
   if (opts.syslog) syslogModule = opts.syslog;
   if (opts.ntp) ntpModule = opts.ntp;
   if (opts.history) historyModule = opts.history;
+  if (opts.perfHistory) perfHistoryModule = opts.perfHistory;
+  if (opts.storageScan) storageScanModule = opts.storageScan;
+  if (opts.sysinfo) sysinfoModule = opts.sysinfo;
+  if (opts.screenColour) screenColourModule = opts.screenColour;
+  if (opts.power) powerModule = opts.power;
   if (opts.sshKeys) sshKeysModule = opts.sshKeys;
   if (opts.screentime) screentimeModule = opts.screentime;
   if (opts.backup) backupModule = opts.backup;
